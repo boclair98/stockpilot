@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# Wait up to 60s for Postgres to accept TCP — the coders.kr platform
+# Wait up to 60s for Postgres to accept TCP. Keep this script LF-only.
 # brings the StatefulSet up in parallel with the build, so the very
 # first container start can race readiness.
 if [ -n "${DATABASE_URL:-}" ]; then

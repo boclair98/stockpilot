@@ -6,9 +6,11 @@ dependencies = [
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
     "fastapi>=0.115.0",
+    "httpx>=0.27.0",
     "pydantic-settings>=2.13.1",
     "sqlalchemy[asyncio]>=2.0.48",
     "uvicorn[standard]>=0.30.0",
+    "websockets>=15.0",
 ]
 
 [project.optional-dependencies]
@@ -37,3 +39,4 @@ extend-exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = ["B008"]

@@ -3,14 +3,8 @@
 /**
  * Client-side identity helpers.
  *
- * The platform gate validates the visitor's `coders_session` cookie at
- * the edge and stamps `X-Coders-User` onto every request that reaches
- * the backend. A static SPA can't read that header (it's HTML, not a
- * server), so we discover identity by fetching `/api/me` and looking
- * at the response:
- *    200 → signed in (the gate forwarded the user, the backend echoed
- *          a row out of its own users table)
- *    401 → anonymous
+ * StockPilot owns its Google OAuth session. The session cookie is HttpOnly,
+ * so the SPA discovers identity through `/api/me`.
  */
 
 import { useEffect, useState } from "react";
@@ -21,6 +15,9 @@ export type Me = {
   id: string;
   coders_id: string;
   display_name: string;
+  email: string | null;
+  picture: string | null;
+  provider: "google";
   first_seen_at: string;
 };
 
@@ -51,18 +48,10 @@ function currentLocation(): string {
   return window.location.pathname + window.location.search;
 }
 
-function buildHref(path: string, returnTo?: string): string {
-  const target = returnTo ?? currentLocation();
-  const here =
-    typeof window === "undefined" ? "" : window.location.origin;
-  const absolute = target.startsWith("http") ? target : here + target;
-  return `https://mcp.coders.kr${path}?return_to=${encodeURIComponent(absolute)}`;
-}
-
 export function signInHref(returnTo?: string): string {
-  return buildHref("/sso/login", returnTo);
+  return `/api/auth/google/login?return_to=${encodeURIComponent(returnTo ?? currentLocation())}`;
 }
 
-export function signOutHref(returnTo?: string): string {
-  return buildHref("/sso/logout", returnTo);
+export function signOutHref(): string {
+  return "/api/auth/logout";
 }

@@ -19,7 +19,7 @@ ENV NGINX_ENVSUBST_FILTER="BACKEND_URL|NGINX_RESOLVER"
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /app/out /usr/share/nginx/html
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 80
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

@@ -1,20 +1,16 @@
-"""First-sight user upsert + /api/me.
-
-The platform doesn't pre-create a row in the tenant DB. We do it lazily
-on first sight, keyed on `coders_id` (the platform identity).
-"""
+"""First-sight Google user upsert + /api/me."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.identity import optional_display_name, require_identity
+from app.core.identity import current_identity, optional_display_name, require_identity
 from app.models import User
 
 router = APIRouter(prefix="/api", tags=["users"])
@@ -44,19 +40,20 @@ async def upsert_local_user(
 
 @router.get("/me")
 async def me(
+    request: Request,
     coders_id: UUID = Depends(require_identity),
     platform_name: str | None = Depends(optional_display_name),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Return the signed-in visitor's app-local user row.
-
-    Anonymous → 401 (`require_identity`). Anyone who got here has a
-    valid coders.kr session.
-    """
+    """Return the signed-in Google user's app-local row."""
     user = await upsert_local_user(session, coders_id, platform_name)
+    identity = current_identity(request)
     return {
         "id": str(user.id),
         "coders_id": str(user.coders_id),
         "display_name": user.display_name,
+        "email": identity.email if identity else None,
+        "picture": identity.picture if identity else None,
+        "provider": "google",
         "first_seen_at": user.first_seen_at.isoformat(),
     }

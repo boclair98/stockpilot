@@ -52,12 +52,11 @@ export function Feed() {
           Feed
         </h1>
         <p className="mt-2 max-w-xl text-[15px] text-muted-foreground leading-relaxed">
-          Anyone can read. Signed-in visitors can post. The platform gate
-          decides who can mutate — anonymous POSTs get bounced to{" "}
+          Anyone can read. Signed-in visitors can post. StockPilot uses{" "}
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[12px] text-foreground">
-            mcp.coders.kr/sso/login
+            Google OAuth
           </code>{" "}
-          before they reach this app.
+          for login.
         </p>
       </header>
 

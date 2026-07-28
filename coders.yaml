@@ -1,12 +1,7 @@
 # coders.kr multi-service deploy manifest.
 #
-# This template uses `mode: native` — the platform gate validates the
-# visitor's session and stamps the identity as `X-Coders-User` on the
-# way in. The app trusts that header (see backend/app/core/identity.py
-# and frontend/lib/identity.ts) and does NOT implement OAuth itself.
-#
-# Existing apps that already have their own login can deploy with
-# `mode: standalone` instead — see PLATFORM.md in the coders-platform repo.
+# StockPilot owns its Google OAuth session, so the platform gate must not
+# inject or require its native (GitHub) identity.
 #
 # This file is validated against a STRICT schema: only the documented
 # fields are allowed and any unknown key fails the deploy (see PLATFORM.md
@@ -14,7 +9,7 @@
 # define — they won't be ignored, they'll be rejected.
 
 version: "1"
-mode: native
+mode: standalone
 
 services:
   web:
@@ -27,6 +22,7 @@ services:
     context: frontend
     port: 80
     expose: public
+    timeout: 3600
     env:
       BACKEND_URL: ${api.internal_url}
 
@@ -40,6 +36,7 @@ services:
     # A COPY of a path outside the context is the usual opaque build failure.
     context: backend
     port: 8000
+    timeout: 3600
     env:
       DATABASE_URL: postgresql+asyncpg://${db.user}:${db.password}@${db.host}:${db.port}/${db.name}
 

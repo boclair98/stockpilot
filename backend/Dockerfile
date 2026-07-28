@@ -4,11 +4,11 @@ ENV UV_NO_CACHE=1
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 COPY . .
 
-RUN chmod +x entrypoint.sh && \
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh && \
     useradd --system --no-create-home --uid 1001 appuser && \
     chown -R appuser /app
 

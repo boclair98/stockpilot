@@ -4,7 +4,7 @@ import { LogOut } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { signInHref, signOutHref } from "@/lib/identity";
+import { signInHref } from "@/lib/identity";
 
 export function SignInLink({
   returnTo,
@@ -18,19 +18,22 @@ export function SignInLink({
       href={signInHref(returnTo)}
       className={cn(buttonVariants({ size }))}
     >
-      Sign in with coders.kr
+      Google로 로그인
     </a>
   );
 }
 
-export function SignOutLink({ returnTo }: { returnTo?: string }) {
+export function SignOutLink() {
   return (
-    <a
-      href={signOutHref(returnTo)}
+    <button
+      onClick={async () => {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        location.href = "/";
+      }}
       className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
     >
       <LogOut className="size-3.5" />
-      Sign out
-    </a>
+      로그아웃
+    </button>
   );
 }

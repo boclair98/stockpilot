@@ -4,9 +4,7 @@ GET /api/feed       — public; recent posts across all users.
 POST /api/posts     — auth-required; creates a post.
 GET /api/users/{id}/posts — public; posts by a specific user.
 
-The platform gate already 302s anonymous mutations (POST/PUT/PATCH/DELETE)
-to mcp.coders.kr/sso/login, so the POST 401 check is defense-in-depth
-(also helpful for local dev without the gate in front).
+Mutations require StockPilot's signed Google session.
 """
 
 from __future__ import annotations

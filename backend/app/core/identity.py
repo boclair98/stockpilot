@@ -1,75 +1,120 @@
-"""Identity dependency for FastAPI routes.
+"""Google-backed application identity.
 
-The coders.kr platform gate validates the visitor's `coders_session`
-cookie *before* the request reaches this service, and stamps the
-identity on the way in:
-
-    X-Coders-User: <uuid>
-
-This module trusts that header. The gate wouldn't be sending it
-otherwise — the platform never forwards a value the visitor sets
-themselves (gate strips inbound X-Coders-User unconditionally).
-
-Two dependencies:
-    require_identity  → 401 if anonymous (use on auth-required endpoints)
-    optional_identity → None if anonymous (use on public-but-personalized)
-
-You typically don't need `require_identity` on POST endpoints — the
-platform gate already 302s anonymous mutations to /sso/login. It's
-defense-in-depth for self-hosted local dev and a clearer contract.
+StockPilot is deployed in coders.kr ``standalone`` mode. Authentication is
+therefore handled by the app itself and never trusts a caller-supplied header.
+The browser receives only a signed, HttpOnly session cookie.
 """
 
 from __future__ import annotations
 
-import urllib.parse
+import base64
+import hashlib
+import hmac
+import json
+import time
+from dataclasses import dataclass
 from uuid import UUID
 
-from fastapi import Header, HTTPException
+from fastapi import HTTPException, Request
 
 from app.core.config import settings
 
+SESSION_COOKIE = "stockpilot_session"
+SESSION_MAX_AGE = 60 * 60 * 24 * 30
 
-def _parse_uuid(value: str | None) -> UUID | None:
-    if not value:
+
+@dataclass(frozen=True)
+class Identity:
+    id: UUID
+    google_sub: str | None
+    display_name: str | None
+    email: str | None
+    picture: str | None
+
+
+def encode_signed(payload: dict, salt: str) -> str:
+    if not settings.auth_session_secret:
+        raise RuntimeError("AUTH_SESSION_SECRET is not configured")
+    value = {**payload, "iat": int(time.time())}
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode()
+    ).decode().rstrip("=")
+    signature = hmac.new(
+        settings.auth_session_secret.encode(),
+        f"{salt}.{encoded}".encode(),
+        hashlib.sha256,
+    ).digest()
+    return f"{encoded}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+
+
+def decode_signed(value: str | None, salt: str, max_age: int) -> dict | None:
+    if not value or not settings.auth_session_secret or "." not in value:
+        return None
+    encoded, signature = value.rsplit(".", 1)
+    expected = hmac.new(
+        settings.auth_session_secret.encode(),
+        f"{salt}.{encoded}".encode(),
+        hashlib.sha256,
+    ).digest()
+    try:
+        actual = base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
+        if not hmac.compare_digest(actual, expected):
+            return None
+        payload = json.loads(
+            base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        )
+        issued_at = int(payload.pop("iat"))
+        if issued_at > time.time() + 60 or time.time() - issued_at > max_age:
+            return None
+        return payload
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return None
+
+
+def encode_session(payload: dict) -> str:
+    return encode_signed(payload, "session")
+
+
+def decode_session(value: str | None) -> Identity | None:
+    payload = decode_signed(value, "session", SESSION_MAX_AGE)
+    if not payload:
         return None
     try:
-        return UUID(value)
-    except ValueError:
-        return None
-
-
-async def optional_identity(
-    x_coders_user: str | None = Header(default=None),
-) -> UUID | None:
-    """Visitor UUID or None (anonymous)."""
-    parsed = _parse_uuid(x_coders_user)
-    if parsed is not None:
-        return parsed
-    # Local-dev fallback so curl works without the platform gate.
-    return _parse_uuid(settings.dev_fake_user)
-
-
-async def optional_display_name(
-    x_coders_user_name: str | None = Header(default=None),
-) -> str | None:
-    """The visitor's opt-in display name, if they set one on coders.kr. The gate
-    forwards it URL-encoded as `X-Coders-User-Name` (headers are ASCII; names may
-    be Unicode), so we percent-decode it. None when they haven't chosen a name —
-    fall back to a generated handle then."""
-    if not x_coders_user_name:
-        return None
-    name = urllib.parse.unquote(x_coders_user_name).strip()
-    return name or None
-
-
-async def require_identity(
-    x_coders_user: str | None = Header(default=None),
-) -> UUID:
-    """Same as optional_identity but raises 401 if anonymous."""
-    cid = await optional_identity(x_coders_user)
-    if cid is None:
-        raise HTTPException(
-            status_code=401,
-            detail="sign in required",
+        return Identity(
+            id=UUID(payload["id"]),
+            google_sub=payload.get("sub"),
+            display_name=payload.get("name"),
+            email=payload.get("email"),
+            picture=payload.get("picture"),
         )
-    return cid
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def current_identity(request: Request) -> Identity | None:
+    identity = decode_session(request.cookies.get(SESSION_COOKIE))
+    if identity:
+        return identity
+    if settings.dev_fake_user:
+        try:
+            return Identity(UUID(settings.dev_fake_user), None, "개발 사용자", None, None)
+        except ValueError:
+            pass
+    return None
+
+
+async def optional_identity(request: Request) -> UUID | None:
+    identity = current_identity(request)
+    return identity.id if identity else None
+
+
+async def optional_display_name(request: Request) -> str | None:
+    identity = current_identity(request)
+    return identity.display_name if identity else None
+
+
+async def require_identity(request: Request) -> UUID:
+    identity = current_identity(request)
+    if not identity:
+        raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
+    return identity.id

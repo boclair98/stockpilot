@@ -5,25 +5,34 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.core.database import AsyncSessionLocal
+from app.routes.auth import router as auth_router
 from app.routes.posts import router as posts_router
+from app.routes.trading import router as trading_router
 from app.routes.users import router as users_router
+from app.services.kis_market import kis_market
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    kis_market.start()
+    try:
+        yield
+    finally:
+        await kis_market.stop()
 
 
 app = FastAPI(
-    title="template-coders API",
-    version="0.1.0",
+    title="StockPilot API",
+    version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
 
 app.include_router(users_router)
+app.include_router(auth_router)
 app.include_router(posts_router)
+app.include_router(trading_router)
 
 
 @app.get("/api/health")

@@ -1,177 +1,136 @@
-# template-coders
+# StockPilot
 
-[![Deploy on coders.kr](https://coders.kr/deploy-button.svg)](https://coders.kr/deploy?repo=https://github.com/cykim8811/template-coders)
+> 한국·미국 주식의 실제 시세를 보며 연습하는 가상투자 서비스
 
-A small starter app written for the [coders.kr](https://coders.kr)
-platform. Hand a Claude Code session the link to this repo, ask it to
-deploy, and you have a live site that:
+[![Live Service](https://img.shields.io/badge/Live-stockpilot.coders.kr-4f6bed?style=for-the-badge)](https://stockpilot.coders.kr)
+[![KIS Open API](https://img.shields.io/badge/Market%20Data-KIS%20Open%20API-22a06b?style=for-the-badge)](https://apiportal.koreainvestment.com/)
 
-- Lets anyone read a public feed.
-- Lets signed-in visitors post.
-- Maps each coders.kr visitor to a row in this app's own `users`
-  table on first sight, without ever shipping an OAuth flow.
+**운영 서비스:** [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
 
-Use it as a base when you want to write something that lives natively
-on coders.kr rather than retrofitting an existing app.
+StockPilot은 한국투자증권 KIS Open API의 국내·미국 주식 시세를 사용해 실제 시장을 따라가면서, 서비스 내부의 가상 원화·달러 자산으로 매매를 연습할 수 있는 웹 서비스입니다. 실제 증권계좌로 주문을 보내거나 실제 돈을 사용하지 않습니다.
 
-## Picking a template
+![StockPilot 메인 화면](docs/images/stockpilot-overview.jpg)
 
-This repo is a small **catalog of starters, one per branch**. `main` is
-the Basic Full-Stack Web template documented below; every other
-template is a sibling branch with the same platform wiring
-(`coders.yaml`, identity, Dockerfiles) but a different app shape.
-Clone the one that matches what you're building:
+## 주요 기능
 
-| Template | Branch | When to use it |
-|---|---|---|
-| **Basic Full-Stack Web** | `main` | CRUD apps, feeds, dashboards — anything request/response. Next.js static SPA + FastAPI + Postgres. |
-| **Game (Realtime)** | `game` | Multiplayer / realtime apps. Adds a WebSocket game loop with rooms, a fullscreen canvas client with reconnect + interpolation, optional sign-in (guests can play), and a persistent leaderboard. |
+- **국내·미국 주식 시세**: KIS Open API를 이용한 현재가와 등락률 표시
+- **시장별 TOP 10**: 한국 주식과 미국 주식의 주요 종목을 한 화면에서 확인
+- **전체 종목 검색**: 약 1.6만 개의 국내·미국 종목을 종목명, 종목코드, 티커로 검색
+- **가상 매수·매도**: 검색한 종목을 선택해 실제 시세 기준으로 가상 주문
+- **이중 통화 자산**: 국내 주식은 KRW, 미국 주식은 USD 가상 예수금으로 분리 관리
+- **포트폴리오**: 보유 수량, 평균 매입가, 평가금액과 주문 기록 저장
+- **Google 로그인**: 사용자별 가상자산과 거래 내역을 안전하게 분리
+- **반응형 UI**: 모바일과 데스크톱에서 사용할 수 있는 간결한 금융 서비스 화면
+
+### 원하는 종목 검색
+
+TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거래할 수 있습니다.
+
+![StockPilot 종목 검색](docs/images/stockpilot-search.jpg)
+
+## 동작 방식
+
+```text
+사용자
+  └─ Next.js 프론트엔드
+       └─ FastAPI 백엔드
+            ├─ KIS Open API: 국내·미국 종목 및 시세
+            ├─ Google OAuth: 사용자 로그인
+            └─ PostgreSQL: 가상 잔고·보유 종목·주문 기록
+```
+
+KIS API는 **시세 조회에만** 사용합니다. 매수·매도 주문은 StockPilot 내부의 가상 원장에만 기록되며 한국투자증권으로 전송되지 않습니다. 따라서 증권계좌번호나 계좌 비밀번호가 필요하지 않습니다.
+
+## 기술 스택
+
+| 영역 | 기술 |
+|---|---|
+| Frontend | Next.js 16, React 19, TypeScript |
+| Backend | FastAPI, SQLAlchemy Async, Alembic |
+| Database | PostgreSQL 16 |
+| Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
+| Market Data | 한국투자증권 KIS Open API |
+| Infrastructure | Docker, Docker Compose, coders.kr |
+
+## 로컬 실행
+
+### 1. 환경 변수 준비
 
 ```bash
-# Basic (this branch)
-git clone https://github.com/coders-kr/template-coders <name>
-
-# Game
-git clone -b game --single-branch https://github.com/coders-kr/template-coders <name>
+cp backend/.env.example backend/.env
 ```
 
-Then `rm -rf .git && git init -b main` and make it yours — a template
-branch is a starting point, not something you track upstream.
+`backend/.env`에 필요한 값을 입력합니다.
 
-## What the platform gives you
+```dotenv
+KIS_ENV=paper
+KIS_APP_KEY=
+KIS_APP_SECRET=
 
-When a request reaches this app, the platform has already done four
-things:
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 
-1. Validated the visitor's `coders_session` cookie at the edge.
-2. If it was valid, stamped the request with `X-Coders-User: <uuid>`.
-3. If the request was a mutation (POST/PUT/PATCH/DELETE) and the
-   visitor was anonymous, redirected them to the platform sign-in page
-   *before* the request reached you.
-4. Recorded the request against the right metering bucket
-   (anonymous → `ProjectQuota`; signed-in → `UserProjectQuota`).
-
-So inside your code:
-
-- **Trust `X-Coders-User`.** The gate strips any inbound value from the
-  client before forwarding, so a value you see here came from a real,
-  validated session.
-- **Don't build a sign-in flow.** Link to
-  `https://mcp.coders.kr/sso/login?return_to=<your URL>` instead. Sign
-  out is `https://mcp.coders.kr/sso/logout?return_to=…`.
-- **Use POST for anything that needs identity.** The gate auto-gates
-  anonymous mutations — you get a logged-in user every time.
-
-## Code tour
-
-```
-backend/
-  app/
-    core/identity.py    require_identity / optional_identity dependencies
-    routes/users.py     /api/me  — auto-upserts the local row on first sight
-    routes/posts.py     /api/feed (public) + POST /api/posts (auth-required)
-    models.py           User(id, coders_id, display_name) + Post(...)
-frontend/
-  lib/identity.ts       getCodersUser() reads the X-Coders-User header
-  components/SignIn.tsx Sign in/out links that target the platform
-  app/layout.tsx        shows the visitor's display_name once signed in
-  app/page.tsx          feed + inline compose form for signed-in visitors
-  app/profile/page.tsx  the visitor's profile + their posts
-coders.yaml             web + api + postgres; `mode: native`
+AUTH_SESSION_SECRET=
+AUTH_COOKIE_SECURE=false
 ```
 
-## Local development
+Google 로그인까지 로컬에서 확인하려면 Google Auth Platform의 승인된 리디렉션 URI에 아래 주소도 등록해야 합니다.
 
-**One command, full hot reload — no platform, no setup:**
+```text
+http://localhost:3000/api/auth/google/callback
+```
+
+`AUTH_SESSION_SECRET`은 최소 32바이트 이상의 무작위 문자열을 사용하세요. API 키와 Secret은 절대 Git에 커밋하지 마세요.
+
+### 2. 서비스 실행
 
 ```bash
 docker compose up
 ```
 
-Brings up Postgres + the FastAPI backend (`uvicorn --reload`) + the Next.js
-frontend (`next dev`) at **http://localhost:3000**. Edit any file and it's live
-instantly — no rebuild, no deploy. Iterate here; deploy only when you're ready
-to ship. (`/api/*` is proxied to the backend, and Postgres migrations run on
-start.)
+- 웹: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:8000](http://localhost:8000)
+- API 상태: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
-There's no platform gate locally, so every request is treated as a fixed
-signed-in dev user (`DEV_FAKE_USER`, defaulted in `compose.yaml`). To test as a
-different user — or the anonymous path — set `DEV_FAKE_USER` in `backend/.env`
-(copy `backend/.env.example`), or unset it.
+## 주요 디렉터리
 
-Prefer running the services yourself (no Docker)? Point the backend at a local
-Postgres and set the same vars in `backend/.env`:
+```text
+backend/
+  app/
+    routes/auth.py        Google 로그인과 세션
+    routes/trading.py     시세·검색·가상 주문 API
+    services/             KIS 연동과 종목 데이터 처리
+  alembic/versions/       거래 관련 DB 마이그레이션
 
-```bash
-# backend/.env
-DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/app
-DEV_FAKE_USER=00000000-0000-0000-0000-000000000001
+frontend/
+  app/                    페이지와 전역 스타일
+  components/
+    TradingTerminal.tsx   시세·검색·주문·포트폴리오 UI
+
+coders.yaml               coders.kr 배포 설정
+compose.yaml              로컬 개발 환경
 ```
 
-## Preview your local app at a real `coders.kr` URL — `dev_up`
+## 운영 환경 설정
 
-`docker compose up` is fast but local-only: a fake user, no real platform gate,
-and a URL only you can open. When you want to see your *local, hot-reloading*
-code at a real `https://<name>-dev.coders.kr` — **with no build and no deploy** —
-open a **dev tunnel**. In Claude Code:
+배포 환경에는 다음 Secret이 필요합니다.
 
-```
-dev_up <name>
-```
+- `KIS_APP_KEY`
+- `KIS_APP_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_SESSION_SECRET`
 
-It returns an `frpc.toml` and a one-line command. Then, on your machine:
+운영 Google OAuth 리디렉션 URI:
 
-1. Run your app locally on port 3000 (`docker compose up` is fine).
-2. Install [frp](https://github.com/fatedier/frp) (`brew install frpc`) and save
-   the returned config as `frpc.toml`.
-3. `frpc -c frpc.toml`
-4. Open `https://<name>-dev.coders.kr`.
-
-Now every edit on your machine is live at that URL instantly — the bytes are
-served straight from your laptop (HMR/WebSockets included). Unlike pure-local
-dev, requests go through the **real platform gate**: the preview is **private to
-you** (owner-only), the session cookie is stripped, and your real
-`X-Coders-User` is stamped — exactly like production, so you can test identity
-for real. Your live `<name>.coders.kr` site is untouched.
-
-Requires the project to have been `deploy`ed at least once (the tunnel reuses its
-namespace). `dev_down <name>` closes the tunnel (it also auto-closes after a few
-idle hours). Use this for the tight edit→see loop; `deploy` when you're ready to
-ship for real.
-
-## Deploying
-
-This repo ships a [`.mcp.json`](./.mcp.json) that points Claude Code at the
-coders.kr MCP server (`https://mcp.coders.kr/mcp`). The first time you open
-the project, Claude Code asks you to approve the server and walks you through
-a one-time browser sign-in — after that the deploy/manage tools are available
-in the session. (No `claude mcp add` needed.)
-
-Then, in Claude Code:
-
-```
-deploy https://github.com/<you>/<your-fork>
+```text
+https://stockpilot.coders.kr/api/auth/google/callback
 ```
 
-That's it. The platform reads `coders.yaml`, parallel-builds the two
-images, brings up Postgres in your tenant namespace, wires
-`${db.url}` into the backend's env, fronts the whole thing with a
-gate at `<name>.coders.kr`, and returns the URL.
+## 주의사항
 
-## Platform policies (read before you ship)
-
-[**PLATFORM.md**](./PLATFORM.md) documents how the platform treats your app
-at runtime — identity, the cost model, quota pools, cold start, and the
-WebSocket/long-connection rules. **If your app streams or holds connections
-open, read §5 first:** a single open *anonymous* WebSocket drains your
-site's anonymous pool in under an hour, after which all anonymous traffic is
-redirected to sign-in.
-
-## Going further
-
-- Add a `redis` component to `coders.yaml` if you want background jobs.
-- Bump `coders.yaml`'s pool sizes (next-slice feature) once your app
-  has clear cost characteristics.
-- For apps that already have their own login flow and don't want to
-  rewire identity, set `mode: standalone` instead — see
-  [PLATFORM.md](https://github.com/cykim8811/coders-platform/blob/main/PLATFORM.md).
+- StockPilot은 모의투자 서비스이며 실제 주문을 전송하지 않습니다.
+- 화면의 시세는 제공처의 정책, 장 운영 시간, 네트워크 상황에 따라 지연될 수 있습니다.
+- 이 프로젝트와 화면의 정보는 투자 권유나 투자 자문이 아닙니다.
+- 실서비스 운영 전에는 사용 중인 시세 API의 이용약관과 재배포 정책을 반드시 확인하세요.
