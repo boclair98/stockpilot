@@ -6,8 +6,8 @@ import "./market.css";
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata = {
-  title: "StockPilot — KIS 실시간 가상투자",
-  description: "KIS 국내·미국 주식 시세로 연습하는 자체 가상투자 서비스",
+  title: "StockPilot — KRX·NXT 통합 시세 가상투자",
+  description: "KIS KRX·NXT 통합 및 미국 주식 시세로 연습하는 가상투자 서비스",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

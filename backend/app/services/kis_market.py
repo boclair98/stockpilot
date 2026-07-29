@@ -20,6 +20,8 @@ from app.services.instrument_catalog import (
 logger = logging.getLogger(__name__)
 TOP_IDS = {item.id for item in TOP_INSTRUMENTS}
 MAX_DYNAMIC_SUBSCRIPTIONS = 20
+DOMESTIC_REST_MARKET = "UN"
+DOMESTIC_STREAM_TR_ID = "H0UNCNT0"
 
 DOMESTIC_COLUMNS = ("symbol", "time", "price", "sign", "change", "change_percent")
 OVERSEAS_COLUMNS = (
@@ -108,6 +110,8 @@ class KISMarket:
             "configured": self.configured,
             "connected": self.connected,
             "source": "한국투자증권 KIS Open API",
+            "domesticVenue": "KRX+NXT 통합",
+            "domesticMarketCode": DOMESTIC_REST_MARKET,
             "quoteCount": len(self._quotes),
             "catalogCount": instrument_catalog.count,
             "lastError": self.last_error or instrument_catalog.last_error,
@@ -224,7 +228,7 @@ class KISMarket:
                         f"{self.rest_base}/uapi/domestic-stock/v1/quotations/inquire-price",
                         headers=self._headers(token, "FHKST01010100"),
                         params={
-                            "FID_COND_MRKT_DIV_CODE": "J",
+                            "FID_COND_MRKT_DIV_CODE": DOMESTIC_REST_MARKET,
                             "FID_INPUT_ISCD": instrument.symbol,
                         },
                     )
@@ -271,7 +275,7 @@ class KISMarket:
     async def _send_subscription(self, instrument: Instrument, tr_type: str) -> None:
         if not self._socket:
             return
-        tr_id = "H0STCNT0" if instrument.market == "KR" else "HDFSCNT0"
+        tr_id = DOMESTIC_STREAM_TR_ID if instrument.market == "KR" else "HDFSCNT0"
         message = {
             "header": {
                 "approval_key": self._approval,
@@ -319,7 +323,11 @@ class KISMarket:
         if len(parts) != 4:
             return
         tr_id, values = parts[1], parts[3].split("^")
-        if tr_id == "H0STCNT0" and len(values) >= len(DOMESTIC_COLUMNS):
+        if tr_id in {
+            DOMESTIC_STREAM_TR_ID,
+            "H0NXCNT0",
+            "H0STCNT0",
+        } and len(values) >= len(DOMESTIC_COLUMNS):
             instrument = next(
                 (item for item in self._watched.values() if item.market == "KR" and item.symbol == values[0]),
                 None,
@@ -345,6 +353,7 @@ class KISMarket:
         price = _number(price_value)
         if price <= 0:
             return
+        venue = "KRX+NXT 통합" if instrument.market == "KR" else "미국 현지시장"
         self._quotes[instrument.id] = {
             **instrument.public(),
             "price": float(price),
@@ -352,7 +361,8 @@ class KISMarket:
             "changePercent": float(_number(percent_value)),
             "marketState": "LIVE" if transport == "WebSocket" else "SNAPSHOT",
             "asOf": datetime.now(UTC).isoformat(),
-            "source": f"KIS Open API · {transport}",
+            "venue": venue,
+            "source": f"KIS {venue} · {transport}",
         }
 
 

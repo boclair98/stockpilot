@@ -7,6 +7,7 @@ import {
   Bell,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
   LogIn,
   LogOut,
   RefreshCw,
@@ -31,6 +32,7 @@ type Quote = {
   marketState: string;
   asOf: string;
   source: string;
+  venue: string;
   isTop: boolean;
 };
 type Position = {
@@ -40,6 +42,11 @@ type Position = {
   currency: Currency;
   quantity: number;
   averagePrice: number;
+  currentPrice: number;
+  costBasis: number;
+  marketValue: number;
+  profit: number;
+  returnRate: number;
   exchange: string;
 };
 type Order = {
@@ -62,6 +69,8 @@ type MarketStatus = {
   configured: boolean;
   connected: boolean;
   source: string;
+  domesticVenue: string;
+  domesticMarketCode: string;
   quoteCount: number;
 };
 type SearchItem = {
@@ -89,6 +98,47 @@ const money = (value: number, currency: Currency) =>
     maximumFractionDigits: currency === "KRW" ? 0 : 2,
   }).format(value);
 
+function nxtSession(now: Date | null) {
+  if (!now) return { label: "시간 확인 중", detail: "NXT 운영시간을 불러오고 있어요" };
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "0";
+  const weekday = value("weekday");
+  const seconds =
+    Number(value("hour")) * 3600 +
+    Number(value("minute")) * 60 +
+    Number(value("second"));
+  if (weekday === "Sat" || weekday === "Sun") {
+    return { label: "NXT 휴장", detail: "평일 오전 8시에 프리마켓이 열려요" };
+  }
+  if (seconds >= 8 * 3600 && seconds < 8 * 3600 + 50 * 60) {
+    return { label: "NXT 프리마켓", detail: "08:00–08:50 거래 중" };
+  }
+  if (seconds >= 9 * 3600 + 30 && seconds < 15 * 3600 + 20 * 60) {
+    return { label: "NXT 메인마켓", detail: "09:00:30–15:20 거래 중" };
+  }
+  if (seconds >= 15 * 3600 + 40 * 60 && seconds < 20 * 3600) {
+    return { label: "NXT 애프터마켓", detail: "15:40–20:00 거래 중" };
+  }
+  if (seconds < 8 * 3600) {
+    return { label: "NXT 개장 전", detail: "08:00 프리마켓 시작" };
+  }
+  if (seconds < 9 * 3600 + 30) {
+    return { label: "NXT 시가 준비", detail: "09:00:30 메인마켓 시작" };
+  }
+  if (seconds < 15 * 3600 + 40 * 60) {
+    return { label: "NXT 애프터 준비", detail: "15:40 애프터마켓 시작" };
+  }
+  return { label: "NXT 장 종료", detail: "다음 평일 08:00 개장" };
+}
+
 export default function TradingTerminal() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio>({
@@ -111,6 +161,7 @@ export default function TradingTerminal() {
   const [searchMarket, setSearchMarket] = useState<"ALL" | Market>("ALL");
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
+  const [clock, setClock] = useState<Date | null>(null);
 
   const refreshPortfolio = useCallback(async () => {
     const response = await fetch("/api/trading/portfolio", {
@@ -164,6 +215,13 @@ export default function TradingTerminal() {
   }, [refreshPortfolio]);
 
   useEffect(() => {
+    const update = () => setClock(new Date());
+    update();
+    const timer = window.setInterval(update, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {
       return;
@@ -195,11 +253,13 @@ export default function TradingTerminal() {
   const activeSymbol = quote?.symbol ?? "005930";
   const selectedName = quote?.name ?? activeSymbol;
   const live = socketConnected && Boolean(status?.connected);
+  const session = useMemo(() => nxtSession(clock), [clock]);
   const positionValues = useMemo(
     () =>
       portfolio.positions.reduce(
         (sum, position) => {
           const price =
+            position.currentPrice ??
             quotes.find((item) => item.symbol === position.symbol && item.exchange === position.exchange)?.price ??
             position.averagePrice;
           sum[position.currency] += position.quantity * price;
@@ -208,6 +268,17 @@ export default function TradingTerminal() {
         { KRW: 0, USD: 0 } as Record<Currency, number>,
       ),
     [portfolio.positions, quotes],
+  );
+  const performance = useMemo(
+    () =>
+      portfolio.positions.reduce(
+        (sum, position) => {
+          sum[position.currency] += position.profit ?? 0;
+          return sum;
+        },
+        { KRW: 0, USD: 0 } as Record<Currency, number>,
+      ),
+    [portfolio.positions],
   );
 
   async function chooseSearchResult(item: SearchItem) {
@@ -236,6 +307,25 @@ export default function TradingTerminal() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     location.href = "/";
+  }
+
+  async function cancelOrder(orderId: string) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/trading/orders/${orderId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "주문을 취소하지 못했어요.");
+      setToast("대기 중인 지정가 가상주문을 취소했어요.");
+      await refreshPortfolio();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+    } finally {
+      setBusy(false);
+      setTimeout(() => setToast(""), 3500);
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -303,10 +393,14 @@ export default function TradingTerminal() {
         <div>
           <p className="eyebrow">
             <span className={live ? "live-dot" : "live-dot off"} />
-            {live ? "KIS 실시간 시세 연결됨" : status?.configured ? "KIS 시세 연결 중" : "시세 설정 필요"}
+            {live
+              ? "KIS KRX+NXT 통합 시세 연결됨"
+              : status?.configured
+                ? "KIS 통합 시세 연결 중"
+                : "시세 설정 필요"}
           </p>
           <h1>실제 시세로 연습하는<br />나의 가상 투자</h1>
-          <p>국내·미국 주식의 KIS 시세로 거래해요. 실제 증권 주문은 전송되지 않습니다.</p>
+          <p>국내는 KRX·NXT 통합, 미국은 현지시장 KIS 시세로 거래해요. 실제 증권 주문은 전송되지 않습니다.</p>
         </div>
         <div className="hero-badge">
           <ShieldCheck size={26} />
@@ -321,6 +415,8 @@ export default function TradingTerminal() {
           <div className="balance-detail">
             <span>원화 주문 가능 <b>{money(portfolio.cash.KRW, "KRW")}</b></span>
             <span>달러 주문 가능 <b>{money(portfolio.cash.USD, "USD")}</b></span>
+            <span>국내 평가손익 <b className={performance.KRW >= 0 ? "up" : "down"}>{money(performance.KRW, "KRW")}</b></span>
+            <span>미국 평가손익 <b className={performance.USD >= 0 ? "up" : "down"}>{money(performance.USD, "USD")}</b></span>
           </div>
         </article>
         <article className="guide-card">
@@ -328,17 +424,22 @@ export default function TradingTerminal() {
           <div><b>시작 가상자금</b><p>1억원과 $100,000가 사용자별로 별도 관리돼요.</p></div>
           <ChevronRight size={18} />
         </article>
+        <article className="market-clock-card">
+          <Clock3 size={23} />
+          <div><b>{session.label}</b><p>{session.detail}</p></div>
+          <span>KRX+NXT</span>
+        </article>
       </section>
 
       <section className="content">
         <div className="market-column">
           <div className="section-head">
-            <div><h2>실시간 주요 종목 TOP 10</h2><p>한국투자증권 KIS 시세를 1초마다 화면에 반영해요</p></div>
+            <div><h2>실시간 주요 종목 TOP 10</h2><p>국내는 KRX+NXT 통합 시세를 1초마다 화면에 반영해요</p></div>
             <span className="source"><Wifi size={13} /> {quote?.source || "KIS 연결 중"}</span>
           </div>
           {([["한국", krTop], ["미국", usTop]] as const).map(([label, items]) => (
             <div className="market-block" key={label}>
-              <div className="market-label"><b>{label} 주식</b><span>TOP 10</span></div>
+              <div className="market-label"><b>{label} 주식</b><span>{label === "한국" ? "KRX+NXT · TOP 10" : "TOP 10"}</span></div>
               <div className="watchlist">
                 {items.length === 0
                   ? [...Array(10)].map((_, index) => <div className="quote skeleton" key={index} />)
@@ -407,13 +508,13 @@ export default function TradingTerminal() {
             </div>
             {portfolio.positions.length ? (
               portfolio.positions.map((position) => {
-                const price = quotes.find((item) => item.symbol === position.symbol && item.exchange === position.exchange)?.price ?? position.averagePrice;
-                const profit = (price - position.averagePrice) * position.quantity;
+                const price = position.currentPrice ?? quotes.find((item) => item.symbol === position.symbol && item.exchange === position.exchange)?.price ?? position.averagePrice;
+                const profit = position.profit ?? (price - position.averagePrice) * position.quantity;
                 return (
                   <div className="holding" key={`${position.exchange}:${position.symbol}`}>
                     <span className="symbol-logo" style={{ background: colorFor(position.symbol) }}>{position.name[0]}</span>
                     <span><b>{position.name}</b><small>{position.quantity}주 · 평균 {money(position.averagePrice, position.currency)}</small></span>
-                    <span><b>{money(price * position.quantity, position.currency)}</b><small className={profit >= 0 ? "up" : "down"}>{profit >= 0 ? "+" : ""}{money(profit, position.currency)}</small></span>
+                    <span><b>{money(price * position.quantity, position.currency)}</b><small className={profit >= 0 ? "up" : "down"}>{profit >= 0 ? "+" : ""}{money(profit, position.currency)} · {(position.returnRate ?? 0).toFixed(2)}%</small></span>
                   </div>
                 );
               })
@@ -426,7 +527,7 @@ export default function TradingTerminal() {
         <aside className="order-card">
           <div className="order-stock">
             <span className="symbol-logo large" style={{ background: colorFor(activeSymbol) }}>{selectedName[0]}</span>
-            <div><h2>{selectedName}</h2><p>{activeSymbol} · {quote?.exchange ?? "KIS"}</p></div>
+            <div><h2>{selectedName}</h2><p>{activeSymbol} · {quote?.market === "KR" ? "KRX+NXT 통합" : quote?.exchange ?? "KIS"}</p></div>
             <span className="current">
               <b>{quote ? money(quote.price, quote.currency) : "—"}</b>
               <small className={(quote?.changePercent ?? 0) >= 0 ? "up" : "down"}>
@@ -467,7 +568,7 @@ export default function TradingTerminal() {
             <button className={`submit ${side.toLowerCase()}`} disabled={busy || !quote}>
               {busy ? <><RefreshCw className="spin" size={17} /> 처리 중</> : portfolio.authenticated ? `${selectedName} ${side === "BUY" ? "가상매수" : "가상매도"}` : "로그인하고 가상투자하기"}
             </button>
-            <p className="disclaimer">시세는 KIS Open API, 체결과 자산은 StockPilot 내부 가상 데이터입니다.</p>
+            <p className="disclaimer">국내 시세는 KIS KRX+NXT 통합(UN), 체결과 자산은 StockPilot 내부 가상 데이터입니다.</p>
           </form>
           {portfolio.orders.length > 0 && (
             <div className="orders">
@@ -475,7 +576,10 @@ export default function TradingTerminal() {
               {portfolio.orders.slice(0, 4).map((order) => (
                 <div key={order.id}>
                   <span><b>{order.symbol}</b><small>{order.side === "BUY" ? "매수" : "매도"} {order.quantity}주</small></span>
-                  <em className={order.status}>{order.status === "FILLED" ? "체결" : order.status === "OPEN" ? "대기" : "거절"}</em>
+                  <span className="order-status">
+                    <em className={order.status}>{order.status === "FILLED" ? "체결" : order.status === "OPEN" ? "대기" : order.status === "CANCELED" ? "취소" : "거절"}</em>
+                    {order.status === "OPEN" && <button type="button" disabled={busy} onClick={() => cancelOrder(order.id)}>주문취소</button>}
+                  </span>
                 </div>
               ))}
             </div>

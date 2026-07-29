@@ -198,6 +198,18 @@ async def portfolio(
         )
         if not instrument or not position.quantity:
             continue
+        await kis_market.watch(instrument)
+        current = kis_market.quote(
+            position.symbol, instrument.market, position.exchange
+        )
+        current_price = (
+            Decimal(str(current["price"])) if current else Decimal(position.average_price)
+        )
+        quantity = Decimal(position.quantity)
+        average_price = Decimal(position.average_price)
+        cost_basis = quantity * average_price
+        market_value = quantity * current_price
+        profit = market_value - cost_basis
         position_rows.append(
             {
                 "symbol": position.symbol,
@@ -205,8 +217,17 @@ async def portfolio(
                 "market": instrument.market,
                 "currency": instrument.currency,
                 "exchange": position.exchange,
-                "quantity": float(position.quantity),
-                "averagePrice": float(position.average_price),
+                "quantity": float(quantity),
+                "averagePrice": float(average_price),
+                "currentPrice": float(current_price),
+                "costBasis": float(cost_basis),
+                "marketValue": float(market_value),
+                "profit": float(profit),
+                "returnRate": float(
+                    (profit / cost_basis * Decimal("100"))
+                    if cost_basis
+                    else Decimal("0")
+                ),
             }
         )
 
@@ -282,6 +303,27 @@ async def order(
         "fillPrice": float(row.fill_price) if row.fill_price else None,
         "currency": instrument.currency,
     }
+
+
+@router.delete("/orders/{order_id}")
+async def cancel_order(
+    order_id: UUID,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    row = (
+        await session.execute(
+            sa.select(TradeOrder)
+            .where(TradeOrder.id == order_id, TradeOrder.owner_id == owner)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "가상주문을 찾을 수 없습니다.")
+    if row.status != "OPEN":
+        raise HTTPException(409, "대기 중인 지정가 주문만 취소할 수 있습니다.")
+    row.status = "CANCELED"
+    return {"id": str(row.id), "status": row.status}
 
 
 @router.websocket("/ws")
