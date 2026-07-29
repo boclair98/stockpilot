@@ -19,6 +19,7 @@ const firebaseConfig = {
 
 const vapidKey =
   "BOMLsaznbUjVNm-3Ak3Fyrmqlf-h58BbC3a377USOOHsh5Z9gY_XlFs8jr8YR_gSgyisBxMv-dhrKp53RZYytjA";
+const serviceWorkerVersion = "20260729-1";
 
 async function messagingClient() {
   if (
@@ -34,9 +35,13 @@ async function messagingClient() {
 
 async function workerRegistration() {
   if (!("serviceWorker" in navigator)) return null;
-  return navigator.serviceWorker.register("/firebase-messaging-sw.js", {
-    scope: "/",
-  });
+  return navigator.serviceWorker.register(
+    `/firebase-messaging-sw.js?v=${serviceWorkerVersion}`,
+    {
+      scope: "/",
+      updateViaCache: "none",
+    },
+  );
 }
 
 export function browserPushState(): NotificationPermission | "unsupported" {
