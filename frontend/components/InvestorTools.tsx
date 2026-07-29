@@ -12,7 +12,22 @@ import {
   Trash2,
   Trophy,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  browserPushState,
+  disableBrowserPush,
+  enableBrowserPush,
+  listenForForegroundPush,
+  restoreBrowserPush,
+} from "@/lib/firebase-push";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -37,6 +52,7 @@ type AlertItem = {
   targetPrice: number;
   currentPrice: number | null;
   status: "ACTIVE" | "TRIGGERED";
+  read: boolean;
   triggeredAt: string | null;
 };
 type Mission = {
@@ -51,6 +67,11 @@ type Dashboard = {
   authenticated: boolean;
   watchlist: WatchItem[];
   alerts: AlertItem[];
+  unreadAlerts: number;
+  push: {
+    configured: boolean;
+    deviceCount: number;
+  };
   report: {
     equity: Record<Currency, number>;
     returnRate: { KRW: number; USD: number; combined: number };
@@ -110,11 +131,18 @@ export default function InvestorTools({
   authenticated,
   onSelect,
   onNotice,
+  onAlertSummary,
+  focusAlertsKey,
 }: {
   selected: SelectedStock | null;
   authenticated: boolean;
   onSelect: (item: WatchItem) => void;
   onNotice: (message: string) => void;
+  onAlertSummary: (summary: {
+    unread: number;
+    pushConfigured: boolean;
+  }) => void;
+  focusAlertsKey: number;
 }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [activeTab, setActiveTab] = useState<"WATCH" | "REPORT" | "MISSION" | "NEWS">("WATCH");
@@ -123,13 +151,46 @@ export default function InvestorTools({
   const [busy, setBusy] = useState(false);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [pushPermission, setPushPermission] = useState<
+    NotificationPermission | "unsupported"
+  >("default");
+  const [thisDeviceEnabled, setThisDeviceEnabled] = useState(false);
+  const seenTriggered = useRef<Set<string> | null>(null);
+  const onNoticeRef = useRef(onNotice);
+  const onAlertSummaryRef = useRef(onAlertSummary);
+
+  useEffect(() => {
+    onNoticeRef.current = onNotice;
+    onAlertSummaryRef.current = onAlertSummary;
+  }, [onAlertSummary, onNotice]);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/features/dashboard", {
       credentials: "include",
       cache: "no-store",
     });
-    if (response.ok) setData(await response.json());
+    if (!response.ok) return;
+    const next: Dashboard = await response.json();
+    setData(next);
+    onAlertSummaryRef.current({
+      unread: next.unreadAlerts,
+      pushConfigured: next.push.configured,
+    });
+    const triggered = next.alerts.filter(
+      (item) => item.status === "TRIGGERED",
+    );
+    if (seenTriggered.current) {
+      const fresh = triggered.filter(
+        (item) => !seenTriggered.current?.has(item.id),
+      );
+      if (fresh.length) {
+        const names = fresh.slice(0, 2).map((item) => item.name).join(", ");
+        onNoticeRef.current(
+          `${names}${fresh.length > 2 ? ` 외 ${fresh.length - 2}개` : ""} 목표가에 도달했어요.`,
+        );
+      }
+    }
+    seenTriggered.current = new Set(triggered.map((item) => item.id));
   }, []);
 
   useEffect(() => {
@@ -140,6 +201,88 @@ export default function InvestorTools({
       window.clearInterval(timer);
     };
   }, [load]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setPushPermission(browserPushState()),
+      0,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: () => void = () => undefined;
+    void listenForForegroundPush((payload) => {
+      const title = payload.data?.title || "StockPilot 가격 알림";
+      const body = payload.data?.body || "설정한 목표 가격에 도달했어요.";
+      onNoticeRef.current(`${title} · ${body}`);
+      void load();
+    }).then((stop) => {
+      if (active) unsubscribe = stop;
+      else stop();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [load]);
+
+  const registerToken = useCallback(async (token: string) => {
+    const response = await fetch("/api/features/push/devices", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.detail || "푸시 알림 기기를 등록하지 못했어요.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      !authenticated ||
+      typeof window === "undefined" ||
+      localStorage.getItem("stockpilot_push_enabled") !== "1"
+    ) {
+      return;
+    }
+    let active = true;
+    void restoreBrowserPush()
+      .then(async (token) => {
+        if (!token || !active) return;
+        await registerToken(token);
+        if (active) {
+          setPushPermission("granted");
+          setThisDeviceEnabled(true);
+          void load();
+        }
+      })
+      .catch(() => {
+        if (active) setThisDeviceEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authenticated, load, registerToken]);
+
+  useEffect(() => {
+    if (!focusAlertsKey) return;
+    const timer = window.setTimeout(() => {
+      setActiveTab("WATCH");
+      document
+        .getElementById("investor-tools")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!authenticated || !data?.unreadAlerts) return;
+      void fetch("/api/features/alerts/read", {
+        method: "POST",
+        credentials: "include",
+      }).then(() => void load());
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [authenticated, data?.unreadAlerts, focusAlertsKey, load]);
 
   useEffect(() => {
     if (!selected) return;
@@ -234,6 +377,51 @@ export default function InvestorTools({
     );
   }
 
+  async function togglePush() {
+    if (!authenticated) {
+      location.href = "/api/auth/google/login?return_to=%2F";
+      return;
+    }
+    if (pushPermission === "denied") {
+      onNotice("브라우저 주소창의 사이트 설정에서 알림을 허용해 주세요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (thisDeviceEnabled) {
+        const token = await disableBrowserPush();
+        if (token) {
+          await fetch("/api/features/push/devices/remove", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          });
+        }
+        localStorage.removeItem("stockpilot_push_enabled");
+        setThisDeviceEnabled(false);
+        onNotice("이 브라우저의 푸시 알림을 껐어요.");
+      } else {
+        const token = await enableBrowserPush();
+        await registerToken(token);
+        localStorage.setItem("stockpilot_push_enabled", "1");
+        setPushPermission("granted");
+        setThisDeviceEnabled(true);
+        onNotice("푸시 알림을 켰어요. 목표가에 도달하면 알려드릴게요.");
+      }
+      await load();
+    } catch (reason) {
+      setPushPermission(browserPushState());
+      onNotice(
+        reason instanceof Error
+          ? reason.message
+          : "푸시 알림을 설정하지 못했어요.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const report = data?.report;
   const completed = data?.missions.filter((mission) => mission.completed).length ?? 0;
 
@@ -304,7 +492,23 @@ export default function InvestorTools({
           </div>
 
           <div className="alert-maker">
-            <div className="tool-card-title"><span><BellRing size={16} /><b>가격 알림</b></span></div>
+            <div className="tool-card-title">
+              <span><BellRing size={16} /><b>가격 알림</b></span>
+              <button
+                type="button"
+                className={`push-toggle ${thisDeviceEnabled ? "enabled" : ""} ${pushPermission === "denied" ? "blocked" : ""}`}
+                disabled={busy || !data.push.configured || pushPermission === "unsupported"}
+                onClick={togglePush}
+              >
+                {pushPermission === "unsupported"
+                  ? "지원하지 않는 브라우저"
+                  : pushPermission === "denied"
+                    ? "브라우저에서 차단됨"
+                    : thisDeviceEnabled
+                      ? "이 기기 알림 켜짐"
+                      : "푸시 알림 켜기"}
+              </button>
+            </div>
             <form onSubmit={addAlert}>
               <p>{selected ? `${selected.name} · ${money(selected.price, selected.currency)}` : "종목을 먼저 선택하세요"}</p>
               <div>

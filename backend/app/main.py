@@ -13,14 +13,17 @@ from app.routes.posts import router as posts_router
 from app.routes.trading import router as trading_router
 from app.routes.users import router as users_router
 from app.services.kis_market import kis_market
+from app.services.price_alert_notifier import price_alert_notifier
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     kis_market.start()
+    price_alert_notifier.start()
     try:
         yield
     finally:
+        await price_alert_notifier.stop()
         await kis_market.stop()
 
 

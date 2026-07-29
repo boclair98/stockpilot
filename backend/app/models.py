@@ -210,6 +210,30 @@ class PriceAlert(Base):
         sa.String(12), nullable=False, default="ACTIVE", server_default="ACTIVE"
     )
     triggered_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    notified_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+
+class PushDevice(Base):
+    __tablename__ = "push_devices"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    token: Mapped[str] = mapped_column(sa.Text, unique=True, nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(sa.String(255))
+    enabled: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

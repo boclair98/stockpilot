@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
 
+    # Firebase Cloud Messaging sends browser notifications when a saved
+    # StockPilot target price is reached. The service-account JSON is base64
+    # encoded before it is stored in the deployment environment.
+    firebase_service_account_b64: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -6,6 +6,8 @@ from app.routes.engagement import (
     mission_rows,
 )
 from app.routes.trading import order_state, simulation_charges
+from app.services.firebase_push import is_permanent_token_error
+from app.services.price_alert_notifier import display_money, reached
 
 
 def test_price_alert_direction() -> None:
@@ -58,3 +60,21 @@ def test_simulation_charges_include_kr_sell_tax() -> None:
     fee, tax = simulation_charges(Decimal("1000000"), "KRW", "SELL")
     assert fee == Decimal("150")
     assert tax == Decimal("2000")
+
+
+def test_background_price_alert_direction() -> None:
+    assert reached("ABOVE", Decimal("101"), Decimal("100"))
+    assert reached("BELOW", Decimal("99"), Decimal("100"))
+    assert not reached("ABOVE", Decimal("99"), Decimal("100"))
+
+
+def test_push_notification_money_display() -> None:
+    assert display_money(Decimal("72500"), "KRW") == "₩72,500"
+    assert display_money(Decimal("203.4"), "USD") == "$203.40"
+
+
+def test_permanent_firebase_token_errors() -> None:
+    assert is_permanent_token_error(
+        RuntimeError("registration-token-not-registered")
+    )
+    assert not is_permanent_token_error(RuntimeError("service unavailable"))
