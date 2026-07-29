@@ -16,6 +16,7 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
 from app.models import Position, TradeOrder, TradingAccount
@@ -23,6 +24,60 @@ from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
+
+
+def simulation_charges(
+    total: Decimal, currency: str, side: str
+) -> tuple[Decimal, Decimal]:
+    fee = total * settings.simulation_fee_rate
+    tax = (
+        total * settings.simulation_kr_sell_tax_rate
+        if currency == "KRW" and side == "SELL"
+        else Decimal("0")
+    )
+    return fee, tax
+
+
+def order_state(
+    order_type: str,
+    status: str,
+    side: str,
+    price: Decimal,
+    limit_price: Decimal | None,
+    trigger_price: Decimal | None,
+) -> tuple[str, bool]:
+    if order_type == "MARKET":
+        return status, True
+    if order_type == "LIMIT":
+        crosses = bool(
+            limit_price is not None
+            and (
+                (side == "BUY" and price <= limit_price)
+                or (side == "SELL" and price >= limit_price)
+            )
+        )
+        return status, crosses
+
+    triggered = status == "TRIGGERED" or bool(
+        trigger_price is not None
+        and (
+            (side == "BUY" and price >= trigger_price)
+            or (side == "SELL" and price <= trigger_price)
+        )
+    )
+    if not triggered:
+        return "OPEN", False
+    if order_type == "STOP":
+        return "TRIGGERED", True
+
+    crosses = bool(
+        limit_price is not None
+        and (
+            (side == "BUY" and price <= limit_price)
+            or (side == "SELL" and price >= limit_price)
+        )
+    )
+    return "TRIGGERED", crosses
 
 
 async def account(
@@ -61,14 +116,16 @@ async def execute(
     ).scalar_one_or_none()
     quantity = Decimal(order.quantity)
     total = quantity * price
+    fee, tax = simulation_charges(total, instrument.currency, order.side)
     cash_field = "cash_krw" if instrument.currency == "KRW" else "cash"
     available = Decimal(getattr(wallet, cash_field))
 
     if order.side == "BUY":
-        if available < total:
+        debit = total + fee
+        if available < debit:
             order.status = "REJECTED"
             return
-        setattr(wallet, cash_field, available - total)
+        setattr(wallet, cash_field, available - debit)
         if not position:
             position = Position(
                 owner_id=order.owner_id,
@@ -80,20 +137,26 @@ async def execute(
             session.add(position)
         old_value = Decimal(position.quantity) * Decimal(position.average_price)
         position.quantity = Decimal(position.quantity) + quantity
-        position.average_price = (old_value + total) / Decimal(position.quantity)
+        position.average_price = (old_value + debit) / Decimal(position.quantity)
     else:
         if not position or Decimal(position.quantity) < quantity:
             order.status = "REJECTED"
             return
+        average_price = Decimal(position.average_price)
         position.quantity = Decimal(position.quantity) - quantity
-        setattr(wallet, cash_field, available + total)
+        setattr(wallet, cash_field, available + total - fee - tax)
+        order.realized_pnl = (price - average_price) * quantity - fee - tax
 
     order.status = "FILLED"
     order.fill_price = price
+    order.fee = fee
+    order.tax = tax
 
 
 async def process_open_orders(session: AsyncSession, owner: UUID | None = None) -> None:
-    query = sa.select(TradeOrder).where(TradeOrder.status == "OPEN")
+    query = sa.select(TradeOrder).where(
+        TradeOrder.status.in_(("OPEN", "TRIGGERED"))
+    )
     if owner:
         query = query.where(TradeOrder.owner_id == owner)
     orders = (await session.execute(query.with_for_update())).scalars().all()
@@ -102,14 +165,21 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
             order.symbol, exchange=order.exchange
         )
         quote = kis_market.quote(order.symbol, exchange=order.exchange)
-        if not instrument or not quote or order.limit_price is None:
+        if not instrument or not quote:
             continue
         price = Decimal(str(quote["price"]))
-        limit_price = Decimal(order.limit_price)
-        crosses = (order.side == "BUY" and price <= limit_price) or (
-            order.side == "SELL" and price >= limit_price
+        next_status, should_execute = order_state(
+            order.order_type,
+            order.status,
+            order.side,
+            price,
+            Decimal(order.limit_price) if order.limit_price is not None else None,
+            Decimal(order.trigger_price)
+            if order.trigger_price is not None
+            else None,
         )
-        if crosses:
+        order.status = next_status
+        if should_execute:
             await execute(session, order, instrument, price)
 
 
@@ -121,6 +191,7 @@ class OrderIn(BaseModel):
     orderType: str = "MARKET"
     quantity: Decimal = Field(gt=0, le=10000)
     limitPrice: Decimal | None = Field(default=None, gt=0)
+    triggerPrice: Decimal | None = Field(default=None, gt=0)
 
 
 @router.get("/quotes")
@@ -244,7 +315,17 @@ async def portfolio(
                 "orderType": order.order_type,
                 "quantity": float(order.quantity),
                 "limitPrice": float(order.limit_price) if order.limit_price else None,
+                "triggerPrice": (
+                    float(order.trigger_price) if order.trigger_price else None
+                ),
                 "fillPrice": float(order.fill_price) if order.fill_price else None,
+                "fee": float(order.fee),
+                "tax": float(order.tax),
+                "realizedPnl": (
+                    float(order.realized_pnl)
+                    if order.realized_pnl is not None
+                    else None
+                ),
                 "status": order.status,
                 "createdAt": order.created_at.isoformat(),
             }
@@ -265,13 +346,17 @@ async def order(
     instrument = await instrument_catalog.get(
         symbol, payload.market.upper(), payload.exchange.upper()
     )
-    if not instrument or side not in {"BUY", "SELL"} or order_type not in {
-        "MARKET",
-        "LIMIT",
-    }:
+    valid_order_types = {"MARKET", "LIMIT", "STOP", "STOP_LIMIT"}
+    if (
+        not instrument
+        or side not in {"BUY", "SELL"}
+        or order_type not in valid_order_types
+    ):
         raise HTTPException(422, "주문 값이 올바르지 않습니다.")
-    if order_type == "LIMIT" and payload.limitPrice is None:
+    if order_type in {"LIMIT", "STOP_LIMIT"} and payload.limitPrice is None:
         raise HTTPException(422, "지정가를 입력하세요.")
+    if order_type in {"STOP", "STOP_LIMIT"} and payload.triggerPrice is None:
+        raise HTTPException(422, "감시 가격을 입력하세요.")
 
     quote = await kis_market.fetch_quote(instrument)
     if not quote:
@@ -285,16 +370,20 @@ async def order(
         order_type=order_type,
         quantity=payload.quantity,
         limit_price=payload.limitPrice,
+        trigger_price=payload.triggerPrice,
     )
     session.add(row)
     await session.flush()
 
-    crosses = (
-        order_type == "MARKET"
-        or (side == "BUY" and price <= Decimal(payload.limitPrice))
-        or (side == "SELL" and price >= Decimal(payload.limitPrice))
+    row.status, should_execute = order_state(
+        order_type,
+        row.status,
+        side,
+        price,
+        Decimal(payload.limitPrice) if payload.limitPrice is not None else None,
+        Decimal(payload.triggerPrice) if payload.triggerPrice is not None else None,
     )
-    if crosses:
+    if should_execute:
         await execute(session, row, instrument, price)
 
     return {
@@ -320,8 +409,8 @@ async def cancel_order(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(404, "가상주문을 찾을 수 없습니다.")
-    if row.status != "OPEN":
-        raise HTTPException(409, "대기 중인 지정가 주문만 취소할 수 있습니다.")
+    if row.status not in {"OPEN", "TRIGGERED"}:
+        raise HTTPException(409, "대기 중인 주문만 취소할 수 있습니다.")
     row.status = "CANCELED"
     return {"id": str(row.id), "status": row.status}
 

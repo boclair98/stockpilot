@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  BrainCircuit,
   ChevronDown,
   ChevronUp,
   Crown,
@@ -17,8 +18,10 @@ import {
   Users,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
 import { signInHref, useMe } from "@/lib/identity";
+import LeagueRooms from "./LeagueRooms";
 
 type Ranking = {
   rank: number;
@@ -79,11 +82,16 @@ export default function LeagueBoard() {
   }, []);
 
   useEffect(() => {
-    load().catch((reason) => setError(reason.message));
+    const initial = window.setTimeout(() => {
+      load().catch((reason) => setError(reason.message));
+    }, 0);
     const timer = window.setInterval(() => {
       load().catch(() => undefined);
     }, 15_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [load]);
 
   async function join(event: FormEvent) {
@@ -132,12 +140,13 @@ export default function LeagueBoard() {
   return (
     <main className="league-app">
       <header className="league-topbar">
-        <a className="league-brand" href="/">
+        <Link className="league-brand" href="/">
           <span><Sparkles size={18} /></span>
           StockPilot
-        </a>
+        </Link>
         <nav>
-          <a href="/"><ArrowLeft size={15} /> 가상투자</a>
+          <Link href="/"><ArrowLeft size={15} /> 가상투자</Link>
+          <Link href="/practice"><BrainCircuit size={15} /> 시세 연습</Link>
           <span className="active"><Trophy size={15} /> 수익률 리그</span>
         </nav>
       </header>
@@ -229,7 +238,7 @@ export default function LeagueBoard() {
                   <span className={data.me.returnRate >= 0 ? "positive" : "negative"}>{rate(data.me.returnRate)}</span>
                 </div>
                 <div className="my-nickname"><span>{data.me.nickname[0]}</span><b>{data.me.nickname}</b><RankChange value={data.me.rankChange} /></div>
-                <a className="trade-button" href="/">수익률 높이러 가기</a>
+                <Link className="trade-button" href="/">수익률 높이러 가기</Link>
                 <button className="leave-button" disabled={busy} onClick={leave}>리그 나가기</button>
               </>
             ) : me ? (
@@ -276,6 +285,8 @@ export default function LeagueBoard() {
         </aside>
       </section>
 
+      <LeagueRooms authenticated={Boolean(me)} />
+
       <section className="league-rules">
         <p>HOW IT WORKS</p>
         <h2>모두에게 같은 조건이에요</h2>
@@ -289,7 +300,7 @@ export default function LeagueBoard() {
       <footer className="league-footer">
         <b>StockPilot League</b>
         <span>투자 권유가 아닌 가상투자 학습 서비스입니다.</span>
-        <a href="/">가상투자로 돌아가기</a>
+        <Link href="/">가상투자로 돌아가기</Link>
       </footer>
     </main>
   );

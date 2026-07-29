@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import secrets
+import string
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -18,6 +20,8 @@ from app.core.identity import optional_identity, require_identity
 from app.models import (
     LeagueParticipant,
     LeagueRankSnapshot,
+    LeagueRoom,
+    LeagueRoomMember,
     Position,
     TradingAccount,
 )
@@ -30,6 +34,7 @@ INITIAL_KRW = Decimal("100000000")
 INITIAL_USD = Decimal("100000")
 SEOUL = timezone(timedelta(hours=9))
 NICKNAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣_-]+$")
+ROOM_NAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣 _-]+$")
 
 
 class JoinIn(BaseModel):
@@ -43,6 +48,41 @@ class JoinIn(BaseModel):
         value = value.strip()
         if not 2 <= len(value) <= 12 or not NICKNAME_PATTERN.fullmatch(value):
             raise ValueError("닉네임은 한글·영문·숫자·_-만 2~12자로 입력하세요.")
+        return value
+
+
+class RoomCreateIn(BaseModel):
+    name: str = Field(min_length=2, max_length=24)
+    nickname: str = Field(min_length=2, max_length=12)
+    durationDays: int = Field(default=30, ge=7, le=90)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        value = value.strip()
+        if not ROOM_NAME_PATTERN.fullmatch(value):
+            raise ValueError("리그 이름에는 한글·영문·숫자·공백·_-만 사용할 수 있습니다.")
+        return value
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_create_nickname(cls, value: str) -> str:
+        value = value.strip()
+        if not NICKNAME_PATTERN.fullmatch(value):
+            raise ValueError("닉네임은 한글·영문·숫자·_-만 사용할 수 있습니다.")
+        return value
+
+
+class RoomJoinIn(BaseModel):
+    inviteCode: str = Field(min_length=6, max_length=10)
+    nickname: str = Field(min_length=2, max_length=12)
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_room_nickname(cls, value: str) -> str:
+        value = value.strip()
+        if not NICKNAME_PATTERN.fullmatch(value):
+            raise ValueError("닉네임은 한글·영문·숫자·_-만 사용할 수 있습니다.")
         return value
 
 
@@ -79,6 +119,31 @@ async def _score_participants(
         return []
 
     owner_ids = [participant.owner_id for participant in participants]
+    equity = await _owner_equity(session, owner_ids)
+
+    scored = [
+        {
+            "participant": participant,
+            "returnRate": combined_return_rate(
+                equity[participant.owner_id]["KRW"],
+                equity[participant.owner_id]["USD"],
+            ),
+        }
+        for participant in participants
+    ]
+    scored.sort(
+        key=lambda row: (
+            -row["returnRate"],
+            row["participant"].joined_at or datetime.now(UTC),
+            row["participant"].nickname,
+        )
+    )
+    return scored
+
+
+async def _owner_equity(
+    session: AsyncSession, owner_ids: list[UUID]
+) -> dict[UUID, dict[str, Decimal]]:
     accounts = {
         row.owner_id: row
         for row in (
@@ -101,7 +166,7 @@ async def _score_participants(
         .all()
     )
 
-    equity = {
+    equity: dict[UUID, dict[str, Decimal]] = {
         owner_id: {
             "KRW": Decimal(accounts[owner_id].cash_krw)
             if owner_id in accounts
@@ -137,24 +202,83 @@ async def _score_participants(
         )
         equity[position.owner_id][instrument.currency] += quantity * price
 
-    scored = [
-        {
-            "participant": participant,
-            "returnRate": combined_return_rate(
-                equity[participant.owner_id]["KRW"],
-                equity[participant.owner_id]["USD"],
-            ),
-        }
-        for participant in participants
-    ]
-    scored.sort(
-        key=lambda row: (
-            -row["returnRate"],
-            row["participant"].joined_at or datetime.now(UTC),
-            row["participant"].nickname,
+    return equity
+
+
+def _room_status(room: LeagueRoom) -> str:
+    now = datetime.now(UTC)
+    if now < room.starts_at:
+        return "UPCOMING"
+    if now >= room.ends_at:
+        return "ENDED"
+    return "ACTIVE"
+
+
+async def _room_payload(
+    session: AsyncSession, room: LeagueRoom, owner: UUID
+) -> dict:
+    members = (
+        (
+            await session.execute(
+                sa.select(LeagueRoomMember)
+                .where(LeagueRoomMember.league_id == room.id)
+                .order_by(LeagueRoomMember.joined_at)
+            )
         )
+        .scalars()
+        .all()
     )
-    return scored
+    member = next((item for item in members if item.owner_id == owner), None)
+    if not member:
+        raise HTTPException(403, "참여 중인 리그만 볼 수 있습니다.")
+    equity = await _owner_equity(session, [item.owner_id for item in members])
+    rankings = []
+    for item in members:
+        current = equity[item.owner_id]
+        baseline_krw = Decimal(item.baseline_krw) or INITIAL_KRW
+        baseline_usd = Decimal(item.baseline_usd) or INITIAL_USD
+        score = (
+            (
+                current["KRW"] / baseline_krw
+                + current["USD"] / baseline_usd
+            )
+            / Decimal("2")
+            - Decimal("1")
+        ) * Decimal("100")
+        rankings.append(
+            {
+                "nickname": item.nickname,
+                "returnRate": float(score.quantize(Decimal("0.0001"))),
+                "isMe": item.owner_id == owner,
+                "joinedAt": item.joined_at.isoformat(),
+            }
+        )
+    rankings.sort(key=lambda row: (-row["returnRate"], row["joinedAt"]))
+    for rank, row in enumerate(rankings, start=1):
+        row["rank"] = rank
+    return {
+        "id": str(room.id),
+        "name": room.name,
+        "inviteCode": room.invite_code,
+        "status": _room_status(room),
+        "startsAt": room.starts_at.isoformat(),
+        "endsAt": room.ends_at.isoformat(),
+        "participantCount": len(rankings),
+        "isOwner": room.owner_id == owner,
+        "rankings": rankings,
+    }
+
+
+async def _new_invite_code(session: AsyncSession) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(10):
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        exists = await session.scalar(
+            sa.select(LeagueRoom.id).where(LeagueRoom.invite_code == code)
+        )
+        if not exists:
+            return code
+    raise HTTPException(503, "초대코드를 만들지 못했습니다. 다시 시도해 주세요.")
 
 
 async def _rankings_payload(
@@ -303,4 +427,150 @@ async def leave(
     if not participant:
         raise HTTPException(404, "참여 중인 리그가 없습니다.")
     participant.active = False
+    return {"left": True}
+
+
+@router.get("/rooms")
+async def rooms(
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    room_rows = (
+        (
+            await session.execute(
+                sa.select(LeagueRoom)
+                .join(
+                    LeagueRoomMember,
+                    LeagueRoomMember.league_id == LeagueRoom.id,
+                )
+                .where(LeagueRoomMember.owner_id == owner)
+                .order_by(LeagueRoom.ends_at.desc())
+                .limit(20)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "rooms": [await _room_payload(session, room, owner) for room in room_rows]
+    }
+
+
+@router.get("/rooms/{room_id}")
+async def room_detail(
+    room_id: UUID,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    room = await session.get(LeagueRoom, room_id)
+    if not room:
+        raise HTTPException(404, "리그를 찾을 수 없습니다.")
+    return await _room_payload(session, room, owner)
+
+
+@router.post("/rooms", status_code=201)
+async def create_room(
+    payload: RoomCreateIn,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    room_count = await session.scalar(
+        sa.select(sa.func.count()).where(LeagueRoom.owner_id == owner)
+    )
+    if (room_count or 0) >= 10:
+        raise HTTPException(409, "만들 수 있는 비공개 리그는 최대 10개입니다.")
+    current = (await _owner_equity(session, [owner]))[owner]
+    now = datetime.now(UTC)
+    room = LeagueRoom(
+        owner_id=owner,
+        name=payload.name.strip(),
+        invite_code=await _new_invite_code(session),
+        starts_at=now,
+        ends_at=now + timedelta(days=payload.durationDays),
+    )
+    session.add(room)
+    await session.flush()
+    session.add(
+        LeagueRoomMember(
+            league_id=room.id,
+            owner_id=owner,
+            nickname=payload.nickname.strip(),
+            baseline_krw=current["KRW"],
+            baseline_usd=current["USD"],
+        )
+    )
+    await session.flush()
+    return await _room_payload(session, room, owner)
+
+
+@router.post("/rooms/join", status_code=201)
+async def join_room(
+    payload: RoomJoinIn,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    room = await session.scalar(
+        sa.select(LeagueRoom).where(
+            LeagueRoom.invite_code == payload.inviteCode.strip().upper()
+        )
+    )
+    if not room:
+        raise HTTPException(404, "초대코드가 올바르지 않습니다.")
+    if _room_status(room) == "ENDED":
+        raise HTTPException(409, "이미 종료된 리그입니다.")
+    existing = await session.scalar(
+        sa.select(LeagueRoomMember).where(
+            LeagueRoomMember.league_id == room.id,
+            LeagueRoomMember.owner_id == owner,
+        )
+    )
+    if existing:
+        return await _room_payload(session, room, owner)
+    member_count = await session.scalar(
+        sa.select(sa.func.count()).where(LeagueRoomMember.league_id == room.id)
+    )
+    if (member_count or 0) >= 100:
+        raise HTTPException(409, "리그 참여 인원이 가득 찼습니다.")
+    duplicate_name = await session.scalar(
+        sa.select(LeagueRoomMember.id).where(
+            LeagueRoomMember.league_id == room.id,
+            LeagueRoomMember.nickname == payload.nickname.strip(),
+        )
+    )
+    if duplicate_name:
+        raise HTTPException(409, "리그에서 이미 사용 중인 닉네임입니다.")
+    current = (await _owner_equity(session, [owner]))[owner]
+    session.add(
+        LeagueRoomMember(
+            league_id=room.id,
+            owner_id=owner,
+            nickname=payload.nickname.strip(),
+            baseline_krw=current["KRW"],
+            baseline_usd=current["USD"],
+        )
+    )
+    await session.flush()
+    return await _room_payload(session, room, owner)
+
+
+@router.delete("/rooms/{room_id}/membership")
+async def leave_room(
+    room_id: UUID,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    room = await session.get(LeagueRoom, room_id)
+    if not room:
+        raise HTTPException(404, "리그를 찾을 수 없습니다.")
+    if room.owner_id == owner:
+        raise HTTPException(409, "방장은 리그를 나갈 수 없습니다.")
+    member = await session.scalar(
+        sa.select(LeagueRoomMember).where(
+            LeagueRoomMember.league_id == room_id,
+            LeagueRoomMember.owner_id == owner,
+        )
+    )
+    if not member:
+        raise HTTPException(404, "참여 중인 리그가 아닙니다.")
+    await session.delete(member)
     return {"left": True}
