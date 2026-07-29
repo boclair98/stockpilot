@@ -143,6 +143,217 @@
   font-size: 12px;
 }
 
+.company-insight {
+  margin-top: 18px;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid #eef0f2;
+  border-radius: 22px;
+  background: white;
+}
+
+.dart-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #687482;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.company-loading,
+.company-state {
+  min-height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #8b949e;
+  font-size: 11px;
+}
+
+.company-profile {
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f5f8fc, #f8f5ff);
+}
+
+.company-building {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: white;
+  color: #4f6bed;
+  box-shadow: 0 4px 14px #34455f10;
+}
+
+.company-profile h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.company-profile p {
+  margin: 4px 0 0;
+  color: #8a949f;
+  font-size: 9px;
+}
+
+.market-chip {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #eaf3ff;
+  color: #2873dc;
+  font-size: 8px;
+  font-weight: 850;
+}
+
+.company-facts {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 15px 4px;
+  border-bottom: 1px solid #eef0f2;
+}
+
+.company-facts > span {
+  display: grid;
+  gap: 4px;
+}
+
+.company-facts small {
+  color: #98a1ab;
+  font-size: 8px;
+}
+
+.company-facts b {
+  font-size: 10px;
+}
+
+.company-facts a {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: #3182f6;
+  font-size: 9px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.financial-block,
+.disclosure-block {
+  padding-top: 16px;
+}
+
+.financial-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.financial-title b {
+  font-size: 12px;
+}
+
+.financial-title span {
+  color: #8d97a2;
+  font-size: 8px;
+}
+
+.financial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.financial-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 13px;
+  background: #f7f8fa;
+}
+
+.financial-grid small {
+  color: #89939e;
+  font-size: 8px;
+}
+
+.financial-grid strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disclosure-list {
+  display: grid;
+}
+
+.disclosure-list a {
+  display: grid;
+  grid-template-columns: 32px 1fr 14px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  border-top: 1px solid #f0f2f4;
+  text-decoration: none;
+}
+
+.disclosure-list a:hover b {
+  color: #3182f6;
+}
+
+.disclosure-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #fff4e9;
+  color: #ef8439;
+}
+
+.disclosure-list a > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.disclosure-list b {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disclosure-list small {
+  color: #929ba5;
+  font-size: 8px;
+}
+
+.disclosure-list > a > svg {
+  color: #a6aeb7;
+}
+
+.no-disclosure,
+.dart-note {
+  color: #929ba5;
+  font-size: 9px;
+}
+
+.dart-note {
+  margin: 13px 0 0;
+  text-align: center;
+}
+
 .top-actions > .user-chip {
   width: auto;
   min-width: 38px;
@@ -299,6 +510,19 @@
 
   .search-results > button > svg {
     display: none;
+  }
+
+  .company-facts {
+    flex-wrap: wrap;
+    gap: 12px 20px;
+  }
+
+  .company-facts a {
+    margin-left: 0;
+  }
+
+  .financial-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .user-chip > span:not(.avatar),

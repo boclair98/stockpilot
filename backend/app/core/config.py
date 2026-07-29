@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
 
+    # OpenDART is used for Korean public-company profiles, financials, and
+    # disclosures. The key never leaves the API server.
+    dart_api_key: str | None = None
+
     # StockPilot runs in coders.kr standalone mode and owns its Google login.
     # Secrets are injected by the platform and never exposed to the browser.
     google_client_id: str | None = None

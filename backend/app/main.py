@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.core.database import AsyncSessionLocal
 from app.routes.auth import router as auth_router
+from app.routes.company import router as company_router
 from app.routes.league import router as league_router
 from app.routes.posts import router as posts_router
 from app.routes.trading import router as trading_router
@@ -32,6 +33,7 @@ app = FastAPI(
 
 app.include_router(users_router)
 app.include_router(auth_router)
+app.include_router(company_router)
 app.include_router(league_router)
 app.include_router(posts_router)
 app.include_router(trading_router)
