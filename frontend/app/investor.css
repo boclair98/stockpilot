@@ -126,6 +126,32 @@
 }
 
 .tool-card-title > button:disabled { opacity: .45; }
+.tool-card-title > button.push-toggle.enabled {
+  background: #e8f8f1;
+  color: #16845e;
+}
+.tool-card-title > button.push-toggle.blocked {
+  background: #fff1f2;
+  color: #e54856;
+}
+.alert-button { position: relative; }
+.alert-count {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid #f7f8fa;
+  border-radius: 999px;
+  background: #f04452;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 850;
+  line-height: 1;
+}
 .saved-items { display: grid; gap: 3px; margin-top: 9px; }
 .saved-items > div {
   display: grid;

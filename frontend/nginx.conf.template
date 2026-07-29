@@ -70,6 +70,14 @@ server {
     add_header Cache-Control "public, immutable";
   }
 
+  # The browser checks this file for every service-worker update. Never let
+  # Cloudflare or the browser pin an old Firebase worker after a deployment.
+  location = /firebase-messaging-sw.js {
+    expires -1;
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    try_files $uri =404;
+  }
+
   # SPA fallback: any unknown path serves the closest matching exported
   # HTML, defaulting to /index.html so client-side routing can pick up.
   location / {

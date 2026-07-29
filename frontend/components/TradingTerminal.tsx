@@ -168,6 +168,8 @@ export default function TradingTerminal() {
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [clock, setClock] = useState<Date | null>(null);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [alertFocusKey, setAlertFocusKey] = useState(0);
 
   const refreshPortfolio = useCallback(async () => {
     const response = await fetch("/api/trading/portfolio", {
@@ -382,7 +384,16 @@ export default function TradingTerminal() {
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
           <button aria-label="검색"><Search size={19} /></button>
-          <button aria-label="알림" onClick={() => document.getElementById("investor-tools")?.scrollIntoView({ behavior: "smooth" })}><Bell size={19} /></button>
+          <button
+            className="alert-button"
+            aria-label={unreadAlerts ? `읽지 않은 알림 ${unreadAlerts}개` : "알림"}
+            onClick={() => setAlertFocusKey((value) => value + 1)}
+          >
+            <Bell size={19} />
+            {unreadAlerts > 0 && (
+              <span className="alert-count">{unreadAlerts > 99 ? "99+" : unreadAlerts}</span>
+            )}
+          </button>
           {portfolio.authenticated ? (
             <button className="user-chip" onClick={logout} title="로그아웃">
               {me?.picture ? <span className="avatar profile-photo" style={{ backgroundImage: `url("${me.picture}")` }} /> : <span className="avatar">{me?.display_name?.[0] || "G"}</span>}
@@ -541,6 +552,8 @@ export default function TradingTerminal() {
               setToast(message);
               setTimeout(() => setToast(""), 3500);
             }}
+            onAlertSummary={({ unread }) => setUnreadAlerts(unread)}
+            focusAlertsKey={alertFocusKey}
           />
 
           <div className="portfolio-panel">

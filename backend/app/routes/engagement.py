@@ -7,7 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,10 +17,12 @@ from app.models import (
     PortfolioDailySnapshot,
     Position,
     PriceAlert,
+    PushDevice,
     TradeOrder,
     TradingAccount,
     WatchlistItem,
 )
+from app.services.firebase_push import firebase_push
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 
@@ -40,6 +42,10 @@ class InstrumentIn(BaseModel):
 class AlertIn(InstrumentIn):
     direction: str = Field(pattern="^(ABOVE|BELOW)$")
     targetPrice: Decimal = Field(gt=0)
+
+
+class PushDeviceIn(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
 
 
 def return_rate(equity: Decimal, initial: Decimal) -> Decimal:
@@ -225,6 +231,8 @@ async def dashboard(
             "authenticated": False,
             "watchlist": [],
             "alerts": [],
+            "unreadAlerts": 0,
+            "push": {"configured": firebase_push.configured, "deviceCount": 0},
             "report": None,
             "missions": [],
         }
@@ -281,6 +289,7 @@ async def dashboard(
                 "targetPrice": float(item.target_price),
                 "currentPrice": quote.get("price") if quote else None,
                 "status": item.status,
+                "read": item.read_at is not None,
                 "triggeredAt": (
                     item.triggered_at.isoformat() if item.triggered_at else None
                 ),
@@ -379,6 +388,23 @@ async def dashboard(
         "authenticated": True,
         "watchlist": watchlist_rows,
         "alerts": alert_rows,
+        "unreadAlerts": sum(
+            1
+            for item in alerts
+            if item.status == "TRIGGERED" and item.read_at is None
+        ),
+        "push": {
+            "configured": firebase_push.configured,
+            "deviceCount": int(
+                await session.scalar(
+                    sa.select(sa.func.count()).where(
+                        PushDevice.owner_id == owner,
+                        PushDevice.enabled.is_(True),
+                    )
+                )
+                or 0
+            ),
+        },
         "report": {
             "equity": {"KRW": float(equity_krw), "USD": float(equity_usd)},
             "returnRate": {
@@ -540,6 +566,23 @@ async def create_alert(
     return {"id": str(row.id), "status": row.status}
 
 
+@router.post("/alerts/read")
+async def read_alerts(
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        sa.update(PriceAlert)
+        .where(
+            PriceAlert.owner_id == owner,
+            PriceAlert.status == "TRIGGERED",
+            PriceAlert.read_at.is_(None),
+        )
+        .values(read_at=datetime.now(UTC))
+    )
+    return {"read": result.rowcount or 0}
+
+
 @router.delete("/alerts/{alert_id}")
 async def delete_alert(
     alert_id: UUID,
@@ -556,3 +599,57 @@ async def delete_alert(
         raise HTTPException(404, "가격 알림을 찾을 수 없습니다.")
     await session.delete(row)
     return {"removed": True}
+
+
+@router.post("/push/devices")
+async def register_push_device(
+    payload: PushDeviceIn,
+    request: Request,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    if not firebase_push.configured:
+        raise HTTPException(503, "푸시 알림 설정을 준비하고 있습니다.")
+    now = datetime.now(UTC)
+    row = await session.scalar(
+        sa.select(PushDevice).where(PushDevice.token == payload.token)
+    )
+    if row:
+        row.owner_id = owner
+        row.enabled = True
+        row.last_seen_at = now
+        row.user_agent = (request.headers.get("user-agent") or "")[:255] or None
+        return {"registered": True}
+
+    device_count = await session.scalar(
+        sa.select(sa.func.count()).where(
+            PushDevice.owner_id == owner,
+            PushDevice.enabled.is_(True),
+        )
+    )
+    if (device_count or 0) >= 10:
+        raise HTTPException(409, "푸시 알림 기기는 최대 10개까지 등록할 수 있습니다.")
+    session.add(
+        PushDevice(
+            owner_id=owner,
+            token=payload.token,
+            user_agent=(request.headers.get("user-agent") or "")[:255] or None,
+            last_seen_at=now,
+        )
+    )
+    return {"registered": True}
+
+
+@router.post("/push/devices/remove")
+async def remove_push_device(
+    payload: PushDeviceIn,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        sa.delete(PushDevice).where(
+            PushDevice.owner_id == owner,
+            PushDevice.token == payload.token,
+        )
+    )
+    return {"removed": bool(result.rowcount)}

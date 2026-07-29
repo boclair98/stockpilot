@@ -32,6 +32,8 @@ StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세�
 - **초대형 시즌 리그**: 친구와 7~90일 비공개 리그를 만들고 참여 이후 수익률로 경쟁
 - **프라이버시 순위표**: 닉네임·순위·수익률·순위 변화만 공개하고 종목·거래·잔고는 비공개
 - **관심종목·가격 알림**: 최대 20개 관심종목과 20개 목표가격 알림 관리
+- **브라우저 푸시 알림**: Firebase Cloud Messaging으로 목표가 도달 알림을 로그인 사용자의 등록 기기에 전송
+- **알림 표시·읽음 처리**: 상단 종 아이콘에 읽지 않은 알림 수를 표시하고 알림 화면에서 확인
 - **투자 리포트**: 국내·미국 수익률, 체결 수, 실현손익, 승률, 모의 비용과 일별 추이 제공
 - **투자 미션**: 첫 체결, 관심종목, 가격 알림, 계획 주문, 분산투자, 리그 참여 미션
 - **종목 뉴스**: KIS 공식 국내 시황·공시 제목과 해외 종목 뉴스 제목 제공
@@ -59,6 +61,7 @@ TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거�
             ├─ KIS Open API: 국내·미국 종목 및 시세
             ├─ OpenDART: 국내 상장사 개요·재무·공시
             ├─ Google OAuth: 사용자 로그인
+            ├─ Firebase FCM: 목표가 도달 웹 푸시
             └─ PostgreSQL: 가상 잔고·보유 종목·주문·리그 기록
 ```
 
@@ -74,6 +77,7 @@ KIS API는 **시세 조회에만** 사용합니다. 매수·매도 주문은 Sto
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API |
 | Company Data | 금융감독원 OpenDART |
+| Push Notification | Firebase Cloud Messaging, Web Push |
 | Infrastructure | Docker, Docker Compose, coders.kr |
 
 ## 로컬 실행
@@ -98,6 +102,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 
 AUTH_SESSION_SECRET=
 AUTH_COOKIE_SECURE=false
+FIREBASE_SERVICE_ACCOUNT_B64=
 SIMULATION_FEE_RATE=0.00015
 SIMULATION_KR_SELL_TAX_RATE=0.002
 ```
@@ -130,7 +135,7 @@ backend/
     routes/company.py     OpenDART 기업 개요·재무·공시 API
     routes/engagement.py  관심종목·가격 알림·리포트·미션 API
     routes/trading.py     시세·검색·가상 주문 API
-    services/             KIS 연동과 종목 데이터 처리
+    services/             KIS·Firebase 연동과 종목 데이터 처리
   alembic/versions/       거래 관련 DB 마이그레이션
 
 frontend/
@@ -157,6 +162,7 @@ compose.yaml              로컬 개발 환경
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SESSION_SECRET`
+- `FIREBASE_SERVICE_ACCOUNT_B64`
 
 운영 Google OAuth 리디렉션 URI:
 
