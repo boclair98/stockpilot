@@ -99,10 +99,18 @@ class TradeOrder(Base):
         sa.String(8), nullable=False, default="KRX", server_default="KRX"
     )
     side: Mapped[str] = mapped_column(sa.String(4), nullable=False)
-    order_type: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    order_type: Mapped[str] = mapped_column(sa.String(12), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(sa.Numeric(18, 6), nullable=False)
     limit_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
+    trigger_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     fill_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
+    fee: Mapped[Decimal] = mapped_column(
+        sa.Numeric(18, 4), nullable=False, default=0, server_default="0"
+    )
+    tax: Mapped[Decimal] = mapped_column(
+        sa.Numeric(18, 4), nullable=False, default=0, server_default="0"
+    )
+    realized_pnl: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     status: Mapped[str] = mapped_column(sa.String(12), nullable=False, default="OPEN")
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), index=True
@@ -156,5 +164,137 @@ class LeagueRankSnapshot(Base):
             "participant_id",
             "snapshot_date",
             name="uq_league_snapshot_participant_date",
+        ),
+    )
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "owner_id",
+            "symbol",
+            "exchange",
+            name="uq_watchlist_owner_symbol_exchange",
+        ),
+    )
+
+
+class PriceAlert(Base):
+    __tablename__ = "price_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    direction: Mapped[str] = mapped_column(sa.String(5), nullable=False)
+    target_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    status: Mapped[str] = mapped_column(
+        sa.String(12), nullable=False, default="ACTIVE", server_default="ACTIVE"
+    )
+    triggered_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+
+class PortfolioDailySnapshot(Base):
+    __tablename__ = "portfolio_daily_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    snapshot_date: Mapped[date] = mapped_column(sa.Date, nullable=False, index=True)
+    equity_krw: Mapped[Decimal] = mapped_column(sa.Numeric(18, 2), nullable=False)
+    equity_usd: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    return_rate: Mapped[Decimal] = mapped_column(sa.Numeric(12, 6), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "owner_id",
+            "snapshot_date",
+            name="uq_portfolio_snapshot_owner_date",
+        ),
+    )
+
+
+class LeagueRoom(Base):
+    __tablename__ = "league_rooms"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    invite_code: Mapped[str] = mapped_column(
+        sa.String(10), unique=True, nullable=False, index=True
+    )
+    starts_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False
+    )
+    ends_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+
+class LeagueRoomMember(Base):
+    __tablename__ = "league_room_members"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    league_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("league_rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    nickname: Mapped[str] = mapped_column(sa.String(24), nullable=False)
+    baseline_krw: Mapped[Decimal] = mapped_column(sa.Numeric(18, 2), nullable=False)
+    baseline_usd: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "league_id",
+            "owner_id",
+            name="uq_league_room_member_owner",
+        ),
+        sa.UniqueConstraint(
+            "league_id",
+            "nickname",
+            name="uq_league_room_member_nickname",
         ),
     )

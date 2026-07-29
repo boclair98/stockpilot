@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import "./market.css";
 import "./league.css";
+import "./investor.css";
+import "./rooms.css";
+import "./practice.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 

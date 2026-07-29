@@ -1,0 +1,182 @@
+.private-leagues {
+  margin: 52px 18px 0;
+}
+
+.private-leagues .league-section-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #3178d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.private-login {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #e7ebef;
+  border-radius: 19px;
+  background: #fff;
+  color: #3182f6;
+}
+
+.private-login > span {
+  display: grid;
+  gap: 4px;
+  color: #191f28;
+}
+
+.private-login b { font-size: 12px; }
+.private-login small { color: #8a949f; font-size: 9px; }
+.private-login a {
+  padding: 11px 14px;
+  border-radius: 11px;
+  background: #3182f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.private-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+}
+
+.room-list {
+  display: grid;
+  gap: 10px;
+}
+
+.room-list > article, .room-maker, .room-empty {
+  padding: 18px;
+  border: 1px solid #e9edf1;
+  border-radius: 19px;
+  background: #fff;
+}
+
+.room-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.room-head > span {
+  display: grid;
+  gap: 4px;
+}
+
+.room-head b { font-size: 13px; }
+.room-head small { color: #8a949f; font-size: 8px; }
+.room-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 9px;
+  background: #f2f4f6;
+  color: #596675;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.room-ranking {
+  display: grid;
+  gap: 3px;
+  margin-top: 12px;
+}
+
+.room-ranking > div {
+  display: grid;
+  grid-template-columns: 25px 1fr auto;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fafbfc;
+  font-size: 9px;
+}
+
+.room-ranking > div.mine { background: #eef6ff; }
+.room-ranking > div > b { color: #77818d; text-align: center; }
+.room-ranking span { display: flex; align-items: center; gap: 5px; font-weight: 750; }
+.room-ranking span small { padding: 2px 4px; border-radius: 5px; background: #3182f6; color: #fff; font-size: 7px; }
+.room-ranking strong { font-size: 10px; }
+.room-list > article > p { margin: 10px 0 0; color: #98a1ab; font-size: 8px; text-align: right; }
+
+.room-empty {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #8793a0;
+}
+
+.room-empty b { color: #4e5968; font-size: 11px; }
+.room-empty p { margin: 0; font-size: 9px; }
+.room-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 4px; border-radius: 12px; background: #f2f4f6; }
+.room-tabs button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #77818d;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.room-tabs button.active { background: #fff; color: #191f28; }
+.room-maker form { display: grid; gap: 10px; margin-top: 15px; }
+.room-maker label { display: grid; gap: 5px; color: #687482; font-size: 9px; font-weight: 750; }
+.room-maker input, .room-maker select {
+  width: 100%;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid #dfe4e9;
+  border-radius: 11px;
+  outline: 0;
+  background: #fff;
+  font-size: 10px;
+}
+.room-maker input:focus, .room-maker select:focus { border-color: #5b9bf3; }
+.room-maker form > button {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 11px;
+  background: #3182f6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.room-maker form > button:disabled { opacity: .55; }
+.room-notice { margin: 10px 0 0; padding: 8px; border-radius: 9px; background: #eef7ff; color: #2e70c9; font-size: 8px; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .private-grid { grid-template-columns: 1fr; }
+  .room-maker { grid-row: 1; }
+}
+
+@media (max-width: 520px) {
+  .private-leagues { margin-right: 10px; margin-left: 10px; }
+  .private-login { grid-template-columns: auto 1fr; }
+  .private-login a { grid-column: 1 / -1; text-align: center; }
+  .private-leagues .league-section-head > span { display: none; }
+}

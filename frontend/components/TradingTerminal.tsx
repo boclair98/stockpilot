@@ -5,6 +5,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  BrainCircuit,
   ChevronRight,
   CircleDollarSign,
   Clock3,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 
 import CompanyInsight from "./CompanyInsight";
+import InvestorTools from "./InvestorTools";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -153,9 +155,10 @@ export default function TradingTerminal() {
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [selected, setSelected] = useState("KR:KRX:005930");
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
-  const [kind, setKind] = useState<"MARKET" | "LIMIT">("MARKET");
+  const [kind, setKind] = useState<"MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT">("MARKET");
   const [quantity, setQuantity] = useState("1");
   const [limitPrice, setLimitPrice] = useState("");
+  const [triggerPrice, setTriggerPrice] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
@@ -296,6 +299,7 @@ export default function TradingTerminal() {
       setQuotes((current) => [...current.filter((entry) => entry.id !== data.id), data]);
       setSelected(data.id);
       setLimitPrice(String(data.price));
+      setTriggerPrice(String(data.price));
       setSearchResults([]);
       setSearchQuery("");
       document.querySelector(".order-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -350,7 +354,8 @@ export default function TradingTerminal() {
           side,
           orderType: kind,
           quantity: Number(quantity),
-          limitPrice: kind === "LIMIT" ? Number(limitPrice) : null,
+          limitPrice: ["LIMIT", "STOP_LIMIT"].includes(kind) ? Number(limitPrice) : null,
+          triggerPrice: ["STOP", "STOP_LIMIT"].includes(kind) ? Number(triggerPrice) : null,
         }),
       });
       const data = await response.json();
@@ -375,8 +380,9 @@ export default function TradingTerminal() {
         <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
         <div className="top-actions">
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
+          <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
           <button aria-label="검색"><Search size={19} /></button>
-          <button aria-label="알림"><Bell size={19} /></button>
+          <button aria-label="알림" onClick={() => document.getElementById("investor-tools")?.scrollIntoView({ behavior: "smooth" })}><Bell size={19} /></button>
           {portfolio.authenticated ? (
             <button className="user-chip" onClick={logout} title="로그아웃">
               {me?.picture ? <span className="avatar profile-photo" style={{ backgroundImage: `url("${me.picture}")` }} /> : <span className="avatar">{me?.display_name?.[0] || "G"}</span>}
@@ -454,6 +460,7 @@ export default function TradingTerminal() {
                     onClick={() => {
                       setSelected(item.id);
                       setLimitPrice(String(item.price));
+                      setTriggerPrice(String(item.price));
                     }}
                   >
                     <span className="symbol-logo" style={{ background: colorFor(item.symbol) }}>{item.name[0]}</span>
@@ -511,6 +518,31 @@ export default function TradingTerminal() {
             market={quote?.market ?? "KR"}
           />
 
+          <InvestorTools
+            authenticated={portfolio.authenticated}
+            selected={quote ? {
+              symbol: quote.symbol,
+              name: quote.name,
+              market: quote.market,
+              currency: quote.currency,
+              exchange: quote.exchange,
+              price: quote.price,
+            } : null}
+            onSelect={(item) => chooseSearchResult({
+              id: `${item.market}:${item.exchange}:${item.symbol}`,
+              symbol: item.symbol,
+              name: item.name,
+              englishName: "",
+              market: item.market,
+              currency: item.currency,
+              exchange: item.exchange,
+            })}
+            onNotice={(message) => {
+              setToast(message);
+              setTimeout(() => setToast(""), 3500);
+            }}
+          />
+
           <div className="portfolio-panel">
             <div className="section-head">
               <div><h2>보유 주식</h2><p>{portfolio.authenticated ? "사용자별 가상계좌에 저장돼요" : "로그인하면 투자 기록이 저장돼요"}</p></div>
@@ -550,12 +582,23 @@ export default function TradingTerminal() {
           </div>
           <form onSubmit={submit}>
             <label>가상주문 방식
-              <select value={kind} onChange={(event) => setKind(event.target.value as "MARKET" | "LIMIT")}>
+              <select value={kind} onChange={(event) => setKind(event.target.value as "MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT")}>
                 <option value="MARKET">시장가</option>
                 <option value="LIMIT">지정가</option>
+                <option value="STOP">손절·돌파 주문</option>
+                <option value="STOP_LIMIT">조건부 지정가</option>
               </select>
             </label>
-            {kind === "LIMIT" && (
+            {["STOP", "STOP_LIMIT"].includes(kind) && (
+              <label>감시 가격
+                <div className="input-money">
+                  <span>{quote?.currency === "KRW" ? "₩" : "$"}</span>
+                  <input required type="number" min="0.01" step={quote?.currency === "KRW" ? "1" : "0.01"} value={triggerPrice} onChange={(event) => setTriggerPrice(event.target.value)} />
+                </div>
+                <small className="order-help">{side === "SELL" ? "현재가가 감시 가격 이하가 되면 주문해요." : "현재가가 감시 가격 이상이 되면 주문해요."}</small>
+              </label>
+            )}
+            {["LIMIT", "STOP_LIMIT"].includes(kind) && (
               <label>희망 가격
                 <div className="input-money">
                   <span>{quote?.currency === "KRW" ? "₩" : "$"}</span>
@@ -574,6 +617,7 @@ export default function TradingTerminal() {
               <span>예상 가상주문금액</span>
               <b>{money((quote?.price || 0) * Number(quantity || 0), quote?.currency ?? "KRW")}</b>
             </div>
+            <small className="order-help">모의 수수료와 국내 매도비용은 체결 시 자동 반영돼요.</small>
             <button className={`submit ${side.toLowerCase()}`} disabled={busy || !quote}>
               {busy ? <><RefreshCw className="spin" size={17} /> 처리 중</> : portfolio.authenticated ? `${selectedName} ${side === "BUY" ? "가상매수" : "가상매도"}` : "로그인하고 가상투자하기"}
             </button>
@@ -586,8 +630,18 @@ export default function TradingTerminal() {
                 <div key={order.id}>
                   <span><b>{order.symbol}</b><small>{order.side === "BUY" ? "매수" : "매도"} {order.quantity}주</small></span>
                   <span className="order-status">
-                    <em className={order.status}>{order.status === "FILLED" ? "체결" : order.status === "OPEN" ? "대기" : order.status === "CANCELED" ? "취소" : "거절"}</em>
-                    {order.status === "OPEN" && <button type="button" disabled={busy} onClick={() => cancelOrder(order.id)}>주문취소</button>}
+                    <em className={order.status}>
+                      {order.status === "FILLED"
+                        ? "체결"
+                        : order.status === "OPEN"
+                          ? "조건 대기"
+                          : order.status === "TRIGGERED"
+                            ? "조건 충족"
+                            : order.status === "CANCELED"
+                              ? "취소"
+                              : "거절"}
+                    </em>
+                    {["OPEN", "TRIGGERED"].includes(order.status) && <button type="button" disabled={busy} onClick={() => cancelOrder(order.id)}>주문취소</button>}
                   </span>
                 </div>
               ))}

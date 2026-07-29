@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from collections import OrderedDict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -53,6 +53,8 @@ class KISMarket:
         self._send_lock = asyncio.Lock()
         self._rest_lock = asyncio.Lock()
         self._last_rest_call = 0.0
+        self._news_cache: dict[str, tuple[datetime, list[dict]]] = {}
+        self._history_cache: dict[str, tuple[datetime, list[dict]]] = {}
         self.connected = False
         self.last_error: str | None = None
 
@@ -145,6 +147,180 @@ class KISMarket:
         self._watched[instrument.id] = instrument
         if self._socket:
             await self._send_subscription(instrument, "1")
+
+    async def news_titles(self, instrument: Instrument) -> list[dict]:
+        cached = self._news_cache.get(instrument.id)
+        now = datetime.now(UTC)
+        if cached and (now - cached[0]).total_seconds() < 300:
+            return [item.copy() for item in cached[1]]
+        if not self.configured:
+            return []
+
+        try:
+            async with self._rest_lock:
+                await self._rate_limit_rest()
+                token = await self._token()
+                async with httpx.AsyncClient(timeout=12) as client:
+                    if instrument.market == "KR":
+                        response = await client.get(
+                            (
+                                f"{self.rest_base}/uapi/domestic-stock/v1/"
+                                "quotations/news-title"
+                            ),
+                            headers=self._headers(token, "FHKST01011800"),
+                            params={
+                                "FID_NEWS_OFER_ENTP_CODE": "",
+                                "FID_COND_MRKT_CLS_CODE": "",
+                                "FID_INPUT_ISCD": instrument.symbol,
+                                "FID_TITL_CNTT": "",
+                                "FID_INPUT_DATE_1": "",
+                                "FID_INPUT_HOUR_1": "",
+                                "FID_RANK_SORT_CLS_CODE": "",
+                                "FID_INPUT_SRNO": "",
+                            },
+                        )
+                        payload = response.json()
+                        rows = payload.get("output") or payload.get("output1") or []
+                        result = [
+                            {
+                                "id": (
+                                    row.get("cntt_usiq_srno")
+                                    or f"{row.get('data_dt')}:{row.get('data_tm')}"
+                                ),
+                                "title": row.get("hts_pbnt_titl_cntt"),
+                                "source": row.get("dorg") or "KIS",
+                                "date": row.get("data_dt"),
+                                "time": row.get("data_tm"),
+                            }
+                            for row in rows
+                            if row.get("hts_pbnt_titl_cntt")
+                        ]
+                    else:
+                        response = await client.get(
+                            (
+                                f"{self.rest_base}/uapi/overseas-price/v1/"
+                                "quotations/news-title"
+                            ),
+                            headers=self._headers(token, "HHPSTH60100C1"),
+                            params={
+                                "INFO_GB": "",
+                                "CLASS_CD": "",
+                                "NATION_CD": "US",
+                                "EXCHANGE_CD": instrument.exchange,
+                                "SYMB": instrument.symbol,
+                                "DATA_DT": "",
+                                "DATA_TM": "",
+                                "CTS": "",
+                            },
+                        )
+                        payload = response.json()
+                        rows = payload.get("outblock1") or []
+                        result = [
+                            {
+                                "id": (
+                                    row.get("news_key")
+                                    or f"{row.get('data_dt')}:{row.get('data_tm')}"
+                                ),
+                                "title": row.get("title"),
+                                "source": row.get("source") or "KIS",
+                                "date": row.get("data_dt"),
+                                "time": row.get("data_tm"),
+                            }
+                            for row in rows
+                            if row.get("title")
+                            and (
+                                not row.get("symb")
+                                or row.get("symb") == instrument.symbol
+                            )
+                        ]
+            self._news_cache[instrument.id] = (now, result[:12])
+            return [item.copy() for item in result[:12]]
+        except Exception as exc:
+            logger.info("KIS news unavailable for %s: %s", instrument.id, exc)
+            return []
+
+    async def daily_history(self, instrument: Instrument) -> list[dict]:
+        cached = self._history_cache.get(instrument.id)
+        now = datetime.now(UTC)
+        if cached and (now - cached[0]).total_seconds() < 3600:
+            return [item.copy() for item in cached[1]]
+        if not self.configured:
+            return []
+
+        end = now.date() - timedelta(days=7)
+        start = end - timedelta(days=150)
+        try:
+            async with self._rest_lock:
+                await self._rate_limit_rest()
+                token = await self._token()
+                async with httpx.AsyncClient(timeout=15) as client:
+                    if instrument.market == "KR":
+                        response = await client.get(
+                            (
+                                f"{self.rest_base}/uapi/domestic-stock/v1/"
+                                "quotations/inquire-daily-itemchartprice"
+                            ),
+                            headers=self._headers(token, "FHKST03010100"),
+                            params={
+                                "FID_COND_MRKT_DIV_CODE": DOMESTIC_REST_MARKET,
+                                "FID_INPUT_ISCD": instrument.symbol,
+                                "FID_INPUT_DATE_1": start.strftime("%Y%m%d"),
+                                "FID_INPUT_DATE_2": end.strftime("%Y%m%d"),
+                                "FID_PERIOD_DIV_CODE": "D",
+                                "FID_ORG_ADJ_PRC": "0",
+                            },
+                        )
+                        payload = response.json()
+                        rows = payload.get("output2") or []
+                        result = [
+                            {
+                                "date": row.get("stck_bsop_date"),
+                                "open": float(_number(row.get("stck_oprc"))),
+                                "high": float(_number(row.get("stck_hgpr"))),
+                                "low": float(_number(row.get("stck_lwpr"))),
+                                "close": float(_number(row.get("stck_clpr"))),
+                                "volume": float(_number(row.get("acml_vol"))),
+                            }
+                            for row in rows
+                            if row.get("stck_bsop_date") and row.get("stck_clpr")
+                        ]
+                    else:
+                        response = await client.get(
+                            (
+                                f"{self.rest_base}/uapi/overseas-price/v1/"
+                                "quotations/dailyprice"
+                            ),
+                            headers=self._headers(token, "HHDFS76240000"),
+                            params={
+                                "AUTH": "",
+                                "EXCD": instrument.exchange,
+                                "SYMB": instrument.symbol,
+                                "GUBN": "0",
+                                "BYMD": end.strftime("%Y%m%d"),
+                                "MODP": "1",
+                            },
+                        )
+                        payload = response.json()
+                        rows = payload.get("output2") or []
+                        result = [
+                            {
+                                "date": row.get("xymd"),
+                                "open": float(_number(row.get("open"))),
+                                "high": float(_number(row.get("high"))),
+                                "low": float(_number(row.get("low"))),
+                                "close": float(_number(row.get("clos"))),
+                                "volume": float(_number(row.get("tvol"))),
+                            }
+                            for row in rows
+                            if row.get("xymd") and row.get("clos")
+                        ]
+            result = [item for item in result if item["close"] > 0]
+            result.sort(key=lambda item: item["date"])
+            self._history_cache[instrument.id] = (now, result[-80:])
+            return [item.copy() for item in result[-80:]]
+        except Exception as exc:
+            logger.info("KIS history unavailable for %s: %s", instrument.id, exc)
+            return []
 
     async def _run(self) -> None:
         retry = 2

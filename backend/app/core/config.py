@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +16,8 @@ class Settings(BaseSettings):
     kis_env: str = "paper"
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
+    simulation_fee_rate: Decimal = Decimal("0.00015")
+    simulation_kr_sell_tax_rate: Decimal = Decimal("0.002")
 
     # OpenDART is used for Korean public-company profiles, financials, and
     # disclosures. The key never leaves the API server.
