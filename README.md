@@ -1,84 +1,152 @@
 # StockPilot
 
-> 한국·미국 주식의 실제 시세를 보며 연습하는 가상투자 서비스
+> 실제 한국·미국 주식 시세로 연습하는 웹 기반 가상투자 서비스
 
-[![Live Service](https://img.shields.io/badge/Live-stockpilot.coders.kr-4f6bed?style=for-the-badge)](https://stockpilot.coders.kr)
-[![KIS Open API](https://img.shields.io/badge/Market%20Data-KIS%20Open%20API-22a06b?style=for-the-badge)](https://apiportal.koreainvestment.com/)
+<p>
+  <a href="https://stockpilot.coders.kr">
+    <img src="https://img.shields.io/badge/운영_서비스-stockpilot.coders.kr-4f6bed?style=for-the-badge" alt="운영 서비스" />
+  </a>
+  <a href="https://apiportal.koreainvestment.com/">
+    <img src="https://img.shields.io/badge/시세-KIS_Open_API-22a06b?style=for-the-badge" alt="KIS Open API" />
+  </a>
+  <img src="https://img.shields.io/badge/거래-100%25_가상투자-f2a93b?style=for-the-badge" alt="가상투자" />
+</p>
 
-**운영 서비스:** [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
+**바로 사용하기:** [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
 
-StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세와 미국 주식 시세를 사용해 실제 시장을 따라가면서, 서비스 내부의 가상 원화·달러 자산으로 매매를 연습할 수 있는 웹 서비스입니다. 실제 증권계좌로 주문을 보내거나 실제 돈을 사용하지 않습니다.
+StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세와 미국 주식 시세를 이용하는 모의투자 서비스입니다. 사용자는 실제 시장 가격을 보며 국내·미국 종목을 검색하고, 서비스에서 지급한 가상 원화·달러 자산으로 매매를 연습할 수 있습니다.
 
-![StockPilot 메인 화면](docs/images/stockpilot-overview.jpg)
+실제 증권계좌로 주문을 전송하지 않으며 계좌번호나 계좌 비밀번호도 요구하지 않습니다.
 
-## 주요 기능
+<p align="center">
+  <a href="https://stockpilot.coders.kr">
+    <img src="docs/images/stockpilot-overview-hd.png" width="820" alt="StockPilot 메인 화면" />
+  </a>
+</p>
 
-- **KRX·NXT 통합 시세**: KIS 통합 시장 코드 `UN`과 실시간 체결 `H0UNCNT0` 사용
-- **국내·미국 주식 시세**: KIS Open API를 이용한 현재가와 등락률 표시
-- **시장별 TOP 10**: 한국 주식과 미국 주식의 주요 종목을 한 화면에서 확인
-- **전체 종목 검색**: 약 1.6만 개의 국내·미국 종목을 종목명, 종목코드, 티커로 검색
-- **가상 매수·매도**: 검색한 종목을 선택해 실제 시세 기준으로 가상 주문
-- **고급 모의주문**: 시장가·지정가·손절/돌파·조건부 지정가 주문 지원
-- **모의 거래비용**: 체결 시 설정된 수수료와 국내 매도 비용을 가상잔고에 반영
-- **이중 통화 자산**: 국내 주식은 KRW, 미국 주식은 USD 가상 예수금으로 분리 관리
-- **포트폴리오**: 보유 수량, 평균 매입가, 평가금액과 주문 기록 저장
-- **평가손익**: 국내·미국 보유 종목의 평가손익과 수익률 표시
-- **지정가 주문 취소**: 아직 체결되지 않은 가상 지정가 주문 취소
-- **NXT 세션 안내**: 프리·메인·애프터마켓의 현재 운영 상태와 시간 표시
-- **공식 기업정보**: OpenDART의 회사 개요, 대표자, 설립일과 결산월 표시
-- **핵심 재무·최근 공시**: 최근 정기보고서의 주요 재무지표와 최근 1년 공시 확인
-- **Google 로그인**: 사용자별 가상자산과 거래 내역을 안전하게 분리
-- **수익률 오픈 리그**: 기존 가상계좌 수익률로 다른 참여자와 순위 경쟁
-- **초대형 시즌 리그**: 친구와 7~90일 비공개 리그를 만들고 참여 이후 수익률로 경쟁
-- **프라이버시 순위표**: 닉네임·순위·수익률·순위 변화만 공개하고 종목·거래·잔고는 비공개
-- **관심종목·가격 알림**: 최대 20개 관심종목과 20개 목표가격 알림 관리
-- **브라우저 푸시 알림**: Firebase Cloud Messaging으로 목표가 도달 알림을 로그인 사용자의 등록 기기에 전송
-- **알림 표시·읽음 처리**: 상단 종 아이콘에 읽지 않은 알림 수를 표시하고 알림 화면에서 확인
-- **투자 리포트**: 국내·미국 수익률, 체결 수, 실현손익, 승률, 모의 비용과 일별 추이 제공
-- **투자 미션**: 첫 체결, 관심종목, 가격 알림, 계획 주문, 분산투자, 리그 참여 미션
-- **종목 뉴스**: KIS 공식 국내 시황·공시 제목과 해외 종목 뉴스 제목 제공
-- **과거 시세 연습**: 미래 가격을 숨긴 채 하루씩 진행하며 매매 결과를 확인하는 리플레이 모드
-- **반응형 UI**: 모바일과 데스크톱에서 사용할 수 있는 간결한 금융 서비스 화면
+## 핵심 기능
 
-### 원하는 종목 검색
+| 영역 | 제공 기능 |
+|---|---|
+| 실시간 시장 | 국내 KRX·NXT 통합 시세, 미국 주식 시세, 시장 운영 상태 |
+| 종목 탐색 | 한국·미국 TOP 10, 종목명·종목코드·티커 통합 검색 |
+| 가상 매매 | 시장가, 지정가, 손절·돌파, 조건부 지정가, 미체결 주문 취소 |
+| 자산 관리 | KRW·USD 가상 예수금, 보유 종목, 평균 매입가, 평가손익 |
+| 투자 분석 | 기간별 수익률, 실현손익, 승률, 체결 수, 모의 거래비용 |
+| 수익률 리그 | 공개 리그, 초대형 시즌 리그, 순위와 순위 변화 |
+| 기업 정보 | OpenDART 회사 개요, 핵심 재무지표, 최근 공시 |
+| 학습 기능 | 과거 시세 리플레이, 투자 미션, 종목 뉴스 |
+| 관심·알림 | 관심종목, 목표가격 알림, 읽지 않은 알림 배지 |
+| 웹 푸시 | Firebase Cloud Messaging 기반 목표가 도달 브라우저 알림 |
+| 사용자 | Google 로그인, 사용자별 가상자산·주문·리그 기록 분리 |
 
-TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거래할 수 있습니다.
+## 주요 화면과 사용 흐름
 
-![StockPilot 종목 검색](docs/images/stockpilot-search.jpg)
+### 1. 실시간 주요 종목 확인
 
-### StockPilot 수익률 리그
+한국과 미국 시장의 주요 종목을 한 화면에서 확인합니다. 국내 시세는 KRX와 NXT를 합친 통합 시장 기준이며, 종목을 선택하면 현재가와 주문 화면이 함께 표시됩니다.
 
-[운영 서비스의 리그 화면](https://stockpilot.coders.kr/league)에서 기존 Google 계정과 가상투자 기록으로 바로 참여할 수 있습니다. 모든 계정은 동일한 `₩1억 + $10만`으로 시작하며, 환율 변화가 순위를 흔들지 않도록 한국 계좌 수익률과 미국 계좌 수익률을 50:50으로 합산합니다.
+### 2. 원하는 종목 검색
 
-공개 순위 응답에는 닉네임, 순위, 누적 수익률, 전일 대비 순위 변화만 포함됩니다. 보유 종목, 매매 내역, 원화·달러 잔고, Google 실명·이메일은 공개하지 않습니다.
+TOP 10에 없는 종목도 종목명, 국내 종목코드 또는 미국 티커로 검색할 수 있습니다. 검색 결과에서 종목을 선택하면 동일한 가상 주문 기능을 사용할 수 있습니다.
 
-## 동작 방식
+<p align="center">
+  <img src="docs/images/stockpilot-search.jpg" width="360" alt="StockPilot 전체 종목 검색 화면" />
+</p>
+
+### 3. 실제 시세 기반 가상 매매
+
+- 국내 주식은 가상 원화 예수금으로 거래합니다.
+- 미국 주식은 가상 달러 예수금으로 거래합니다.
+- 시장가와 계획 주문을 지원하며 미체결 지정가 주문은 취소할 수 있습니다.
+- 체결 시 모의 수수료와 국내 매도 비용을 가상 잔고에 반영합니다.
+- 모든 거래는 StockPilot 내부 가상 원장에만 기록됩니다.
+
+### 4. 포트폴리오와 투자 리포트
+
+보유 수량, 평균 매입가, 현재 평가금액, 평가손익과 수익률을 확인할 수 있습니다. 투자 리포트에서는 국내·미국 수익률, 실현손익, 체결 수, 승률, 거래비용과 일별 추이를 제공합니다.
+
+### 5. 수익률 리그
+
+[수익률 리그](https://stockpilot.coders.kr/league)는 가상투자 결과로 다른 사용자와 경쟁하는 기능입니다.
+
+- 모든 사용자는 동일한 `₩1억 + US$10만`으로 시작합니다.
+- 한국 계좌와 미국 계좌 수익률을 50:50으로 합산합니다.
+- 공개 순위에는 닉네임, 순위, 수익률과 순위 변화만 표시합니다.
+- 보유 종목, 매매 내역, 잔고, Google 실명과 이메일은 공개하지 않습니다.
+- 친구와 7~90일 동안 경쟁하는 초대형 비공개 시즌 리그를 만들 수 있습니다.
+
+### 6. 관심종목과 목표가 푸시 알림
+
+관심종목과 목표가격을 등록하면 목표가 도달 시 상단 알림 배지와 브라우저 푸시로 알려줍니다. 로그인 후 `나의 투자 도구 → 관심·알림 → 푸시 알림 켜기`에서 기기를 등록할 수 있습니다.
+
+## 서비스 구조
 
 ```text
-사용자
-  └─ Next.js 프론트엔드
-       └─ FastAPI 백엔드
-            ├─ KIS Open API: 국내·미국 종목 및 시세
-            ├─ OpenDART: 국내 상장사 개요·재무·공시
-            ├─ Google OAuth: 사용자 로그인
-            ├─ Firebase FCM: 목표가 도달 웹 푸시
-            └─ PostgreSQL: 가상 잔고·보유 종목·주문·리그 기록
+사용자 브라우저
+  └─ Next.js 16 / React 19
+       └─ FastAPI
+            ├─ KIS Open API
+            │    ├─ 국내 KRX·NXT 통합 시세
+            │    └─ 미국 주식 시세·뉴스
+            ├─ OpenDART
+            │    └─ 기업 개요·재무·공시
+            ├─ Google OAuth 2.0
+            │    └─ 로그인·사용자 세션
+            ├─ Firebase Cloud Messaging
+            │    └─ 목표가 도달 웹 푸시
+            └─ PostgreSQL
+                 └─ 가상 잔고·보유 종목·주문·리그·알림
 ```
 
-KIS API는 **시세 조회에만** 사용합니다. 매수·매도 주문은 StockPilot 내부의 가상 원장에만 기록되며 한국투자증권으로 전송되지 않습니다. 따라서 증권계좌번호나 계좌 비밀번호가 필요하지 않습니다.
+KIS Open API는 **종목과 시세 조회에만** 사용합니다. 사용자가 제출한 매수·매도 주문은 StockPilot의 PostgreSQL 가상 원장에 저장되며 한국투자증권으로 전송되지 않습니다.
 
 ## 기술 스택
 
 | 영역 | 기술 |
 |---|---|
 | Frontend | Next.js 16, React 19, TypeScript |
-| Backend | FastAPI, SQLAlchemy Async, Alembic |
-| Database | PostgreSQL 16 |
+| Backend | Python, FastAPI, SQLAlchemy Async |
+| Database | PostgreSQL 16, Alembic |
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API |
 | Company Data | 금융감독원 OpenDART |
 | Push Notification | Firebase Cloud Messaging, Web Push |
 | Infrastructure | Docker, Docker Compose, coders.kr |
+
+## 주요 디렉터리
+
+```text
+backend/
+  app/
+    routes/
+      auth.py             Google 로그인과 세션
+      trading.py          시세·검색·가상 주문
+      league.py           리그 참여·수익률·순위
+      company.py          OpenDART 기업정보
+      engagement.py       관심종목·알림·리포트·미션
+    services/
+      firebase_push.py    Firebase 푸시 발송
+      price_alert_notifier.py
+                          목표가 감시 작업
+  alembic/versions/       데이터베이스 마이그레이션
+
+frontend/
+  app/                    페이지와 전역 스타일
+  components/
+    TradingTerminal.tsx   종목·검색·주문·포트폴리오
+    LeagueBoard.tsx       공개 수익률 리그
+    LeagueRooms.tsx       초대형 시즌 리그
+    CompanyInsight.tsx    기업 개요·재무·공시
+    InvestorTools.tsx     관심종목·알림·리포트·미션
+    PracticeLab.tsx       과거 시세 리플레이
+  public/
+    firebase-messaging-sw.js
+                          백그라운드 푸시 서비스 워커
+
+compose.yaml              로컬 개발 환경
+coders.yaml               coders.kr 배포 설정
+```
 
 ## 로컬 실행
 
@@ -103,19 +171,20 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 AUTH_SESSION_SECRET=
 AUTH_COOKIE_SECURE=false
 FIREBASE_SERVICE_ACCOUNT_B64=
+
 SIMULATION_FEE_RATE=0.00015
 SIMULATION_KR_SELL_TAX_RATE=0.002
 ```
 
-Google 로그인까지 로컬에서 확인하려면 Google Auth Platform의 승인된 리디렉션 URI에 아래 주소도 등록해야 합니다.
+Google Auth Platform의 승인된 리디렉션 URI에도 다음 주소를 등록합니다.
 
 ```text
 http://localhost:3000/api/auth/google/callback
 ```
 
-`AUTH_SESSION_SECRET`은 최소 32바이트 이상의 무작위 문자열을 사용하세요. API 키와 Secret은 절대 Git에 커밋하지 마세요.
+`AUTH_SESSION_SECRET`은 최소 32바이트 이상의 무작위 문자열을 사용하세요. API Key, App Secret, 서비스 계정 JSON은 Git에 커밋하지 마세요.
 
-### 2. 서비스 실행
+### 2. 실행
 
 ```bash
 docker compose up
@@ -123,36 +192,9 @@ docker compose up
 
 - 웹: [http://localhost:3000](http://localhost:3000)
 - API: [http://localhost:8000](http://localhost:8000)
-- API 상태: [http://localhost:8000/api/health](http://localhost:8000/api/health)
+- 상태 확인: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
-## 주요 디렉터리
-
-```text
-backend/
-  app/
-    routes/auth.py        Google 로그인과 세션
-    routes/league.py      수익률 계산·참여·프라이버시 순위 API
-    routes/company.py     OpenDART 기업 개요·재무·공시 API
-    routes/engagement.py  관심종목·가격 알림·리포트·미션 API
-    routes/trading.py     시세·검색·가상 주문 API
-    services/             KIS·Firebase 연동과 종목 데이터 처리
-  alembic/versions/       거래 관련 DB 마이그레이션
-
-frontend/
-  app/                    페이지와 전역 스타일
-  components/
-    LeagueBoard.tsx       수익률 리그 참여·순위 UI
-    CompanyInsight.tsx    국내 상장사 기업정보·재무·공시 UI
-    InvestorTools.tsx     관심종목·알림·리포트·미션 UI
-    LeagueRooms.tsx       초대형 시즌 리그 UI
-    PracticeLab.tsx       KIS 과거 시세 기반 리플레이 학습 UI
-    TradingTerminal.tsx   시세·검색·주문·포트폴리오 UI
-
-coders.yaml               coders.kr 배포 설정
-compose.yaml              로컬 개발 환경
-```
-
-## 운영 환경 설정
+## 운영 환경 Secret
 
 배포 환경에는 다음 Secret이 필요합니다.
 
@@ -172,8 +214,8 @@ https://stockpilot.coders.kr/api/auth/google/callback
 
 ## 주의사항
 
-- StockPilot은 모의투자 서비스이며 실제 주문을 전송하지 않습니다.
-- 화면의 시세는 제공처의 정책, 장 운영 시간, 네트워크 상황에 따라 지연될 수 있습니다.
-- 수수료와 세금은 실제 과세 판단이 아닌 모의투자용 설정값이며 운영 환경변수로 조정할 수 있습니다.
-- 이 프로젝트와 화면의 정보는 투자 권유나 투자 자문이 아닙니다.
-- 실서비스 운영 전에는 사용 중인 시세 API의 이용약관과 재배포 정책을 반드시 확인하세요.
+- StockPilot은 모의투자 서비스이며 실제 주식 주문을 전송하지 않습니다.
+- 화면의 시세는 제공처 정책, 장 운영 시간과 네트워크 상태에 따라 지연될 수 있습니다.
+- 수수료와 세금은 학습을 위한 모의 설정값이며 실제 과세 판단에 사용할 수 없습니다.
+- 서비스의 정보는 투자 권유 또는 투자 자문이 아닙니다.
+- 실제 서비스 운영 시 각 데이터 제공 API의 이용약관과 재배포 정책을 확인해야 합니다.
