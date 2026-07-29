@@ -14,6 +14,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Trophy,
   Wifi,
 } from "lucide-react";
 
@@ -371,6 +372,7 @@ export default function TradingTerminal() {
       <header className="topbar">
         <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
         <div className="top-actions">
+          <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <button aria-label="검색"><Search size={19} /></button>
           <button aria-label="알림"><Bell size={19} /></button>
           {portfolio.authenticated ? (
