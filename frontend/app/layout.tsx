@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "./market.css";
+import "./league.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 

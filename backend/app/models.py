@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -106,4 +106,55 @@ class TradeOrder(Base):
     status: Mapped[str] = mapped_column(sa.String(12), nullable=False, default="OPEN")
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), index=True
+    )
+
+
+class LeagueParticipant(Base):
+    """Public league profile linked only to an internal trading-account id."""
+
+    __tablename__ = "league_participants"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), unique=True, nullable=False, index=True
+    )
+    nickname: Mapped[str] = mapped_column(
+        sa.String(24), unique=True, nullable=False, index=True
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+    active: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.true()
+    )
+
+
+class LeagueRankSnapshot(Base):
+    """One daily rank per participant, used only to show rank movement."""
+
+    __tablename__ = "league_rank_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("league_participants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    snapshot_date: Mapped[date] = mapped_column(sa.Date, nullable=False, index=True)
+    rank: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    return_rate: Mapped[Decimal] = mapped_column(sa.Numeric(12, 6), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "participant_id",
+            "snapshot_date",
+            name="uq_league_snapshot_participant_date",
+        ),
     )

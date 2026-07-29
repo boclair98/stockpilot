@@ -24,6 +24,8 @@ StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세�
 - **지정가 주문 취소**: 아직 체결되지 않은 가상 지정가 주문 취소
 - **NXT 세션 안내**: 프리·메인·애프터마켓의 현재 운영 상태와 시간 표시
 - **Google 로그인**: 사용자별 가상자산과 거래 내역을 안전하게 분리
+- **수익률 오픈 리그**: 기존 가상계좌 수익률로 다른 참여자와 순위 경쟁
+- **프라이버시 순위표**: 닉네임·순위·수익률·순위 변화만 공개하고 종목·거래·잔고는 비공개
 - **반응형 UI**: 모바일과 데스크톱에서 사용할 수 있는 간결한 금융 서비스 화면
 
 ### 원하는 종목 검색
@@ -31,6 +33,12 @@ StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세�
 TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거래할 수 있습니다.
 
 ![StockPilot 종목 검색](docs/images/stockpilot-search.jpg)
+
+### StockPilot 수익률 리그
+
+[운영 서비스의 리그 화면](https://stockpilot.coders.kr/league)에서 기존 Google 계정과 가상투자 기록으로 바로 참여할 수 있습니다. 모든 계정은 동일한 `₩1억 + $10만`으로 시작하며, 환율 변화가 순위를 흔들지 않도록 한국 계좌 수익률과 미국 계좌 수익률을 50:50으로 합산합니다.
+
+공개 순위 응답에는 닉네임, 순위, 누적 수익률, 전일 대비 순위 변화만 포함됩니다. 보유 종목, 매매 내역, 원화·달러 잔고, Google 실명·이메일은 공개하지 않습니다.
 
 ## 동작 방식
 
@@ -40,7 +48,7 @@ TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거�
        └─ FastAPI 백엔드
             ├─ KIS Open API: 국내·미국 종목 및 시세
             ├─ Google OAuth: 사용자 로그인
-            └─ PostgreSQL: 가상 잔고·보유 종목·주문 기록
+            └─ PostgreSQL: 가상 잔고·보유 종목·주문·리그 기록
 ```
 
 KIS API는 **시세 조회에만** 사용합니다. 매수·매도 주문은 StockPilot 내부의 가상 원장에만 기록되며 한국투자증권으로 전송되지 않습니다. 따라서 증권계좌번호나 계좌 비밀번호가 필요하지 않습니다.
@@ -103,6 +111,7 @@ docker compose up
 backend/
   app/
     routes/auth.py        Google 로그인과 세션
+    routes/league.py      수익률 계산·참여·프라이버시 순위 API
     routes/trading.py     시세·검색·가상 주문 API
     services/             KIS 연동과 종목 데이터 처리
   alembic/versions/       거래 관련 DB 마이그레이션
@@ -110,6 +119,7 @@ backend/
 frontend/
   app/                    페이지와 전역 스타일
   components/
+    LeagueBoard.tsx       수익률 리그 참여·순위 UI
     TradingTerminal.tsx   시세·검색·주문·포트폴리오 UI
 
 coders.yaml               coders.kr 배포 설정
