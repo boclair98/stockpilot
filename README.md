@@ -23,6 +23,8 @@ StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세�
 - **평가손익**: 국내·미국 보유 종목의 평가손익과 수익률 표시
 - **지정가 주문 취소**: 아직 체결되지 않은 가상 지정가 주문 취소
 - **NXT 세션 안내**: 프리·메인·애프터마켓의 현재 운영 상태와 시간 표시
+- **공식 기업정보**: OpenDART의 회사 개요, 대표자, 설립일과 결산월 표시
+- **핵심 재무·최근 공시**: 최근 정기보고서의 주요 재무지표와 최근 1년 공시 확인
 - **Google 로그인**: 사용자별 가상자산과 거래 내역을 안전하게 분리
 - **수익률 오픈 리그**: 기존 가상계좌 수익률로 다른 참여자와 순위 경쟁
 - **프라이버시 순위표**: 닉네임·순위·수익률·순위 변화만 공개하고 종목·거래·잔고는 비공개
@@ -47,6 +49,7 @@ TOP 10에 없는 종목도 검색해서 시세를 확인하고 가상으로 거�
   └─ Next.js 프론트엔드
        └─ FastAPI 백엔드
             ├─ KIS Open API: 국내·미국 종목 및 시세
+            ├─ OpenDART: 국내 상장사 개요·재무·공시
             ├─ Google OAuth: 사용자 로그인
             └─ PostgreSQL: 가상 잔고·보유 종목·주문·리그 기록
 ```
@@ -62,6 +65,7 @@ KIS API는 **시세 조회에만** 사용합니다. 매수·매도 주문은 Sto
 | Database | PostgreSQL 16 |
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API |
+| Company Data | 금융감독원 OpenDART |
 | Infrastructure | Docker, Docker Compose, coders.kr |
 
 ## 로컬 실행
@@ -78,6 +82,7 @@ cp backend/.env.example backend/.env
 KIS_ENV=paper
 KIS_APP_KEY=
 KIS_APP_SECRET=
+DART_API_KEY=
 
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -112,6 +117,7 @@ backend/
   app/
     routes/auth.py        Google 로그인과 세션
     routes/league.py      수익률 계산·참여·프라이버시 순위 API
+    routes/company.py     OpenDART 기업 개요·재무·공시 API
     routes/trading.py     시세·검색·가상 주문 API
     services/             KIS 연동과 종목 데이터 처리
   alembic/versions/       거래 관련 DB 마이그레이션
@@ -120,6 +126,7 @@ frontend/
   app/                    페이지와 전역 스타일
   components/
     LeagueBoard.tsx       수익률 리그 참여·순위 UI
+    CompanyInsight.tsx    국내 상장사 기업정보·재무·공시 UI
     TradingTerminal.tsx   시세·검색·주문·포트폴리오 UI
 
 coders.yaml               coders.kr 배포 설정
@@ -132,6 +139,7 @@ compose.yaml              로컬 개발 환경
 
 - `KIS_APP_KEY`
 - `KIS_APP_SECRET`
+- `DART_API_KEY`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SESSION_SECRET`

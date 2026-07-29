@@ -18,6 +18,8 @@ import {
   Wifi,
 } from "lucide-react";
 
+import CompanyInsight from "./CompanyInsight";
+
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
 type Quote = {
@@ -503,6 +505,11 @@ export default function TradingTerminal() {
               </div>
             )}
           </div>
+
+          <CompanyInsight
+            symbol={activeSymbol}
+            market={quote?.market ?? "KR"}
+          />
 
           <div className="portfolio-panel">
             <div className="section-head">
