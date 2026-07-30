@@ -21,6 +21,8 @@ import {
 
 import CompanyInsight from "./CompanyInsight";
 import InvestorTools from "./InvestorTools";
+import MarketIndexChart from "./MarketIndexChart";
+import StockLogo from "./StockLogo";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -502,6 +504,8 @@ export default function TradingTerminal() {
         </article>
       </section>
 
+      <MarketIndexChart />
+
       <section className="content">
         <div className="market-column">
           <div className="section-head">
@@ -524,7 +528,7 @@ export default function TradingTerminal() {
                       setTriggerPrice(String(item.price));
                     }}
                   >
-                    <span className="symbol-logo" style={{ background: colorFor(item.symbol) }}>{item.name[0]}</span>
+                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} />
                     <span className="company"><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span>
                     <span className="quote-price">
                       <b>{money(item.price, item.currency)}</b>
@@ -564,7 +568,7 @@ export default function TradingTerminal() {
               <div className="search-results">
                 {searching ? <p className="search-state"><RefreshCw className="spin" size={16} /> 종목을 찾고 있어요</p> : searchResults.length ? searchResults.map((item) => (
                   <button key={item.id} onClick={() => chooseSearchResult(item)}>
-                    <span className="symbol-logo" style={{ background: colorFor(item.symbol) }}>{item.name[0]}</span>
+                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} />
                     <span><b>{item.name}</b><small>{item.englishName || item.symbol}</small></span>
                     <span><b>{item.symbol}</b><small>{item.market === "KR" ? "한국" : "미국"} · {item.exchange}</small></span>
                     <ChevronRight size={17} />
@@ -613,7 +617,7 @@ export default function TradingTerminal() {
                 const profit = position.profit ?? (price - position.averagePrice) * position.quantity;
                 return (
                   <div className="holding" key={`${position.exchange}:${position.symbol}`}>
-                    <span className="symbol-logo" style={{ background: colorFor(position.symbol) }}>{position.name[0]}</span>
+                    <StockLogo symbol={position.symbol} name={position.name} color={colorFor(position.symbol)} />
                     <span><b>{position.name}</b><small>{position.quantity}주 · 평균 {money(position.averagePrice, position.currency)}</small></span>
                     <span><b>{money(price * position.quantity, position.currency)}</b><small className={profit >= 0 ? "up" : "down"}>{profit >= 0 ? "+" : ""}{money(profit, position.currency)} · {(position.returnRate ?? 0).toFixed(2)}%</small></span>
                   </div>
@@ -627,7 +631,7 @@ export default function TradingTerminal() {
 
         <aside className="order-card">
           <div className="order-stock">
-            <span className="symbol-logo large" style={{ background: colorFor(activeSymbol) }}>{selectedName[0]}</span>
+            <StockLogo symbol={activeSymbol} name={selectedName} color={colorFor(activeSymbol)} large />
             <div><h2>{selectedName}</h2><p>{activeSymbol} · {quote?.market === "KR" ? "KRX+NXT 통합" : quote?.exchange ?? "KIS"}</p></div>
             <span className="current">
               <b>{quote ? money(quote.price, quote.currency) : "—"}</b>

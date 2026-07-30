@@ -151,12 +151,16 @@ export default function InvestorTools({
   const [busy, setBusy] = useState(false);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [newsRefreshing, setNewsRefreshing] = useState(false);
+  const [newsUpdatedAt, setNewsUpdatedAt] = useState<string | null>(null);
+  const [newsRefreshKey, setNewsRefreshKey] = useState(0);
   const [pushPermission, setPushPermission] = useState<
     NotificationPermission | "unsupported"
   >("default");
   const [thisDeviceEnabled, setThisDeviceEnabled] = useState(false);
   const seenTriggered = useRef<Set<string> | null>(null);
   const alertSelectionKey = useRef("");
+  const newsSelectionKey = useRef("");
   const onNoticeRef = useRef(onNotice);
   const onAlertSummaryRef = useRef(onAlertSummary);
 
@@ -295,32 +299,70 @@ export default function InvestorTools({
     return () => window.clearTimeout(timer);
   }, [selected]);
 
+  const newsSymbol = selected?.symbol;
+  const newsMarket = selected?.market;
+  const newsExchange = selected?.exchange;
+
   useEffect(() => {
-    if (!selected || activeTab !== "NEWS") return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setNewsLoading(true);
+    if (!newsSymbol || !newsMarket || !newsExchange || activeTab !== "NEWS") {
+      return;
+    }
+
+    let active = true;
+    let controller: AbortController | null = null;
+    const selectionKey = `${newsMarket}:${newsExchange}:${newsSymbol}`;
+    const selectionChanged = newsSelectionKey.current !== selectionKey;
+    newsSelectionKey.current = selectionKey;
+    if (selectionChanged) {
+      setNews([]);
+      setNewsUpdatedAt(null);
+    }
+
+    const loadNews = async (initial: boolean) => {
+      controller?.abort();
+      controller = new AbortController();
+      if (initial) setNewsLoading(true);
+      else setNewsRefreshing(true);
       try {
         const params = new URLSearchParams({
-          symbol: selected.symbol,
-          market: selected.market,
-          exchange: selected.exchange,
+          symbol: newsSymbol,
+          market: newsMarket,
+          exchange: newsExchange,
         });
         const response = await fetch(`/api/features/news?${params}`, {
           cache: "no-store",
           signal: controller.signal,
         });
-        const body = response.ok ? await response.json() : { items: [] };
-        if (!controller.signal.aborted) setNews(body.items);
+        const body = response.ok
+          ? await response.json()
+          : { items: [], refreshedAt: null };
+        if (active && !controller.signal.aborted) {
+          setNews(body.items);
+          setNewsUpdatedAt(body.refreshedAt || new Date().toISOString());
+        }
+      } catch (reason) {
+        if (
+          active &&
+          !(reason instanceof DOMException && reason.name === "AbortError")
+        ) {
+          onNoticeRef.current("뉴스를 갱신하지 못했어요. 잠시 후 다시 시도할게요.");
+        }
       } finally {
-        if (!controller.signal.aborted) setNewsLoading(false);
+        if (active && !controller.signal.aborted) {
+          setNewsLoading(false);
+          setNewsRefreshing(false);
+        }
       }
-    }, 0);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
     };
-  }, [activeTab, selected]);
+
+    void loadNews(selectionChanged);
+    const interval = window.setInterval(() => void loadNews(false), 300_000);
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(interval);
+    };
+  }, [activeTab, newsExchange, newsMarket, newsRefreshKey, newsSymbol]);
 
   async function mutate(url: string, options: RequestInit, message: string) {
     if (!authenticated) {
@@ -574,7 +616,25 @@ export default function InvestorTools({
         <div className="stock-news">
           <div className="stock-news-head">
             <span><Newspaper size={16} /><b>{selected?.name || "선택 종목"} 뉴스</b></span>
-            <small>한국투자증권 KIS 제공</small>
+            <span className="news-refresh-status">
+              <small>
+                5분마다 자동 갱신
+                {newsUpdatedAt
+                  ? ` · ${new Intl.DateTimeFormat("ko-KR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(newsUpdatedAt))}`
+                  : ""}
+              </small>
+              <button
+                type="button"
+                aria-label="뉴스 지금 갱신"
+                onClick={() => setNewsRefreshKey((value) => value + 1)}
+                disabled={newsLoading || newsRefreshing}
+              >
+                <RefreshCw className={newsRefreshing ? "spin" : ""} size={13} />
+              </button>
+            </span>
           </div>
           {newsLoading ? (
             <div className="company-loading"><RefreshCw className="spin" size={16} /> 뉴스를 불러오고 있어요</div>
@@ -590,7 +650,7 @@ export default function InvestorTools({
           ) : (
             <p className="tool-empty">현재 KIS에서 조회된 이 종목의 뉴스가 없어요.</p>
           )}
-          <p className="news-note">뉴스 제목은 정보 확인용이며 투자 권유가 아닙니다.</p>
+          <p className="news-note">한국투자증권 KIS 제공 · 뉴스 제목은 정보 확인용이며 투자 권유가 아닙니다.</p>
         </div>
       ) : (
         <div className="mission-grid">

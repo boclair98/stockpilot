@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "./market.css";
+import "./market-index.css";
 import "./league.css";
 import "./investor.css";
 import "./rooms.css";

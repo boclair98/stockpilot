@@ -295,6 +295,11 @@ async def market_status() -> dict:
     return kis_market.status()
 
 
+@router.get("/kospi")
+async def kospi() -> dict:
+    return await kis_market.kospi_history()
+
+
 @router.get("/portfolio")
 async def portfolio(
     owner: UUID | None = Depends(optional_identity),

@@ -462,6 +462,7 @@ async def news(
         "symbol": instrument.symbol,
         "name": instrument.name,
         "source": "한국투자증권 KIS Open API",
+        "refreshedAt": datetime.now(UTC).isoformat(),
         "items": await kis_market.news_titles(instrument),
     }
 

@@ -310,6 +310,10 @@
 .stock-news-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 1px solid #f0f2f4; }
 .stock-news-head > span { display: flex; align-items: center; gap: 7px; color: #485666; font-size: 11px; }
 .stock-news-head small { color: #98a1ab; font-size: 8px; }
+.news-refresh-status { display: flex; align-items: center; gap: 5px; }
+.news-refresh-status button { width: 25px; height: 25px; display: grid; place-items: center; border: 0; border-radius: 8px; background: #f3f6f9; color: #708091; cursor: pointer; }
+.news-refresh-status button:hover { background: #eaf2fc; color: #3182f6; }
+.news-refresh-status button:disabled { cursor: default; opacity: .55; }
 .news-list { display: grid; }
 .news-list article { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 3px; border-bottom: 1px solid #f1f3f5; }
 .news-list article > span { display: grid; gap: 4px; }

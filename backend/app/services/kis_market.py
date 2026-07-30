@@ -38,6 +38,44 @@ def _number(value: object, default: Decimal = Decimal("0")) -> Decimal:
         return default
 
 
+def parse_kospi_payload(payload: dict, now: datetime | None = None) -> dict:
+    """Normalize KIS daily index output for the public chart API."""
+    output = payload.get("output1") or {}
+    rows = payload.get("output2") or []
+    points = [
+        {
+            "date": (
+                f"{date[0:4]}-{date[4:6]}-{date[6:8]}"
+                if len(date := str(row.get("stck_bsop_date") or "")) == 8
+                else date
+            ),
+            "open": float(_number(row.get("bstp_nmix_oprc"))),
+            "high": float(_number(row.get("bstp_nmix_hgpr"))),
+            "low": float(_number(row.get("bstp_nmix_lwpr"))),
+            "close": float(_number(row.get("bstp_nmix_prpr"))),
+            "volume": float(_number(row.get("acml_vol"))),
+        }
+        for row in rows
+        if row.get("stck_bsop_date") and _number(row.get("bstp_nmix_prpr")) > 0
+    ]
+    points.sort(key=lambda item: item["date"])
+    points = points[-30:]
+    value = float(_number(output.get("bstp_nmix_prpr")))
+    if value <= 0 and points:
+        value = points[-1]["close"]
+    return {
+        "name": "KOSPI",
+        "marketName": output.get("hts_kor_isnm") or "코스피",
+        "value": value,
+        "change": float(_number(output.get("bstp_nmix_prdy_vrss"))),
+        "changePercent": float(_number(output.get("bstp_nmix_prdy_ctrt"))),
+        "previousClose": float(_number(output.get("prdy_nmix"))),
+        "asOf": (now or datetime.now(UTC)).isoformat(),
+        "source": "한국투자증권 KIS Open API",
+        "points": points,
+    }
+
+
 class KISMarket:
     def __init__(self) -> None:
         self._quotes: dict[str, dict] = {}
@@ -55,6 +93,7 @@ class KISMarket:
         self._last_rest_call = 0.0
         self._news_cache: dict[str, tuple[datetime, list[dict]]] = {}
         self._history_cache: dict[str, tuple[datetime, list[dict]]] = {}
+        self._index_cache: tuple[datetime, dict] | None = None
         self.connected = False
         self.last_error: str | None = None
 
@@ -321,6 +360,53 @@ class KISMarket:
         except Exception as exc:
             logger.info("KIS history unavailable for %s: %s", instrument.id, exc)
             return []
+
+    async def kospi_history(self) -> dict:
+        now = datetime.now(UTC)
+        if (
+            self._index_cache
+            and (now - self._index_cache[0]).total_seconds() < 300
+        ):
+            return self._index_cache[1]
+
+        empty = parse_kospi_payload({}, now)
+        if not self.configured:
+            return empty
+
+        start = now.date() - timedelta(days=60)
+        try:
+            async with self._rest_lock:
+                await self._rate_limit_rest()
+                token = await self._token()
+                async with httpx.AsyncClient(timeout=15) as client:
+                    response = await client.get(
+                        (
+                            f"{self.rest_base}/uapi/domestic-stock/v1/"
+                            "quotations/inquire-daily-indexchartprice"
+                        ),
+                        headers=self._headers(token, "FHKUP03500100"),
+                        params={
+                            "FID_COND_MRKT_DIV_CODE": "U",
+                            "FID_INPUT_ISCD": "0001",
+                            "FID_INPUT_DATE_1": start.strftime("%Y%m%d"),
+                            "FID_INPUT_DATE_2": now.strftime("%Y%m%d"),
+                            "FID_PERIOD_DIV_CODE": "D",
+                        },
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+            if payload.get("rt_cd") not in {None, "0"}:
+                raise RuntimeError(payload.get("msg1") or "KIS index request failed")
+            result = parse_kospi_payload(payload, now)
+            if not result["points"]:
+                raise RuntimeError("KIS returned no KOSPI history")
+            self._index_cache = (now, result)
+            return result
+        except Exception as exc:
+            logger.info("KIS KOSPI index unavailable: %s", exc)
+            if self._index_cache:
+                return {**self._index_cache[1], "stale": True}
+            return empty
 
     async def _run(self) -> None:
         retry = 2

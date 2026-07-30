@@ -1,0 +1,165 @@
+.market-index-card {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 28px;
+  margin: 0 18px 28px;
+  padding: 24px 26px 20px;
+  overflow: hidden;
+  border: 1px solid #edf0f3;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 34px #27384b08;
+}
+
+.market-index-copy {
+  align-self: center;
+}
+
+.index-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #687787;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.index-kicker svg {
+  color: #3182f6;
+}
+
+.index-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.index-title > div {
+  display: grid;
+  gap: 4px;
+}
+
+.index-title h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.index-title strong {
+  font-size: 27px;
+  letter-spacing: -.8px;
+}
+
+.index-title > span {
+  padding-bottom: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.market-index-copy p {
+  margin: 14px 0 5px;
+  color: #6f7b88;
+  font-size: 11px;
+}
+
+.market-index-copy small {
+  color: #9aa3ad;
+  font-size: 8px;
+}
+
+.market-index-visual {
+  position: relative;
+  min-width: 0;
+  min-height: 190px;
+}
+
+.market-index-visual svg {
+  width: 100%;
+  height: 178px;
+  overflow: visible;
+}
+
+.index-grid-line {
+  stroke: #eef1f4;
+  stroke-width: 1;
+}
+
+.index-line {
+  fill: none;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.index-line.positive {
+  stroke: #f04452;
+}
+
+.index-line.negative {
+  stroke: #3182f6;
+}
+
+.index-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #9aa3ad;
+  font-size: 8px;
+}
+
+.index-state {
+  min-height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #8d98a4;
+  font-size: 11px;
+}
+
+.index-refresh {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: #7a8794;
+}
+
+@media (max-width: 760px) {
+  .market-index-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .index-title {
+    justify-content: flex-start;
+  }
+
+  .market-index-copy p {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 520px) {
+  .market-index-card {
+    margin: 0 10px 20px;
+    padding: 20px 18px 16px;
+    border-radius: 20px;
+  }
+
+  .market-index-visual,
+  .index-state {
+    min-height: 150px;
+  }
+
+  .market-index-visual svg {
+    height: 142px;
+  }
+
+  .index-axis span:nth-child(2),
+  .index-axis span:nth-child(3) {
+    display: none;
+  }
+}
