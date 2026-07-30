@@ -1,0 +1,59 @@
+.sell-availability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid #dceaff;
+  border-radius: 13px;
+  background: #f2f7ff;
+  color: #295caa;
+}
+
+.sell-availability.warning {
+  border-color: #ffd9dd;
+  background: #fff4f5;
+  color: #c93645;
+}
+
+.sell-availability span {
+  display: grid;
+  gap: 3px;
+}
+
+.sell-availability b {
+  font-size: 12px;
+}
+
+.sell-availability small {
+  font-size: 10px;
+  opacity: 0.78;
+}
+
+.sell-availability button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 1px 4px #1d293912;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.order-error {
+  margin: -6px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff2f3;
+  color: #d13b49;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.toast {
+  width: max-content;
+  max-width: min(92vw, 520px);
+  text-align: center;
+}

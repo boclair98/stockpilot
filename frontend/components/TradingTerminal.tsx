@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -57,6 +57,7 @@ type Position = {
 type Order = {
   id: string;
   symbol: string;
+  exchange: string;
   side: string;
   orderType: string;
   quantity: number;
@@ -170,6 +171,13 @@ export default function TradingTerminal() {
   const [clock, setClock] = useState<Date | null>(null);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [alertFocusKey, setAlertFocusKey] = useState(0);
+  const toastTimer = useRef<number | null>(null);
+
+  const notify = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), 3500);
+  }, []);
 
   const refreshPortfolio = useCallback(async () => {
     const response = await fetch("/api/trading/portfolio", {
@@ -229,6 +237,13 @@ export default function TradingTerminal() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(
+    () => () => {
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {
@@ -260,6 +275,36 @@ export default function TradingTerminal() {
   const quote = quotes.find((item) => item.id === selected) ?? quotes[0];
   const activeSymbol = quote?.symbol ?? "005930";
   const selectedName = quote?.name ?? activeSymbol;
+  const activePosition = portfolio.positions.find(
+    (position) =>
+      position.symbol === activeSymbol && position.exchange === quote?.exchange,
+  );
+  const pendingSellQuantity = portfolio.orders
+    .filter(
+      (order) =>
+        order.side === "SELL" &&
+        ["OPEN", "TRIGGERED"].includes(order.status) &&
+        order.symbol === activeSymbol &&
+        order.exchange === quote?.exchange,
+    )
+    .reduce((sum, order) => sum + order.quantity, 0);
+  const availableSellQuantity = Math.max(
+    0,
+    (activePosition?.quantity ?? 0) - pendingSellQuantity,
+  );
+  const requestedQuantity = Number(quantity);
+  const sellIssue =
+    side !== "SELL" || !portfolio.authenticated
+      ? ""
+      : !activePosition || activePosition.quantity <= 0
+        ? `${selectedName}은 현재 보유하고 있지 않아 매도할 수 없어요.`
+        : requestedQuantity > availableSellQuantity
+          ? `매도 가능 수량은 ${availableSellQuantity.toLocaleString("ko-KR")}주예요.`
+          : "";
+  const estimatedPrice =
+    ["LIMIT", "STOP_LIMIT"].includes(kind) && Number(limitPrice) > 0
+      ? Number(limitPrice)
+      : quote?.price || 0;
   const live = socketConnected && Boolean(status?.connected);
   const session = useMemo(() => nxtSession(clock), [clock]);
   const positionValues = useMemo(
@@ -306,8 +351,7 @@ export default function TradingTerminal() {
       setSearchQuery("");
       document.querySelector(".order-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
-      setTimeout(() => setToast(""), 3500);
+      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setSearching(false);
     }
@@ -327,13 +371,12 @@ export default function TradingTerminal() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "주문을 취소하지 못했어요.");
-      setToast("대기 중인 지정가 가상주문을 취소했어요.");
+      notify("대기 중인 지정가 가상주문을 취소했어요.");
       await refreshPortfolio();
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
-      setTimeout(() => setToast(""), 3500);
     }
   }
 
@@ -341,6 +384,14 @@ export default function TradingTerminal() {
     event.preventDefault();
     if (!portfolio.authenticated) {
       location.href = `/api/auth/google/login?return_to=${encodeURIComponent(location.pathname + location.search)}`;
+      return;
+    }
+    if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+      notify("주문 수량을 1주 이상 입력해 주세요.");
+      return;
+    }
+    if (sellIssue) {
+      notify(sellIssue);
       return;
     }
     setBusy(true);
@@ -362,17 +413,16 @@ export default function TradingTerminal() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "주문을 접수하지 못했어요.");
-      setToast(
+      notify(
         data.status === "FILLED"
           ? `${selectedName} 가상주문이 ${money(data.fillPrice, data.currency)}에 체결됐어요.`
           : `${selectedName} 지정가 가상주문을 접수했어요.`,
       );
       await refreshPortfolio();
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
-      setTimeout(() => setToast(""), 3500);
     }
   }
 
@@ -548,10 +598,7 @@ export default function TradingTerminal() {
               currency: item.currency,
               exchange: item.exchange,
             })}
-            onNotice={(message) => {
-              setToast(message);
-              setTimeout(() => setToast(""), 3500);
-            }}
+            onNotice={notify}
             onAlertSummary={({ unread }) => setUnreadAlerts(unread)}
             focusAlertsKey={alertFocusKey}
           />
@@ -591,9 +638,38 @@ export default function TradingTerminal() {
           </div>
           <div className="side-tabs">
             <button className={side === "BUY" ? "buy active" : ""} onClick={() => setSide("BUY")}><ArrowDownLeft size={16} /> 매수</button>
-            <button className={side === "SELL" ? "sell active" : ""} onClick={() => setSide("SELL")}><ArrowUpRight size={16} /> 매도</button>
+            <button
+              className={side === "SELL" ? "sell active" : ""}
+              onClick={() => {
+                setSide("SELL");
+                if (portfolio.authenticated && !activePosition) {
+                  notify(`${selectedName}은 현재 보유하고 있지 않아 매도할 수 없어요.`);
+                }
+              }}
+            ><ArrowUpRight size={16} /> 매도</button>
           </div>
           <form onSubmit={submit}>
+            {side === "SELL" && portfolio.authenticated && (
+              <div className={`sell-availability ${sellIssue ? "warning" : ""}`} role="status">
+                <span>
+                  <b>매도 가능 {availableSellQuantity.toLocaleString("ko-KR")}주</b>
+                  <small>
+                    보유 {(activePosition?.quantity ?? 0).toLocaleString("ko-KR")}주
+                    {pendingSellQuantity > 0
+                      ? ` · 대기 주문 ${pendingSellQuantity.toLocaleString("ko-KR")}주`
+                      : ""}
+                  </small>
+                </span>
+                {availableSellQuantity > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(String(availableSellQuantity))}
+                  >
+                    전량
+                  </button>
+                )}
+              </div>
+            )}
             <label>가상주문 방식
               <select value={kind} onChange={(event) => setKind(event.target.value as "MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT")}>
                 <option value="MARKET">시장가</option>
@@ -622,16 +698,24 @@ export default function TradingTerminal() {
             <label>수량
               <div className="stepper">
                 <button type="button" onClick={() => setQuantity(String(Math.max(1, Number(quantity) - 1)))}>−</button>
-                <input type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+                <input
+                  aria-label="주문 수량"
+                  type="number"
+                  min="1"
+                  max={side === "SELL" && portfolio.authenticated ? Math.max(1, availableSellQuantity) : 10000}
+                  value={quantity}
+                  onChange={(event) => setQuantity(event.target.value)}
+                />
                 <button type="button" onClick={() => setQuantity(String(Number(quantity) + 1))}>＋</button>
               </div>
             </label>
             <div className="estimate">
               <span>예상 가상주문금액</span>
-              <b>{money((quote?.price || 0) * Number(quantity || 0), quote?.currency ?? "KRW")}</b>
+              <b>{money(estimatedPrice * Number(quantity || 0), quote?.currency ?? "KRW")}</b>
             </div>
+            {sellIssue && <p className="order-error" role="alert">{sellIssue}</p>}
             <small className="order-help">모의 수수료와 국내 매도비용은 체결 시 자동 반영돼요.</small>
-            <button className={`submit ${side.toLowerCase()}`} disabled={busy || !quote}>
+            <button className={`submit ${side.toLowerCase()}`} disabled={busy || !quote || Boolean(sellIssue)}>
               {busy ? <><RefreshCw className="spin" size={17} /> 처리 중</> : portfolio.authenticated ? `${selectedName} ${side === "BUY" ? "가상매수" : "가상매도"}` : "로그인하고 가상투자하기"}
             </button>
             <p className="disclaimer">국내 시세는 KIS KRX+NXT 통합(UN), 체결과 자산은 StockPilot 내부 가상 데이터입니다.</p>
@@ -663,7 +747,7 @@ export default function TradingTerminal() {
         </aside>
       </section>
       <footer><b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span><a href="https://coders.kr">coders.kr에서 호스팅</a></footer>
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
     </main>
   );
 }

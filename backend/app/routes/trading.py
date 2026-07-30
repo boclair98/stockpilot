@@ -96,6 +96,72 @@ async def account(
     return row
 
 
+def quantity_text(value: Decimal) -> str:
+    text = format(value, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def sell_quantity_error(
+    held: Decimal, reserved: Decimal, requested: Decimal
+) -> tuple[Decimal, str | None]:
+    available = max(Decimal("0"), held - reserved)
+    if held <= 0:
+        return available, "보유하지 않은 종목은 매도할 수 없습니다."
+    if requested > available:
+        if reserved > 0:
+            return (
+                available,
+                f"매도 가능 수량은 {quantity_text(available)}주입니다. "
+                f"대기 중인 매도 주문 {quantity_text(reserved)}주를 확인해 주세요.",
+            )
+        return available, (
+            "보유 수량보다 많이 매도할 수 없습니다. "
+            f"최대 {quantity_text(available)}주까지 가능합니다."
+        )
+    return available, None
+
+
+async def sell_capacity(
+    session: AsyncSession,
+    owner: UUID,
+    symbol: str,
+    exchange: str,
+) -> tuple[Decimal, Decimal]:
+    position = (
+        await session.execute(
+            sa.select(Position)
+            .where(
+                Position.owner_id == owner,
+                Position.symbol == symbol,
+                Position.exchange == exchange,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    pending_orders = (
+        (
+            await session.execute(
+                sa.select(TradeOrder)
+                .where(
+                    TradeOrder.owner_id == owner,
+                    TradeOrder.symbol == symbol,
+                    TradeOrder.exchange == exchange,
+                    TradeOrder.side == "SELL",
+                    TradeOrder.status.in_(("OPEN", "TRIGGERED")),
+                )
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    held = Decimal(position.quantity) if position else Decimal("0")
+    reserved = sum(
+        (Decimal(item.quantity) for item in pending_orders), Decimal("0")
+    )
+    return held, reserved
+
+
 async def execute(
     session: AsyncSession,
     order: TradeOrder,
@@ -357,6 +423,13 @@ async def order(
         raise HTTPException(422, "지정가를 입력하세요.")
     if order_type in {"STOP", "STOP_LIMIT"} and payload.triggerPrice is None:
         raise HTTPException(422, "감시 가격을 입력하세요.")
+    if side == "SELL":
+        held, reserved = await sell_capacity(
+            session, owner, symbol, instrument.exchange
+        )
+        _, error = sell_quantity_error(held, reserved, payload.quantity)
+        if error:
+            raise HTTPException(409, error)
 
     quote = await kis_market.fetch_quote(instrument)
     if not quote:
@@ -385,6 +458,10 @@ async def order(
     )
     if should_execute:
         await execute(session, row, instrument, price)
+        if row.status == "REJECTED":
+            if side == "BUY":
+                raise HTTPException(409, "가상 예수금이 부족해 주문을 체결할 수 없습니다.")
+            raise HTTPException(409, "보유 수량이 부족해 주문을 체결할 수 없습니다.")
 
     return {
         "id": str(row.id),

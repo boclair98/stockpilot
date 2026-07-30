@@ -6,6 +6,7 @@ import "./league.css";
 import "./investor.css";
 import "./rooms.css";
 import "./practice.css";
+import "./order-safety.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 

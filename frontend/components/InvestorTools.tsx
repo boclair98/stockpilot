@@ -156,6 +156,7 @@ export default function InvestorTools({
   >("default");
   const [thisDeviceEnabled, setThisDeviceEnabled] = useState(false);
   const seenTriggered = useRef<Set<string> | null>(null);
+  const alertSelectionKey = useRef("");
   const onNoticeRef = useRef(onNotice);
   const onAlertSummaryRef = useRef(onAlertSummary);
 
@@ -286,9 +287,11 @@ export default function InvestorTools({
 
   useEffect(() => {
     if (!selected) return;
-    const timer = window.setTimeout(() => {
-      setTargetPrice(String(selected.price));
-    }, 0);
+    const nextKey = `${selected.market}:${selected.exchange}:${selected.symbol}`;
+    if (alertSelectionKey.current === nextKey) return;
+    alertSelectionKey.current = nextKey;
+    const initialPrice = selected.price;
+    const timer = window.setTimeout(() => setTargetPrice(String(initialPrice)), 0);
     return () => window.clearTimeout(timer);
   }, [selected]);
 
@@ -516,7 +519,16 @@ export default function InvestorTools({
                   <option value="ABOVE">이 가격 이상</option>
                   <option value="BELOW">이 가격 이하</option>
                 </select>
-                <input type="number" min="0.01" required value={targetPrice} onChange={(event) => setTargetPrice(event.target.value)} />
+                <input
+                  aria-label="목표 가격"
+                  type="number"
+                  min="0.01"
+                  step={selected?.currency === "KRW" ? "1" : "0.01"}
+                  inputMode="decimal"
+                  required
+                  value={targetPrice}
+                  onChange={(event) => setTargetPrice(event.target.value)}
+                />
                 <button disabled={busy || !selected}>알림 만들기</button>
               </div>
             </form>
