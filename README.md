@@ -20,7 +20,7 @@ StockPilot은 한국투자증권 KIS Open API의 국내 KRX·NXT 통합 시세�
 
 <p align="center">
   <a href="https://stockpilot.coders.kr">
-    <img src="docs/images/stockpilot-overview-hd.png" width="760" alt="StockPilot 메인 화면" />
+    <img src="docs/images/stockpilot-kospi-live.png" width="760" alt="StockPilot KOSPI 그래프가 포함된 운영 화면" />
   </a>
 </p>
 
