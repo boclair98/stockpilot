@@ -675,6 +675,27 @@ export default function TradingTerminal() {
                 )) : <p className="search-state">일치하는 종목이 없어요.</p>}
               </div>
             )}
+            {!searchQuery && recentStocks.length > 0 && (
+              <div className="recent-stocks">
+                <span><History size={14} /> 최근 본 종목</span>
+                <div>
+                  {recentStocks.map((item) => (
+                    <button
+                      type="button"
+                      key={`${item.market}:${item.exchange}:${item.symbol}`}
+                      onClick={() => void chooseSearchResult(item)}
+                    >
+                      <StockLogo
+                        symbol={item.symbol}
+                        name={item.name}
+                        color={colorFor(item.symbol)}
+                      />
+                      <span><b>{item.name}</b><small>{item.symbol}</small></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <StockTrendPanel
@@ -779,27 +800,6 @@ export default function TradingTerminal() {
                     전량
                   </button>
                 )}
-              </div>
-            )}
-            {!searchQuery && recentStocks.length > 0 && (
-              <div className="recent-stocks">
-                <span><History size={14} /> 최근 본 종목</span>
-                <div>
-                  {recentStocks.map((item) => (
-                    <button
-                      type="button"
-                      key={`${item.market}:${item.exchange}:${item.symbol}`}
-                      onClick={() => void chooseSearchResult(item)}
-                    >
-                      <StockLogo
-                        symbol={item.symbol}
-                        name={item.name}
-                        color={colorFor(item.symbol)}
-                      />
-                      <span><b>{item.name}</b><small>{item.symbol}</small></span>
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
             <label>가상주문 방식
