@@ -143,6 +143,75 @@
   font-size: 12px;
 }
 
+.recent-stocks {
+  display: grid;
+  gap: 9px;
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid #edf0f3;
+}
+
+.recent-stocks > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #75818e;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.recent-stocks > div {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.recent-stocks > div > button {
+  min-width: 138px;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #edf0f3;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recent-stocks > div > button:hover {
+  border-color: #cfe1fa;
+  background: #f7faff;
+}
+
+.recent-stocks .symbol-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.recent-stocks button > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.recent-stocks b {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-stocks small {
+  color: #8d97a2;
+  font-size: 8px;
+}
+
 .company-insight {
   margin-top: 18px;
   padding: 22px;

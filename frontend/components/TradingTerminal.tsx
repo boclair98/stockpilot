@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  History,
   LogIn,
   LogOut,
   RefreshCw,
@@ -17,12 +18,14 @@ import {
   Sparkles,
   Trophy,
   Wifi,
+  X,
 } from "lucide-react";
 
 import CompanyInsight from "./CompanyInsight";
 import InvestorTools from "./InvestorTools";
 import MarketIndexChart from "./MarketIndexChart";
 import StockLogo from "./StockLogo";
+import StockTrendPanel from "./StockTrendPanel";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -99,6 +102,12 @@ type Me = {
 const palette = ["#111827", "#2563eb", "#76b900", "#ef4444", "#f59e0b", "#0668e1", "#18a46b"];
 const colorFor = (symbol: string) =>
   palette[[...symbol].reduce((sum, char) => sum + char.charCodeAt(0), 0) % palette.length];
+const ORDER_LABELS = {
+  MARKET: "시장가",
+  LIMIT: "지정가",
+  STOP: "손절·돌파 주문",
+  STOP_LIMIT: "조건부 지정가",
+} as const;
 const money = (value: number, currency: Currency) =>
   new Intl.NumberFormat("ko-KR", {
     style: "currency",
@@ -173,6 +182,8 @@ export default function TradingTerminal() {
   const [clock, setClock] = useState<Date | null>(null);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [alertFocusKey, setAlertFocusKey] = useState(0);
+  const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
   const toastTimer = useRef<number | null>(null);
 
   const notify = useCallback((message: string) => {
@@ -238,6 +249,29 @@ export default function TradingTerminal() {
     const timer = window.setInterval(update, 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem("stockpilot_recent_stocks") || "[]",
+        );
+        if (Array.isArray(saved)) setRecentStocks(saved.slice(0, 6));
+      } catch {
+        localStorage.removeItem("stockpilot_recent_stocks");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!confirmingOrder) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setConfirmingOrder(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [busy, confirmingOrder]);
 
   useEffect(
     () => () => {
@@ -307,6 +341,16 @@ export default function TradingTerminal() {
     ["LIMIT", "STOP_LIMIT"].includes(kind) && Number(limitPrice) > 0
       ? Number(limitPrice)
       : quote?.price || 0;
+  const maxBuyQuantity =
+    estimatedPrice > 0
+      ? Math.max(
+          0,
+          Math.floor(
+            ((portfolio.cash[quote?.currency ?? "KRW"] || 0) * 0.998) /
+              estimatedPrice,
+          ),
+        )
+      : 0;
   const live = socketConnected && Boolean(status?.connected);
   const session = useMemo(() => nxtSession(clock), [clock]);
   const positionValues = useMemo(
@@ -336,6 +380,39 @@ export default function TradingTerminal() {
     [portfolio.positions],
   );
 
+  const rememberStock = useCallback((item: SearchItem) => {
+    setRecentStocks((current) => {
+      const next = [
+        item,
+        ...current.filter(
+          (entry) =>
+            !(
+              entry.symbol === item.symbol &&
+              entry.exchange === item.exchange &&
+              entry.market === item.market
+            ),
+        ),
+      ].slice(0, 6);
+      localStorage.setItem("stockpilot_recent_stocks", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  function selectTopQuote(item: Quote) {
+    setSelected(item.id);
+    setLimitPrice(String(item.price));
+    setTriggerPrice(String(item.price));
+    rememberStock({
+      id: item.id,
+      symbol: item.symbol,
+      name: item.name,
+      englishName: "",
+      market: item.market,
+      currency: item.currency,
+      exchange: item.exchange,
+    });
+  }
+
   async function chooseSearchResult(item: SearchItem) {
     setSearching(true);
     try {
@@ -349,6 +426,15 @@ export default function TradingTerminal() {
       setSelected(data.id);
       setLimitPrice(String(data.price));
       setTriggerPrice(String(data.price));
+      rememberStock({
+        id: data.id,
+        symbol: data.symbol,
+        name: data.name,
+        englishName: item.englishName || "",
+        market: data.market,
+        currency: data.currency,
+        exchange: data.exchange,
+      });
       setSearchResults([]);
       setSearchQuery("");
       document.querySelector(".order-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -382,6 +468,18 @@ export default function TradingTerminal() {
     }
   }
 
+  function setQuickQuantity(percent: number) {
+    const maximum =
+      side === "SELL" && portfolio.authenticated
+        ? availableSellQuantity
+        : maxBuyQuantity;
+    const next =
+      percent === 100
+        ? maximum
+        : Math.floor(maximum * (percent / 100));
+    setQuantity(String(Math.max(1, next)));
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!portfolio.authenticated) {
@@ -396,6 +494,10 @@ export default function TradingTerminal() {
       notify(sellIssue);
       return;
     }
+    setConfirmingOrder(true);
+  }
+
+  async function placeOrder() {
     setBusy(true);
     try {
       const response = await fetch("/api/trading/orders", {
@@ -425,6 +527,7 @@ export default function TradingTerminal() {
       notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
+      setConfirmingOrder(false);
     }
   }
 
@@ -522,11 +625,7 @@ export default function TradingTerminal() {
                   <button
                     className={`quote ${selected === item.id ? "active" : ""}`}
                     key={item.id}
-                    onClick={() => {
-                      setSelected(item.id);
-                      setLimitPrice(String(item.price));
-                      setTriggerPrice(String(item.price));
-                    }}
+                    onClick={() => selectTopQuote(item)}
                   >
                     <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} />
                     <span className="company"><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span>
@@ -577,6 +676,14 @@ export default function TradingTerminal() {
               </div>
             )}
           </div>
+
+          <StockTrendPanel
+            symbol={activeSymbol}
+            name={selectedName}
+            market={quote?.market ?? "KR"}
+            exchange={quote?.exchange ?? "KRX"}
+            currency={quote?.currency ?? "KRW"}
+          />
 
           <CompanyInsight
             symbol={activeSymbol}
@@ -674,6 +781,27 @@ export default function TradingTerminal() {
                 )}
               </div>
             )}
+            {!searchQuery && recentStocks.length > 0 && (
+              <div className="recent-stocks">
+                <span><History size={14} /> 최근 본 종목</span>
+                <div>
+                  {recentStocks.map((item) => (
+                    <button
+                      type="button"
+                      key={`${item.market}:${item.exchange}:${item.symbol}`}
+                      onClick={() => void chooseSearchResult(item)}
+                    >
+                      <StockLogo
+                        symbol={item.symbol}
+                        name={item.name}
+                        color={colorFor(item.symbol)}
+                      />
+                      <span><b>{item.name}</b><small>{item.symbol}</small></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label>가상주문 방식
               <select value={kind} onChange={(event) => setKind(event.target.value as "MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT")}>
                 <option value="MARKET">시장가</option>
@@ -713,6 +841,29 @@ export default function TradingTerminal() {
                 <button type="button" onClick={() => setQuantity(String(Number(quantity) + 1))}>＋</button>
               </div>
             </label>
+            <div className="quick-quantity">
+              <span>
+                {side === "BUY"
+                  ? `주문 가능 금액 기준 · 최대 ${maxBuyQuantity.toLocaleString("ko-KR")}주`
+                  : `매도 가능 수량 기준 · 최대 ${availableSellQuantity.toLocaleString("ko-KR")}주`}
+              </span>
+              <div>
+                {[10, 25, 50, 100].map((percent) => (
+                  <button
+                    type="button"
+                    key={percent}
+                    disabled={
+                      side === "SELL"
+                        ? availableSellQuantity <= 0
+                        : maxBuyQuantity <= 0
+                    }
+                    onClick={() => setQuickQuantity(percent)}
+                  >
+                    {percent === 100 && side === "SELL" ? "전량" : `${percent}%`}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="estimate">
               <span>예상 가상주문금액</span>
               <b>{money(estimatedPrice * Number(quantity || 0), quote?.currency ?? "KRW")}</b>
@@ -751,6 +902,65 @@ export default function TradingTerminal() {
         </aside>
       </section>
       <footer><b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span><a href="https://coders.kr">coders.kr에서 호스팅</a></footer>
+      {confirmingOrder && quote && (
+        <div
+          className="order-confirm-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) {
+              setConfirmingOrder(false);
+            }
+          }}
+        >
+          <section
+            className="order-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-confirm-title"
+          >
+            <button
+              type="button"
+              className="confirm-close"
+              aria-label="주문 확인 닫기"
+              disabled={busy}
+              onClick={() => setConfirmingOrder(false)}
+            >
+              <X size={18} />
+            </button>
+            <span className={`confirm-side ${side.toLowerCase()}`}>
+              {side === "BUY" ? "가상매수" : "가상매도"}
+            </span>
+            <h2 id="order-confirm-title">주문 내용을 확인해 주세요</h2>
+            <p>{selectedName} · {activeSymbol}</p>
+            <dl>
+              <div><dt>주문 방식</dt><dd>{ORDER_LABELS[kind]}</dd></div>
+              <div><dt>수량</dt><dd>{requestedQuantity.toLocaleString("ko-KR")}주</dd></div>
+              <div><dt>기준 가격</dt><dd>{money(estimatedPrice, quote.currency)}</dd></div>
+              <div className="confirm-total">
+                <dt>예상 주문금액</dt>
+                <dd>{money(estimatedPrice * requestedQuantity, quote.currency)}</dd>
+              </div>
+            </dl>
+            <div className="confirm-simulation-note">
+              실제 증권계좌 주문이 아닌 StockPilot 내부 가상주문입니다.
+            </div>
+            <div className="confirm-actions">
+              <button type="button" disabled={busy} onClick={() => setConfirmingOrder(false)}>
+                다시 확인
+              </button>
+              <button
+                type="button"
+                className={side.toLowerCase()}
+                disabled={busy}
+                onClick={() => void placeOrder()}
+              >
+                {busy
+                  ? "처리 중"
+                  : `${side === "BUY" ? "가상매수" : "가상매도"} 확정`}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
     </main>
   );

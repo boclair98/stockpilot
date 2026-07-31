@@ -286,7 +286,8 @@ class KISMarket:
         if not self.configured:
             return []
 
-        end = now.date() - timedelta(days=7)
+        # KIS rejects a range ending on a not-yet-completed trading day.
+        end = now.date() - timedelta(days=1)
         start = end - timedelta(days=150)
         try:
             async with self._rest_lock:
@@ -335,7 +336,8 @@ class KISMarket:
                                 "EXCD": instrument.exchange,
                                 "SYMB": instrument.symbol,
                                 "GUBN": "0",
-                                "BYMD": end.strftime("%Y%m%d"),
+                                # Blank means the latest completed US trading day.
+                                "BYMD": "",
                                 "MODP": "1",
                             },
                         )
