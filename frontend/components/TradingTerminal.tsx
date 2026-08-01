@@ -4,14 +4,17 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  BarChart3,
   Bell,
   BrainCircuit,
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  Gauge,
   History,
   LogIn,
   LogOut,
+  PieChart,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -114,6 +117,7 @@ const money = (value: number, currency: Currency) =>
     currency,
     maximumFractionDigits: currency === "KRW" ? 0 : 2,
   }).format(value);
+const percentText = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
 function nxtSession(now: Date | null) {
   if (!now) return { label: "시간 확인 중", detail: "NXT 운영시간을 불러오고 있어요" };
@@ -379,6 +383,78 @@ export default function TradingTerminal() {
       ),
     [portfolio.positions],
   );
+  const marketPulse = useMemo(() => {
+    const topQuotes = quotes.filter((item) => item.isTop);
+    const sorted = [...topQuotes].sort((a, b) => b.changePercent - a.changePercent);
+    const riser = sorted[0] ?? null;
+    const faller = sorted.at(-1) ?? null;
+    const average =
+      topQuotes.length > 0
+        ? topQuotes.reduce((sum, item) => sum + item.changePercent, 0) / topQuotes.length
+        : 0;
+    const risingCount = topQuotes.filter((item) => item.changePercent > 0).length;
+    return {
+      average,
+      faller,
+      risingCount,
+      total: topQuotes.length,
+      riser,
+    };
+  }, [quotes]);
+  const portfolioCheck = useMemo(() => {
+    const invested = {
+      KRW: positionValues.KRW,
+      USD: positionValues.USD,
+    } satisfies Record<Currency, number>;
+    const total = {
+      KRW: portfolio.cash.KRW + invested.KRW,
+      USD: portfolio.cash.USD + invested.USD,
+    } satisfies Record<Currency, number>;
+    const cashRatio = {
+      KRW: total.KRW > 0 ? (portfolio.cash.KRW / total.KRW) * 100 : 100,
+      USD: total.USD > 0 ? (portfolio.cash.USD / total.USD) * 100 : 100,
+    } satisfies Record<Currency, number>;
+    const largest = portfolio.positions.reduce<Position | null>(
+      (current, position) =>
+        !current || position.marketValue > current.marketValue ? position : current,
+      null,
+    );
+    const largestTotal = largest ? total[largest.currency] : 0;
+    const concentration =
+      largest && largestTotal > 0 ? (largest.marketValue / largestTotal) * 100 : 0;
+    const winners = portfolio.positions.filter((position) => position.profit > 0).length;
+    const losers = portfolio.positions.filter((position) => position.profit < 0).length;
+    const notices: string[] = [];
+    if (!portfolio.authenticated) {
+      notices.push("Google로 로그인하면 내 보유 종목 기준 체크업이 표시돼요.");
+    } else if (portfolio.positions.length === 0) {
+      notices.push("아직 보유 종목이 없어 현금 중심의 안정 상태예요.");
+    } else {
+      if (concentration >= 55 && largest) {
+        notices.push(`${largest.name} 비중이 ${concentration.toFixed(0)}%로 높아요.`);
+      }
+      if (cashRatio.KRW < 8 && cashRatio.USD < 8) {
+        notices.push("원화와 달러 현금 비중이 모두 낮아 추가 주문 여력이 작아요.");
+      } else if (cashRatio.KRW > 80 && cashRatio.USD > 80) {
+        notices.push("현금 비중이 높아 아직 시장 노출이 작은 편이에요.");
+      }
+      if (losers > winners && losers > 0) {
+        notices.push("손실 중인 종목이 더 많아 손절·목표가 알림을 점검해 보세요.");
+      }
+      if (!notices.length) {
+        notices.push("현금, 보유 비중, 손익 균형이 무난한 상태예요.");
+      }
+    }
+    return {
+      cashRatio,
+      concentration,
+      largest,
+      losers,
+      notices: notices.slice(0, 3),
+      positionCount: portfolio.positions.length,
+      winners,
+    };
+  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, positionValues]);
 
   const rememberStock = useCallback((item: SearchItem) => {
     setRecentStocks((current) => {
@@ -608,6 +684,69 @@ export default function TradingTerminal() {
       </section>
 
       <MarketIndexChart />
+
+      <section className="insight-grid" aria-label="시장과 내 투자 체크업">
+        <article className="pulse-card">
+          <div className="insight-title">
+            <span><BarChart3 size={16} /> 오늘의 시장 요약</span>
+            <small>{marketPulse.total ? `${marketPulse.total}개 주요 종목 기준` : "시세 수신 대기"}</small>
+          </div>
+          <strong className={marketPulse.average >= 0 ? "up" : "down"}>
+            {percentText(marketPulse.average)}
+          </strong>
+          <p>
+            주요 종목 중 {marketPulse.risingCount}개가 상승 중이에요.
+            {marketPulse.riser && marketPulse.faller
+              ? ` 강한 종목은 ${marketPulse.riser.name}, 약한 종목은 ${marketPulse.faller.name}입니다.`
+              : " 시세가 들어오면 상승·하락 종목을 자동으로 요약해요."}
+          </p>
+          <div className="pulse-movers">
+            <span>
+              <small>상승 선두</small>
+              <b>{marketPulse.riser ? marketPulse.riser.name : "—"}</b>
+              <em className="up">{marketPulse.riser ? percentText(marketPulse.riser.changePercent) : "—"}</em>
+            </span>
+            <span>
+              <small>하락 선두</small>
+              <b>{marketPulse.faller ? marketPulse.faller.name : "—"}</b>
+              <em className="down">{marketPulse.faller ? percentText(marketPulse.faller.changePercent) : "—"}</em>
+            </span>
+          </div>
+        </article>
+
+        <article className="checkup-card">
+          <div className="insight-title">
+            <span><Gauge size={16} /> 내 투자 체크업</span>
+            <small>{portfolioCheck.positionCount}개 보유 종목</small>
+          </div>
+          <div className="checkup-metrics">
+            <span>
+              <small>원화 현금</small>
+              <b>{portfolioCheck.cashRatio.KRW.toFixed(0)}%</b>
+            </span>
+            <span>
+              <small>달러 현금</small>
+              <b>{portfolioCheck.cashRatio.USD.toFixed(0)}%</b>
+            </span>
+            <span>
+              <small>최대 비중</small>
+              <b>{portfolioCheck.concentration.toFixed(0)}%</b>
+            </span>
+            <span>
+              <small>손익 종목</small>
+              <b>{portfolioCheck.winners}/{portfolioCheck.losers}</b>
+            </span>
+          </div>
+          <div className="checkup-advice">
+            <PieChart size={16} />
+            <div>
+              {portfolioCheck.notices.map((notice) => (
+                <p key={notice}>{notice}</p>
+              ))}
+            </div>
+          </div>
+        </article>
+      </section>
 
       <section className="content">
         <div className="market-column">

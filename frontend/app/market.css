@@ -533,6 +533,142 @@
   background: #f2f4f6;
 }
 
+.insight-grid {
+  display: grid;
+  grid-template-columns: .95fr 1.05fr;
+  gap: 14px;
+  margin: 0 18px 28px;
+}
+
+.pulse-card,
+.checkup-card {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid #edf0f3;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 12px 34px #27384b08;
+}
+
+.pulse-card {
+  background: linear-gradient(135deg, #fff, #f8fbff 58%, #fff7f1);
+}
+
+.checkup-card {
+  background: linear-gradient(135deg, #fff, #fbfcfe 60%, #f5fff9);
+}
+
+.insight-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.insight-title > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #435061;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.insight-title svg {
+  color: #3182f6;
+}
+
+.insight-title small {
+  color: #8d97a2;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.pulse-card > strong {
+  display: block;
+  font-size: 30px;
+  letter-spacing: -.6px;
+}
+
+.pulse-card > p {
+  margin: 8px 0 16px;
+  color: #65717f;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pulse-movers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pulse-movers > span,
+.checkup-metrics > span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 13px;
+  background: #f7f9fb;
+}
+
+.pulse-movers small,
+.checkup-metrics small {
+  color: #89939e;
+  font-size: 8px;
+}
+
+.pulse-movers b {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pulse-movers em {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.checkup-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.checkup-metrics b {
+  font-size: 14px;
+}
+
+.checkup-advice {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: 14px;
+  background: #f4f8fd;
+  color: #556272;
+}
+
+.checkup-advice > svg {
+  margin-top: 1px;
+  color: #18a46b;
+}
+
+.checkup-advice p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.checkup-advice p + p {
+  margin-top: 4px;
+}
+
 @media (max-width: 980px) {
   .summary {
     grid-template-columns: 1fr 1fr;
@@ -550,6 +686,10 @@
 
   .balance-card {
     grid-column: auto;
+  }
+
+  .insight-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -602,5 +742,26 @@
   .top-actions > .league-link {
     padding: 9px;
     font-size: 0;
+  }
+
+  .insight-grid {
+    margin: 0 10px 20px;
+  }
+
+  .pulse-card,
+  .checkup-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .insight-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .pulse-movers,
+  .checkup-metrics {
+    grid-template-columns: 1fr 1fr;
   }
 }
