@@ -612,6 +612,7 @@ export default function TradingTerminal() {
       <header className="topbar">
         <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
         <div className="top-actions">
+          <a className="league-link growth-link" href="/growth"><Gauge size={16} /> 성장 허브</a>
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
           <button aria-label="검색"><Search size={19} /></button>

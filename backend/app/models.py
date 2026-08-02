@@ -278,6 +278,12 @@ class LeagueRoom(Base):
     invite_code: Mapped[str] = mapped_column(
         sa.String(10), unique=True, nullable=False, index=True
     )
+    mode: Mapped[str] = mapped_column(
+        sa.String(12), nullable=False, default="SEASON", server_default="SEASON"
+    )
+    max_members: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=100, server_default="100"
+    )
     starts_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False
     )
@@ -321,4 +327,65 @@ class LeagueRoomMember(Base):
             "nickname",
             name="uq_league_room_member_nickname",
         ),
+    )
+
+
+class DailyChallengeAttempt(Base):
+    """One answer per user and calendar day for the five-minute challenge."""
+
+    __tablename__ = "daily_challenge_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    challenge_date: Mapped[date] = mapped_column(
+        sa.Date, nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    choice: Mapped[str] = mapped_column(sa.String(5), nullable=False)
+    start_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    end_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    score: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "owner_id",
+            "challenge_date",
+            name="uq_daily_challenge_owner_date",
+        ),
+    )
+
+
+class TradeJournal(Base):
+    """Private pre-trade thesis and post-trade review."""
+
+    __tablename__ = "trade_journals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    thesis: Mapped[str] = mapped_column(sa.String(500), nullable=False)
+    horizon: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    target_return: Mapped[Decimal | None] = mapped_column(sa.Numeric(8, 3))
+    stop_loss: Mapped[Decimal | None] = mapped_column(sa.Numeric(8, 3))
+    confidence: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    review: Mapped[str | None] = mapped_column(sa.String(500))
+    outcome: Mapped[str | None] = mapped_column(sa.String(12))
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
