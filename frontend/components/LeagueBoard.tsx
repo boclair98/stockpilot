@@ -16,6 +16,7 @@ import {
   Target,
   Trophy,
   Users,
+  Gauge,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -146,6 +147,7 @@ export default function LeagueBoard() {
         </Link>
         <nav>
           <Link href="/"><ArrowLeft size={15} /> 가상투자</Link>
+          <Link href="/growth"><Gauge size={15} /> 성장 허브</Link>
           <Link href="/practice"><BrainCircuit size={15} /> 시세 연습</Link>
           <span className="active"><Trophy size={15} /> 수익률 리그</span>
         </nav>

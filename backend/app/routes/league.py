@@ -7,11 +7,12 @@ import secrets
 import string
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +55,8 @@ class JoinIn(BaseModel):
 class RoomCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=24)
     nickname: str = Field(min_length=2, max_length=12)
-    durationDays: int = Field(default=30, ge=7, le=90)
+    durationDays: int = Field(default=30, ge=1, le=90)
+    mode: Literal["SEASON", "DUEL"] = "SEASON"
 
     @field_validator("name")
     @classmethod
@@ -71,6 +73,13 @@ class RoomCreateIn(BaseModel):
         if not NICKNAME_PATTERN.fullmatch(value):
             raise ValueError("닉네임은 한글·영문·숫자·_-만 사용할 수 있습니다.")
         return value
+
+    @model_validator(mode="after")
+    def validate_duration(self) -> RoomCreateIn:
+        allowed = {1, 3, 7} if self.mode == "DUEL" else {7, 14, 30, 60}
+        if self.durationDays not in allowed:
+            raise ValueError("대결 또는 시즌에서 제공하는 기간을 선택해 주세요.")
+        return self
 
 
 class RoomJoinIn(BaseModel):
@@ -260,6 +269,8 @@ async def _room_payload(
         "id": str(room.id),
         "name": room.name,
         "inviteCode": room.invite_code,
+        "mode": room.mode,
+        "maxMembers": room.max_members,
         "status": _room_status(room),
         "startsAt": room.starts_at.isoformat(),
         "endsAt": room.ends_at.isoformat(),
@@ -485,6 +496,8 @@ async def create_room(
         owner_id=owner,
         name=payload.name.strip(),
         invite_code=await _new_invite_code(session),
+        mode=payload.mode,
+        max_members=2 if payload.mode == "DUEL" else 100,
         starts_at=now,
         ends_at=now + timedelta(days=payload.durationDays),
     )
@@ -529,8 +542,13 @@ async def join_room(
     member_count = await session.scalar(
         sa.select(sa.func.count()).where(LeagueRoomMember.league_id == room.id)
     )
-    if (member_count or 0) >= 100:
-        raise HTTPException(409, "리그 참여 인원이 가득 찼습니다.")
+    if (member_count or 0) >= room.max_members:
+        message = (
+            "이미 상대가 참여해 1:1 대결이 가득 찼습니다."
+            if room.mode == "DUEL"
+            else "리그 참여 인원이 가득 찼습니다."
+        )
+        raise HTTPException(409, message)
     duplicate_name = await session.scalar(
         sa.select(LeagueRoomMember.id).where(
             LeagueRoomMember.league_id == room.id,
