@@ -12,10 +12,13 @@ def test_streak_counts_back_from_today() -> None:
 
 def test_streak_keeps_yesterday_when_today_not_answered() -> None:
     today = date(2026, 8, 2)
-    assert _streak(
-        [today - timedelta(days=1), today - timedelta(days=2)],
-        today,
-    ) == 2
+    assert (
+        _streak(
+            [today - timedelta(days=1), today - timedelta(days=2)],
+            today,
+        )
+        == 2
+    )
 
 
 def test_skill_score_rewards_planning_and_review() -> None:

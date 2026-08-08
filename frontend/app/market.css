@@ -669,6 +669,89 @@
   margin-top: 4px;
 }
 
+.stress-test {
+  margin-top: 12px;
+  padding-top: 13px;
+  border-top: 1px solid #edf0f3;
+}
+
+.stress-head,
+.stress-head > span,
+.stress-head > div {
+  display: flex;
+  align-items: center;
+}
+
+.stress-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stress-head > span {
+  gap: 6px;
+  color: #526170;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.stress-head > span svg {
+  color: #ef7d39;
+}
+
+.stress-head > div {
+  gap: 4px;
+}
+
+.stress-head button {
+  min-width: 34px;
+  height: 26px;
+  border: 1px solid #e5e9ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #75808c;
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.stress-head button.active {
+  border-color: #f2b58f;
+  background: #fff2e9;
+  color: #e76f2b;
+}
+
+.stress-result {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.stress-result > span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 11px;
+  background: #fff7f3;
+}
+
+.stress-result small {
+  color: #8b949e;
+  font-size: 8px;
+}
+
+.stress-result b {
+  color: #f04452;
+  font-size: 11px;
+}
+
+.stress-test > p {
+  margin: 8px 1px 0;
+  color: #9aa3ad;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
 @media (max-width: 980px) {
   .summary {
     grid-template-columns: 1fr 1fr;
@@ -761,7 +844,13 @@
   }
 
   .pulse-movers,
-  .checkup-metrics {
+  .checkup-metrics,
+  .stress-result {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .stress-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

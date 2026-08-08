@@ -188,6 +188,7 @@ export default function TradingTerminal() {
   const [alertFocusKey, setAlertFocusKey] = useState(0);
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
+  const [stressMove, setStressMove] = useState(-5);
   const toastTimer = useRef<number | null>(null);
 
   const notify = useCallback((message: string) => {
@@ -425,6 +426,10 @@ export default function TradingTerminal() {
     const winners = portfolio.positions.filter((position) => position.profit > 0).length;
     const losers = portfolio.positions.filter((position) => position.profit < 0).length;
     const notices: string[] = [];
+    const stressLoss = {
+      KRW: invested.KRW * (stressMove / 100),
+      USD: invested.USD * (stressMove / 100),
+    } satisfies Record<Currency, number>;
     if (!portfolio.authenticated) {
       notices.push("Google로 로그인하면 내 보유 종목 기준 체크업이 표시돼요.");
     } else if (portfolio.positions.length === 0) {
@@ -452,9 +457,10 @@ export default function TradingTerminal() {
       losers,
       notices: notices.slice(0, 3),
       positionCount: portfolio.positions.length,
+      stressLoss,
       winners,
     };
-  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, positionValues]);
+  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, positionValues, stressMove]);
 
   const rememberStock = useCallback((item: SearchItem) => {
     setRecentStocks((current) => {
@@ -745,6 +751,28 @@ export default function TradingTerminal() {
                 <p key={notice}>{notice}</p>
               ))}
             </div>
+          </div>
+          <div className="stress-test">
+            <div className="stress-head">
+              <span><BrainCircuit size={15} /> 급락 스트레스 테스트</span>
+              <div>
+                {[-1, -3, -5, -10].map((move) => (
+                  <button
+                    className={stressMove === move ? "active" : ""}
+                    key={move}
+                    onClick={() => setStressMove(move)}
+                    type="button"
+                  >
+                    {move}%
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="stress-result">
+              <span><small>국내 보유분 예상 변동</small><b>{money(portfolioCheck.stressLoss.KRW, "KRW")}</b></span>
+              <span><small>미국 보유분 예상 변동</small><b>{money(portfolioCheck.stressLoss.USD, "USD")}</b></span>
+            </div>
+            <p>모든 보유 종목이 같은 폭으로 움직인 단순 가정이며, 실제 손실 예측이나 투자 조언이 아닙니다.</p>
           </div>
         </article>
       </section>

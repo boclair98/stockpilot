@@ -36,14 +36,9 @@ class PriceAlertNotifier:
         self._task: asyncio.Task | None = None
 
     def start(self) -> None:
-        if (
-            firebase_push.configured
-            and (self._task is None or self._task.done())
-        ):
+        if firebase_push.configured and (self._task is None or self._task.done()):
             self._stop.clear()
-            self._task = asyncio.create_task(
-                self._run(), name="price-alert-notifier"
-            )
+            self._task = asyncio.create_task(self._run(), name="price-alert-notifier")
 
     async def stop(self) -> None:
         self._stop.set()

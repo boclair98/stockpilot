@@ -50,26 +50,59 @@ class Instrument:
 
 
 TOP_INSTRUMENTS = (
-    Instrument("005930", "삼성전자", "KR", "KRW", "KRX", "005930", "Samsung Electronics", True),
+    Instrument(
+        "005930", "삼성전자", "KR", "KRW", "KRX", "005930", "Samsung Electronics", True
+    ),
     Instrument("000660", "SK하이닉스", "KR", "KRW", "KRX", "000660", "SK hynix", True),
-    Instrument("373220", "LG에너지솔루션", "KR", "KRW", "KRX", "373220", "LG Energy Solution", True),
-    Instrument("207940", "삼성바이오로직스", "KR", "KRW", "KRX", "207940", "Samsung Biologics", True),
+    Instrument(
+        "373220",
+        "LG에너지솔루션",
+        "KR",
+        "KRW",
+        "KRX",
+        "373220",
+        "LG Energy Solution",
+        True,
+    ),
+    Instrument(
+        "207940",
+        "삼성바이오로직스",
+        "KR",
+        "KRW",
+        "KRX",
+        "207940",
+        "Samsung Biologics",
+        True,
+    ),
     Instrument("005380", "현대차", "KR", "KRW", "KRX", "005380", "Hyundai Motor", True),
     Instrument("068270", "셀트리온", "KR", "KRW", "KRX", "068270", "Celltrion", True),
     Instrument("105560", "KB금융", "KR", "KRW", "KRX", "105560", "KB Financial", True),
     Instrument("035420", "NAVER", "KR", "KRW", "KRX", "035420", "NAVER", True),
     Instrument("000270", "기아", "KR", "KRW", "KRX", "000270", "Kia", True),
-    Instrument("329180", "HD현대중공업", "KR", "KRW", "KRX", "329180", "HD Hyundai Heavy Industries", True),
+    Instrument(
+        "329180",
+        "HD현대중공업",
+        "KR",
+        "KRW",
+        "KRX",
+        "329180",
+        "HD Hyundai Heavy Industries",
+        True,
+    ),
     Instrument("NVDA", "NVIDIA", "US", "USD", "NAS", "DNASNVDA", "NVIDIA", True),
     Instrument("MSFT", "Microsoft", "US", "USD", "NAS", "DNASMSFT", "Microsoft", True),
     Instrument("AAPL", "Apple", "US", "USD", "NAS", "DNASAAPL", "Apple", True),
     Instrument("AMZN", "Amazon", "US", "USD", "NAS", "DNASAMZN", "Amazon", True),
-    Instrument("GOOGL", "Alphabet", "US", "USD", "NAS", "DNASGOOGL", "Alphabet Class A", True),
+    Instrument(
+        "GOOGL", "Alphabet", "US", "USD", "NAS", "DNASGOOGL", "Alphabet Class A", True
+    ),
     Instrument("META", "Meta", "US", "USD", "NAS", "DNASMETA", "Meta Platforms", True),
     Instrument("AVGO", "Broadcom", "US", "USD", "NAS", "DNASAVGO", "Broadcom", True),
     Instrument("TSLA", "Tesla", "US", "USD", "NAS", "DNASTSLA", "Tesla", True),
     Instrument("NFLX", "Netflix", "US", "USD", "NAS", "DNASNFLX", "Netflix", True),
-    Instrument("COST", "Costco", "US", "USD", "NAS", "DNASCOST", "Costco Wholesale", True),
+    Instrument(
+        "COST", "Costco", "US", "USD", "NAS", "DNASCOST", "Costco Wholesale", True
+    ),
 )
 
 
@@ -99,7 +132,9 @@ class InstrumentCatalog:
                     )
                 for exchange, response in zip(MASTER_URLS, responses, strict=True):
                     if isinstance(response, Exception):
-                        logger.warning("KIS master download failed (%s): %s", exchange, response)
+                        logger.warning(
+                            "KIS master download failed (%s): %s", exchange, response
+                        )
                         continue
                     response.raise_for_status()
                     raw = self._unzip_first(response.content)
@@ -164,7 +199,9 @@ class InstrumentCatalog:
                 )
         return items
 
-    async def search(self, query: str, market: str = "ALL", limit: int = 20) -> list[dict]:
+    async def search(
+        self, query: str, market: str = "ALL", limit: int = 20
+    ) -> list[dict]:
         await self.ensure_loaded()
         needle = query.casefold().strip()
         if not needle:
@@ -187,7 +224,9 @@ class InstrumentCatalog:
             else:
                 continue
             matches.append((score, item))
-        matches.sort(key=lambda row: (row[0], not row[1].is_top, len(row[1].symbol), row[1].name))
+        matches.sort(
+            key=lambda row: (row[0], not row[1].is_top, len(row[1].symbol), row[1].name)
+        )
         return [item.public() for _, item in matches[:limit]]
 
     async def get(

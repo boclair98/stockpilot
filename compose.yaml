@@ -14,9 +14,6 @@
 # user. Override it in backend/.env (copy .env.example) to test as someone else
 # or unset it to exercise the anonymous path. See app/core/identity.py.
 #
-# No redis / no arq — this template has no background jobs. If you add
-# them, mirror template-full's compose for the redis service.
-
 services:
   db:
     image: postgres:16-alpine
@@ -47,6 +44,7 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      REDIS_URL: redis://cache:6379/0
       # No platform gate locally → treat every request as this signed-in dev
       # user (see app/core/identity.py). Override in backend/.env if you want
       # to test as a different user, or unset to exercise the anonymous path.
@@ -57,6 +55,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  cache:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no --maxmemory 192mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   frontend:
     image: node:22-alpine

@@ -159,16 +159,15 @@ def _skill_scores(
     return_score = max(0, min(100, 50 + float(combined) * 5))
     risk_score = max(0, min(100, 100 - max_drawdown * 8))
     planned = sum(
-        1 for row in journals if row.target_return is not None and row.stop_loss is not None
+        1
+        for row in journals
+        if row.target_return is not None and row.stop_loss is not None
     )
     reviewed = sum(1 for row in journals if row.reviewed_at is not None)
     discipline = min(100, 30 + min(planned, 5) * 8 + min(reviewed, 5) * 6)
     experience = min(100, filled_count * 5)
     overall = round(
-        return_score * 0.30
-        + risk_score * 0.30
-        + discipline * 0.25
-        + experience * 0.15
+        return_score * 0.30 + risk_score * 0.30 + discipline * 0.25 + experience * 0.15
     )
     grade = "새싹"
     if overall >= 85:
@@ -188,9 +187,7 @@ def _skill_scores(
     }
 
 
-async def _overview(
-    session: AsyncSession, owner: UUID | None, day: date
-) -> dict:
+async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dict:
     challenge, instrument = await _challenge(day)
     attempt = None
     distribution = {"BUY": 0, "HOLD": 0, "SELL": 0}
@@ -209,9 +206,7 @@ async def _overview(
     if not owner:
         return {
             "authenticated": False,
-            "challenge": _challenge_public(
-                challenge, instrument, None, distribution
-            ),
+            "challenge": _challenge_public(challenge, instrument, None, distribution),
             "streak": 0,
             "skill": None,
             "weeklyCard": None,
@@ -331,9 +326,7 @@ async def _overview(
         badges.append({"key": "risk-keeper", "label": "리스크 지킴이"})
     return {
         "authenticated": True,
-        "challenge": _challenge_public(
-            challenge, instrument, attempt, distribution
-        ),
+        "challenge": _challenge_public(challenge, instrument, attempt, distribution),
         "streak": streak,
         "skill": scores,
         "weeklyCard": {

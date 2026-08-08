@@ -131,9 +131,7 @@ async def _instrument(payload: InstrumentIn) -> Instrument:
 
 
 async def _quote(instrument: Instrument) -> dict | None:
-    cached = kis_market.quote(
-        instrument.symbol, instrument.market, instrument.exchange
-    )
+    cached = kis_market.quote(instrument.symbol, instrument.market, instrument.exchange)
     if cached:
         return cached
     await kis_market.watch(instrument)
@@ -187,9 +185,7 @@ async def _equity(
     return equity["KRW"], equity["USD"], allocations
 
 
-async def _evaluate_alerts(
-    session: AsyncSession, owner: UUID
-) -> list[PriceAlert]:
+async def _evaluate_alerts(session: AsyncSession, owner: UUID) -> list[PriceAlert]:
     alerts = (
         (
             await session.execute(
@@ -205,9 +201,7 @@ async def _evaluate_alerts(
     for alert in alerts:
         if alert.status != "ACTIVE":
             continue
-        instrument = await instrument_catalog.get(
-            alert.symbol, exchange=alert.exchange
-        )
+        instrument = await instrument_catalog.get(alert.symbol, exchange=alert.exchange)
         if not instrument:
             continue
         quote = await _quote(instrument)
@@ -251,9 +245,7 @@ async def dashboard(
     )
     watchlist_rows = []
     for item in watchlist:
-        instrument = await instrument_catalog.get(
-            item.symbol, exchange=item.exchange
-        )
+        instrument = await instrument_catalog.get(item.symbol, exchange=item.exchange)
         if not instrument:
             continue
         quote = await _quote(instrument)
@@ -273,9 +265,7 @@ async def dashboard(
     alerts = await _evaluate_alerts(session, owner)
     alert_rows = []
     for item in alerts:
-        instrument = await instrument_catalog.get(
-            item.symbol, exchange=item.exchange
-        )
+        instrument = await instrument_catalog.get(item.symbol, exchange=item.exchange)
         if not instrument:
             continue
         quote = await _quote(instrument)
@@ -315,9 +305,7 @@ async def dashboard(
     realized = {"KRW": Decimal("0"), "USD": Decimal("0")}
     total_costs = {"KRW": Decimal("0"), "USD": Decimal("0")}
     for order in filled:
-        instrument = await instrument_catalog.get(
-            order.symbol, exchange=order.exchange
-        )
+        instrument = await instrument_catalog.get(order.symbol, exchange=order.exchange)
         if not instrument:
             continue
         currency = instrument.currency
@@ -374,9 +362,7 @@ async def dashboard(
     missions = mission_rows(
         len(filled),
         sum(
-            1
-            for order in orders
-            if order.order_type in {"LIMIT", "STOP", "STOP_LIMIT"}
+            1 for order in orders if order.order_type in {"LIMIT", "STOP", "STOP_LIMIT"}
         ),
         active_positions,
         len(watchlist_rows),
@@ -389,9 +375,7 @@ async def dashboard(
         "watchlist": watchlist_rows,
         "alerts": alert_rows,
         "unreadAlerts": sum(
-            1
-            for item in alerts
-            if item.status == "TRIGGERED" and item.read_at is None
+            1 for item in alerts if item.status == "TRIGGERED" and item.read_at is None
         ),
         "push": {
             "configured": firebase_push.configured,

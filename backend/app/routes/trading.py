@@ -156,9 +156,7 @@ async def sell_capacity(
         .all()
     )
     held = Decimal(position.quantity) if position else Decimal("0")
-    reserved = sum(
-        (Decimal(item.quantity) for item in pending_orders), Decimal("0")
-    )
+    reserved = sum((Decimal(item.quantity) for item in pending_orders), Decimal("0"))
     return held, reserved
 
 
@@ -220,16 +218,12 @@ async def execute(
 
 
 async def process_open_orders(session: AsyncSession, owner: UUID | None = None) -> None:
-    query = sa.select(TradeOrder).where(
-        TradeOrder.status.in_(("OPEN", "TRIGGERED"))
-    )
+    query = sa.select(TradeOrder).where(TradeOrder.status.in_(("OPEN", "TRIGGERED")))
     if owner:
         query = query.where(TradeOrder.owner_id == owner)
     orders = (await session.execute(query.with_for_update())).scalars().all()
     for order in orders:
-        instrument = await instrument_catalog.get(
-            order.symbol, exchange=order.exchange
-        )
+        instrument = await instrument_catalog.get(order.symbol, exchange=order.exchange)
         quote = kis_market.quote(order.symbol, exchange=order.exchange)
         if not instrument or not quote:
             continue
@@ -240,9 +234,7 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
             order.side,
             price,
             Decimal(order.limit_price) if order.limit_price is not None else None,
-            Decimal(order.trigger_price)
-            if order.trigger_price is not None
-            else None,
+            Decimal(order.trigger_price) if order.trigger_price is not None else None,
         )
         order.status = next_status
         if should_execute:
@@ -345,7 +337,9 @@ async def portfolio(
             position.symbol, instrument.market, position.exchange
         )
         current_price = (
-            Decimal(str(current["price"])) if current else Decimal(position.average_price)
+            Decimal(str(current["price"]))
+            if current
+            else Decimal(position.average_price)
         )
         quantity = Decimal(position.quantity)
         average_price = Decimal(position.average_price)
@@ -465,7 +459,9 @@ async def order(
         await execute(session, row, instrument, price)
         if row.status == "REJECTED":
             if side == "BUY":
-                raise HTTPException(409, "가상 예수금이 부족해 주문을 체결할 수 없습니다.")
+                raise HTTPException(
+                    409, "가상 예수금이 부족해 주문을 체결할 수 없습니다."
+                )
             raise HTTPException(409, "보유 수량이 부족해 주문을 체결할 수 없습니다.")
 
     return {
