@@ -11,6 +11,7 @@ import httpx
 import websockets
 
 from app.core.config import settings
+from app.core.traffic import traffic_store
 from app.services.instrument_catalog import (
     TOP_INSTRUMENTS,
     Instrument,
@@ -25,9 +26,20 @@ DOMESTIC_STREAM_TR_ID = "H0UNCNT0"
 
 DOMESTIC_COLUMNS = ("symbol", "time", "price", "sign", "change", "change_percent")
 OVERSEAS_COLUMNS = (
-    "symbol", "decimal_places", "local_date", "korea_date", "local_time",
-    "korea_date_2", "korea_time", "open", "high", "low", "price", "sign",
-    "change", "change_percent",
+    "symbol",
+    "decimal_places",
+    "local_date",
+    "korea_date",
+    "local_time",
+    "korea_date_2",
+    "korea_time",
+    "open",
+    "high",
+    "low",
+    "price",
+    "sign",
+    "change",
+    "change_percent",
 )
 
 
@@ -168,9 +180,18 @@ class KISMarket:
                     return cached.copy()
             except (KeyError, ValueError):
                 pass
-        await self._fetch_rest(instrument)
-        cached = self._quotes.get(instrument.id)
-        return cached.copy() if cached else None
+        cache_key = f"market:quote:{instrument.id}"
+
+        async def refresh() -> dict | None:
+            await self._fetch_rest(instrument)
+            fresh = self._quotes.get(instrument.id)
+            return fresh.copy() if fresh else None
+
+        shared = await traffic_store.get_or_set(cache_key, 5, refresh)
+        if shared:
+            self._quotes[instrument.id] = shared
+            return shared.copy()
+        return None
 
     async def watch(self, instrument: Instrument) -> None:
         if instrument.id in self._watched:
@@ -192,6 +213,10 @@ class KISMarket:
         now = datetime.now(UTC)
         if cached and (now - cached[0]).total_seconds() < 300:
             return [item.copy() for item in cached[1]]
+        shared = await traffic_store.get_json(f"market:news:{instrument.id}")
+        if shared:
+            self._news_cache[instrument.id] = (now, shared)
+            return [item.copy() for item in shared]
         if not self.configured:
             return []
 
@@ -273,6 +298,9 @@ class KISMarket:
                             )
                         ]
             self._news_cache[instrument.id] = (now, result[:12])
+            await traffic_store.set_json(
+                f"market:news:{instrument.id}", result[:12], 300
+            )
             return [item.copy() for item in result[:12]]
         except Exception as exc:
             logger.info("KIS news unavailable for %s: %s", instrument.id, exc)
@@ -283,6 +311,10 @@ class KISMarket:
         now = datetime.now(UTC)
         if cached and (now - cached[0]).total_seconds() < 3600:
             return [item.copy() for item in cached[1]]
+        shared = await traffic_store.get_json(f"market:history:{instrument.id}")
+        if shared:
+            self._history_cache[instrument.id] = (now, shared)
+            return [item.copy() for item in shared]
         if not self.configured:
             return []
 
@@ -358,6 +390,9 @@ class KISMarket:
             result = [item for item in result if item["close"] > 0]
             result.sort(key=lambda item: item["date"])
             self._history_cache[instrument.id] = (now, result[-80:])
+            await traffic_store.set_json(
+                f"market:history:{instrument.id}", result[-80:], 3600
+            )
             return [item.copy() for item in result[-80:]]
         except Exception as exc:
             logger.info("KIS history unavailable for %s: %s", instrument.id, exc)
@@ -365,11 +400,12 @@ class KISMarket:
 
     async def kospi_history(self) -> dict:
         now = datetime.now(UTC)
-        if (
-            self._index_cache
-            and (now - self._index_cache[0]).total_seconds() < 300
-        ):
+        if self._index_cache and (now - self._index_cache[0]).total_seconds() < 300:
             return self._index_cache[1]
+        shared = await traffic_store.get_json("market:index:kospi")
+        if shared:
+            self._index_cache = (now, shared)
+            return shared
 
         empty = parse_kospi_payload({}, now)
         if not self.configured:
@@ -403,6 +439,7 @@ class KISMarket:
             if not result["points"]:
                 raise RuntimeError("KIS returned no KOSPI history")
             self._index_cache = (now, result)
+            await traffic_store.set_json("market:index:kospi", result, 300)
             return result
         except Exception as exc:
             logger.info("KIS KOSPI index unavailable: %s", exc)
@@ -444,7 +481,9 @@ class KISMarket:
             "appsecret": settings.kis_app_secret,
         }
         async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(f"{self.rest_base}/oauth2/tokenP", json=payload)
+            response = await client.post(
+                f"{self.rest_base}/oauth2/tokenP", json=payload
+            )
             response.raise_for_status()
             data = response.json()
         self._access_token = data["access_token"]
@@ -593,14 +632,22 @@ class KISMarket:
             "H0STCNT0",
         } and len(values) >= len(DOMESTIC_COLUMNS):
             instrument = next(
-                (item for item in self._watched.values() if item.market == "KR" and item.symbol == values[0]),
+                (
+                    item
+                    for item in self._watched.values()
+                    if item.market == "KR" and item.symbol == values[0]
+                ),
                 None,
             )
             if instrument:
                 self._store(instrument, values[2], values[4], values[5], "WebSocket")
         elif tr_id == "HDFSCNT0" and len(values) >= len(OVERSEAS_COLUMNS):
             instrument = next(
-                (item for item in self._watched.values() if item.market == "US" and item.symbol == values[0]),
+                (
+                    item
+                    for item in self._watched.values()
+                    if item.market == "US" and item.symbol == values[0]
+                ),
                 None,
             )
             if instrument:

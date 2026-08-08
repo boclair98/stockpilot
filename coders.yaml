@@ -39,7 +39,13 @@ services:
     timeout: 3600
     env:
       DATABASE_URL: postgresql+asyncpg://${db.user}:${db.password}@${db.host}:${db.port}/${db.name}
+      REDIS_URL: ${cache.url}
+      DATABASE_POOL_SIZE: "10"
+      DATABASE_MAX_OVERFLOW: "20"
 
   db:
     type: postgres
     size: 1Gi
+
+  cache:
+    type: redis

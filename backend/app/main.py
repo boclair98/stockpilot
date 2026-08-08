@@ -1,10 +1,16 @@
+import time
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.core.database import AsyncSessionLocal
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal, engine
+from app.core.identity import SESSION_COOKIE, decode_session
+from app.core.traffic import request_metrics, traffic_store
 from app.routes.auth import router as auth_router
 from app.routes.company import router as company_router
 from app.routes.engagement import router as engagement_router
@@ -19,6 +25,7 @@ from app.services.price_alert_notifier import price_alert_notifier
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await traffic_store.start()
     kis_market.start()
     price_alert_notifier.start()
     try:
@@ -26,6 +33,8 @@ async def lifespan(app: FastAPI):
     finally:
         await price_alert_notifier.stop()
         await kis_market.stop()
+        await traffic_store.close()
+        await engine.dispose()
 
 
 app = FastAPI(
@@ -35,6 +44,62 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+
+
+def _traffic_identity(request: Request) -> str:
+    session_cookie = request.cookies.get(SESSION_COOKIE)
+    identity = decode_session(session_cookie)
+    if identity:
+        return f"session:{identity.id}"
+    forwarded = request.headers.get("cf-connecting-ip")
+    client = forwarded or (request.client.host if request.client else "unknown")
+    return f"ip:{client}"
+
+
+@app.middleware("http")
+async def traffic_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", "")
+    if not request_id.isascii() or not 8 <= len(request_id) <= 64:
+        request_id = str(uuid4())
+    started = time.perf_counter()
+    status = 500
+    await request_metrics.begin()
+    try:
+        if request.url.path.startswith("/api/") and not request.url.path.startswith(
+            "/api/health"
+        ):
+            is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
+            limit = (
+                settings.rate_limit_write_per_minute
+                if is_write
+                else settings.rate_limit_read_per_minute
+            )
+            bucket = int(time.time() // 60)
+            allowed = await traffic_store.allow(
+                f"ratelimit:{_traffic_identity(request)}:{'w' if is_write else 'r'}:{bucket}",
+                limit,
+            )
+            if not allowed:
+                status = 429
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": "요청이 잠시 많습니다. 잠시 후 다시 시도해 주세요.",
+                        "requestId": request_id,
+                    },
+                    headers={"Retry-After": "60", "X-Request-ID": request_id},
+                )
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Response-Time"] = (
+            f"{(time.perf_counter() - started) * 1000:.1f}ms"
+        )
+        return response
+    finally:
+        await request_metrics.finish(status, (time.perf_counter() - started) * 1000)
+
 
 app.include_router(users_router)
 app.include_router(auth_router)
@@ -70,3 +135,13 @@ async def liveness() -> JSONResponse:
     Keep it dependency-free; adding a DB hit here would reintroduce false
     'warming' whenever the DB (not the pod) is the slow part."""
     return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/api/health/traffic")
+async def traffic_health() -> JSONResponse:
+    """Aggregated process health for dashboards; contains no user data."""
+
+    return JSONResponse(
+        content={"status": "ok", **(await request_metrics.snapshot())},
+        headers={"Cache-Control": "no-store"},
+    )

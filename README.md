@@ -286,8 +286,10 @@ Google로 처음 로그인하면 사용자마다 별도의 가상계좌가 생�
 | 달러 현금 비중 | 달러 계좌에서 현금이 차지하는 비율 | 미국 주식 주문 여력 |
 | 최대 종목 비중 | 가장 큰 보유 종목이 해당 통화 총자산에서 차지하는 비율 | 특정 종목 쏠림 경고 |
 | 손익 종목 수 | 수익 중인 종목 수와 손실 중인 종목 수 | 손실 종목이 더 많을 때 목표가·손절 알림 점검 제안 |
+| 급락 스트레스 테스트 | 시장이 `-1%`, `-3%`, `-5%`, `-10%` 움직인 단순 시나리오 | 국내·미국 보유분의 예상 평가금액 변동을 통화별로 분리 표시 |
 
 체크업은 사용자의 보유 종목과 가상 예수금을 기준으로 계산합니다. 공개 리그나 다른 사용자에게는 이 정보가 노출되지 않습니다.
+스트레스 테스트는 모든 종목이 같은 폭으로 움직인다고 가정한 교육용 계산이며 실제 손실 예측이나 투자 조언이 아닙니다.
 
 #### 투자 리포트
 
@@ -508,6 +510,7 @@ flowchart TB
     API --> DART["OpenDART<br/>기업개요 · 재무 · 공시"]
     API --> AUTH["Google OAuth 2.0"]
     API --> DB[("PostgreSQL<br/>가상원장 · 주문 · 리그 · 알림")]
+    API --> REDIS[("Redis<br/>공용 캐시 · 요청 제한 · 중복 계산 방지")]
     API --> GROWTH["성장 엔진<br/>챌린지 · 일지 · 실력점수"]
     GROWTH --> DB
     API --> FCM["Firebase Cloud Messaging"]
@@ -523,6 +526,7 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | Frontend | Next.js 16, React 19, TypeScript |
 | Backend | Python, FastAPI, SQLAlchemy Async |
 | Database | PostgreSQL 16, Alembic |
+| Cache & traffic control | Redis, 공유 TTL 캐시, 분산 single-flight, 사용자별 요청 제한 |
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API |
 | Company Data | 금융감독원 OpenDART |
@@ -562,6 +566,34 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | `POST` | `/api/growth/journals` | 거래 전 투자일지 생성 | 필요 |
 | `PATCH` | `/api/growth/journals/{id}` | 거래 후 복기 저장 | 필요 |
 | `DELETE` | `/api/growth/journals/{id}` | 투자일지 삭제 | 필요 |
+| `GET` | `/api/health/traffic` | 요청 수·오류·평균 지연·공용 캐시 상태 | 없음 |
+
+### 트래픽 증가에 대비한 운영 구조
+
+이번 구조는 특정 동시 사용자 수를 근거 없이 보장하지 않습니다. 대신 실제 부하 테스트와 수평 확장에 필요한 병목 방지 장치를 포함합니다.
+
+| 장치 | 처리 방식 |
+|---|---|
+| 정적 프론트 | Next.js 정적 산출물을 nginx와 CDN 캐시에 올려 API 요청 없이 화면 뼈대 전달 |
+| 공용 Redis | 여러 API 프로세스가 공개 리그 결과와 요청 제한 상태를 공유 |
+| 외부 API 보호 | 종목 현재가·뉴스·과거 차트·KOSPI 결과를 인스턴스 간 공유해 KIS 중복 호출 절감 |
+| 캐시 스탬피드 방지 | 캐시가 만료돼도 한 프로세스만 리그를 재계산하고 나머지는 결과를 기다림 |
+| 리그 시세 중복 제거 | 참가자별이 아니라 고유 종목별 한 번만 현재가를 조회 |
+| 순위 일괄 저장 | 참가자별 INSERT 반복 대신 PostgreSQL bulk upsert 한 번으로 일별 순위 저장 |
+| DB 연결 상한 | 기본 풀 10개 + 일시 초과 20개, 15초 대기·15분 연결 재활용을 환경변수로 조정 |
+| 과다 요청 보호 | 로그인 세션 또는 클라이언트별 읽기·쓰기 요청을 Redis 기준으로 별도 제한 |
+| 장애 격리 | Redis 오류 시 메모리 캐시로 자동 전환하여 주문·로그인 경로 유지 |
+| 응답 최적화 | 1KB 이상 JSON GZip 압축, 요청 ID와 서버 처리시간 응답 헤더 제공 |
+| 관측 | `/api/health/traffic`에서 누적 요청, 동시 처리, 5xx, 평균 지연, Redis 상태 확인 |
+
+운영 전에는 실제 배포 환경에서 읽기 전용 스모크 테스트를 실행하고, p95 지연과 5xx를 기준으로 DB 풀·요청 제한을 조정합니다.
+
+```bash
+cd backend
+python scripts/load_smoke.py https://stockpilot.coders.kr 200 20
+```
+
+이 스크립트는 주문을 만들지 않고 공개 리그 조회만 병렬 호출합니다. 더 큰 부하는 KIS 호출 한도와 coders.kr 운영 정책을 확인한 뒤 단계적으로 올려야 합니다.
 
 ### 주요 디렉터리
 
@@ -583,6 +615,10 @@ backend/
       price_alert_notifier.py
                           목표가 감시
       firebase_push.py    FCM 푸시 전송
+    core/
+      traffic.py          Redis 캐시·요청 제한·관측 지표
+  scripts/
+    load_smoke.py         읽기 전용 동시 요청 스모크 테스트
   alembic/versions/       데이터베이스 마이그레이션
 
 frontend/

@@ -341,9 +341,7 @@ class DailyChallengeAttempt(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         sa.UUID(as_uuid=True), nullable=False, index=True
     )
-    challenge_date: Mapped[date] = mapped_column(
-        sa.Date, nullable=False, index=True
-    )
+    challenge_date: Mapped[date] = mapped_column(sa.Date, nullable=False, index=True)
     symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
     exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
     choice: Mapped[str] = mapped_column(sa.String(5), nullable=False)
@@ -383,9 +381,7 @@ class TradeJournal(Base):
     confidence: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     review: Mapped[str | None] = mapped_column(sa.String(500))
     outcome: Mapped[str | None] = mapped_column(sa.String(12))
-    reviewed_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True)
-    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

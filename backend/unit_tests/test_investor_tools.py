@@ -74,7 +74,5 @@ def test_push_notification_money_display() -> None:
 
 
 def test_permanent_firebase_token_errors() -> None:
-    assert is_permanent_token_error(
-        RuntimeError("registration-token-not-registered")
-    )
+    assert is_permanent_token_error(RuntimeError("registration-token-not-registered"))
     assert not is_permanent_token_error(RuntimeError("service unavailable"))

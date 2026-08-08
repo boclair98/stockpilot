@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import secrets
 import string
@@ -16,8 +17,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
+from app.core.traffic import traffic_store
 from app.models import (
     LeagueParticipant,
     LeagueRankSnapshot,
@@ -36,6 +39,7 @@ INITIAL_USD = Decimal("100000")
 SEOUL = timezone(timedelta(hours=9))
 NICKNAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣_-]+$")
 ROOM_NAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣 _-]+$")
+OPEN_RANKINGS_CACHE_KEY = "league:open-rankings:v3"
 
 
 class JoinIn(BaseModel):
@@ -63,7 +67,9 @@ class RoomCreateIn(BaseModel):
     def validate_name(cls, value: str) -> str:
         value = value.strip()
         if not ROOM_NAME_PATTERN.fullmatch(value):
-            raise ValueError("리그 이름에는 한글·영문·숫자·공백·_-만 사용할 수 있습니다.")
+            raise ValueError(
+                "리그 이름에는 한글·영문·숫자·공백·_-만 사용할 수 있습니다."
+            )
         return value
 
     @field_validator("nickname")
@@ -100,9 +106,7 @@ def combined_return_rate(krw_equity: Decimal, usd_equity: Decimal) -> Decimal:
 
     krw_factor = krw_equity / INITIAL_KRW
     usd_factor = usd_equity / INITIAL_USD
-    return ((krw_factor + usd_factor) / Decimal("2") - Decimal("1")) * Decimal(
-        "100"
-    )
+    return ((krw_factor + usd_factor) / Decimal("2") - Decimal("1")) * Decimal("100")
 
 
 def _default_nickname(owner: UUID) -> str:
@@ -157,9 +161,7 @@ async def _owner_equity(
         row.owner_id: row
         for row in (
             await session.execute(
-                sa.select(TradingAccount).where(
-                    TradingAccount.owner_id.in_(owner_ids)
-                )
+                sa.select(TradingAccount).where(TradingAccount.owner_id.in_(owner_ids))
             )
         )
         .scalars()
@@ -187,28 +189,53 @@ async def _owner_equity(
         for owner_id in owner_ids
     }
 
-    for position in positions:
-        quantity = Decimal(position.quantity)
-        if quantity <= 0:
-            continue
-        instrument = await instrument_catalog.get(
-            position.symbol, exchange=position.exchange
+    instrument_keys = sorted(
+        {
+            (position.symbol, position.exchange)
+            for position in positions
+            if Decimal(position.quantity) > 0
+        }
+    )
+    resolved = await asyncio.gather(
+        *(
+            instrument_catalog.get(symbol, exchange=exchange)
+            for symbol, exchange in instrument_keys
         )
+    )
+    instruments = dict(zip(instrument_keys, resolved, strict=True))
+
+    async def current_price(key: tuple[str, str]) -> Decimal | None:
+        instrument = instruments[key]
         if not instrument:
-            continue
+            return None
         quote = kis_market.quote(
-            position.symbol, instrument.market, position.exchange
+            instrument.symbol, instrument.market, instrument.exchange
         )
         if not quote:
             try:
                 quote = await kis_market.fetch_quote(instrument)
             except Exception:
                 quote = None
-        price = (
+        return (
             Decimal(str(quote["price"]))
             if quote and quote.get("price") is not None
-            else Decimal(position.average_price)
+            else None
         )
+
+    price_values = await asyncio.gather(
+        *(current_price(key) for key in instrument_keys)
+    )
+    prices = dict(zip(instrument_keys, price_values, strict=True))
+
+    for position in positions:
+        quantity = Decimal(position.quantity)
+        if quantity <= 0:
+            continue
+        key = (position.symbol, position.exchange)
+        instrument = instruments.get(key)
+        if not instrument:
+            continue
+        price = prices.get(key) or Decimal(position.average_price)
         equity[position.owner_id][instrument.currency] += quantity * price
 
     return equity
@@ -223,9 +250,7 @@ def _room_status(room: LeagueRoom) -> str:
     return "ACTIVE"
 
 
-async def _room_payload(
-    session: AsyncSession, room: LeagueRoom, owner: UUID
-) -> dict:
+async def _room_payload(session: AsyncSession, room: LeagueRoom, owner: UUID) -> dict:
     members = (
         (
             await session.execute(
@@ -247,10 +272,7 @@ async def _room_payload(
         baseline_krw = Decimal(item.baseline_krw) or INITIAL_KRW
         baseline_usd = Decimal(item.baseline_usd) or INITIAL_USD
         score = (
-            (
-                current["KRW"] / baseline_krw
-                + current["USD"] / baseline_usd
-            )
+            (current["KRW"] / baseline_krw + current["USD"] / baseline_usd)
             / Decimal("2")
             - Decimal("1")
         ) * Decimal("100")
@@ -292,9 +314,7 @@ async def _new_invite_code(session: AsyncSession) -> str:
     raise HTTPException(503, "초대코드를 만들지 못했습니다. 다시 시도해 주세요.")
 
 
-async def _rankings_payload(
-    session: AsyncSession, owner: UUID | None = None
-) -> dict:
+async def _compute_rankings_base(session: AsyncSession) -> dict:
     participants = (
         (
             await session.execute(
@@ -327,39 +347,39 @@ async def _rankings_payload(
         )
 
     rankings = []
-    me = {"joined": False}
+    snapshots = []
     for index, row in enumerate(scored, start=1):
         participant = row["participant"]
         return_rate = row["returnRate"].quantize(Decimal("0.0001"))
         prior_rank = previous_ranks.get(participant.id)
         rank_change = prior_rank - index if prior_rank else 0
         public_row = {
+            "ownerId": str(participant.owner_id),
+            "participantId": str(participant.id),
             "rank": index,
             "nickname": participant.nickname,
             "returnRate": float(return_rate),
             "rankChange": rank_change,
-            "isMe": participant.owner_id == owner,
         }
         rankings.append(public_row)
-        if participant.owner_id == owner:
-            me = {
-                "joined": True,
-                "nickname": participant.nickname,
+        snapshots.append(
+            {
+                "participant_id": participant.id,
+                "snapshot_date": today,
                 "rank": index,
-                "returnRate": float(return_rate),
-                "rankChange": rank_change,
+                "return_rate": return_rate,
             }
+        )
+
+    if snapshots:
+        statement = pg_insert(LeagueRankSnapshot).values(snapshots)
         await session.execute(
-            pg_insert(LeagueRankSnapshot)
-            .values(
-                participant_id=participant.id,
-                snapshot_date=today,
-                rank=index,
-                return_rate=return_rate,
-            )
-            .on_conflict_do_update(
+            statement.on_conflict_do_update(
                 constraint="uq_league_snapshot_participant_date",
-                set_={"rank": index, "return_rate": return_rate},
+                set_={
+                    "rank": statement.excluded.rank,
+                    "return_rate": statement.excluded.return_rate,
+                },
             )
         )
 
@@ -367,8 +387,9 @@ async def _rankings_payload(
         "title": "StockPilot 오픈 리그",
         "participantCount": len(rankings),
         "asOf": datetime.now(UTC).isoformat(),
+        # Only the public top 100 is cached. Personal rows outside the top 100
+        # are read from the compact daily snapshot table below.
         "rankings": rankings[:100],
-        "me": me,
         "rules": {
             "startingCapital": "모든 계정은 ₩1억 + $10만으로 시작",
             "scoring": "한국·미국 계좌 수익률을 50:50으로 합산",
@@ -376,6 +397,73 @@ async def _rankings_payload(
             "trading": "StockPilot의 기존 가상거래 결과를 사용",
         },
     }
+
+
+async def _rankings_payload(session: AsyncSession, owner: UUID | None = None) -> dict:
+    base = await traffic_store.get_or_set(
+        OPEN_RANKINGS_CACHE_KEY,
+        settings.leaderboard_cache_seconds,
+        lambda: _compute_rankings_base(session),
+    )
+    top_rows = base["rankings"]
+    rankings = [
+        {
+            key: value
+            for key, value in row.items()
+            if key not in {"ownerId", "participantId"}
+        }
+        | {"isMe": row["ownerId"] == str(owner)}
+        for row in top_rows
+    ]
+    me = {"joined": False}
+    if owner:
+        top_me = next((row for row in top_rows if row["ownerId"] == str(owner)), None)
+        if top_me:
+            me = {
+                "joined": True,
+                "nickname": top_me["nickname"],
+                "rank": top_me["rank"],
+                "returnRate": top_me["returnRate"],
+                "rankChange": top_me["rankChange"],
+            }
+        else:
+            participant = await session.scalar(
+                sa.select(LeagueParticipant).where(
+                    LeagueParticipant.owner_id == owner,
+                    LeagueParticipant.active.is_(True),
+                )
+            )
+            if participant:
+                snapshot = await session.scalar(
+                    sa.select(LeagueRankSnapshot).where(
+                        LeagueRankSnapshot.participant_id == participant.id,
+                        LeagueRankSnapshot.snapshot_date == datetime.now(SEOUL).date(),
+                    )
+                )
+                if snapshot:
+                    previous_date = await session.scalar(
+                        sa.select(sa.func.max(LeagueRankSnapshot.snapshot_date)).where(
+                            LeagueRankSnapshot.snapshot_date < snapshot.snapshot_date
+                        )
+                    )
+                    prior_rank = (
+                        await session.scalar(
+                            sa.select(LeagueRankSnapshot.rank).where(
+                                LeagueRankSnapshot.participant_id == participant.id,
+                                LeagueRankSnapshot.snapshot_date == previous_date,
+                            )
+                        )
+                        if previous_date
+                        else None
+                    )
+                    me = {
+                        "joined": True,
+                        "nickname": participant.nickname,
+                        "rank": snapshot.rank,
+                        "returnRate": float(snapshot.return_rate),
+                        "rankChange": (prior_rank - snapshot.rank) if prior_rank else 0,
+                    }
+    return {**base, "rankings": rankings, "me": me}
 
 
 @router.get("/rankings")
@@ -421,6 +509,7 @@ async def join(
             )
         )
     await session.flush()
+    await traffic_store.delete(OPEN_RANKINGS_CACHE_KEY)
     return await _rankings_payload(session, owner)
 
 
@@ -438,6 +527,7 @@ async def leave(
     if not participant:
         raise HTTPException(404, "참여 중인 리그가 없습니다.")
     participant.active = False
+    await traffic_store.delete(OPEN_RANKINGS_CACHE_KEY)
     return {"left": True}
 
 
@@ -462,9 +552,7 @@ async def rooms(
         .scalars()
         .all()
     )
-    return {
-        "rooms": [await _room_payload(session, room, owner) for room in room_rows]
-    }
+    return {"rooms": [await _room_payload(session, room, owner) for room in room_rows]}
 
 
 @router.get("/rooms/{room_id}")

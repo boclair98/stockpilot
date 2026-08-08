@@ -6,6 +6,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # Provided by the coders.kr platform via coders.yaml substitution.
     database_url: str = "postgresql+asyncpg://app:app@localhost:5432/app"
+    database_pool_size: int = 10
+    database_max_overflow: int = 20
+    database_pool_timeout: int = 15
+    database_pool_recycle: int = 900
+
+    # Redis is optional in local development and mandatory in the production
+    # manifest. It keeps hot public responses and abuse limits consistent when
+    # more than one API process is serving traffic.
+    redis_url: str | None = None
+    leaderboard_cache_seconds: int = 15
+    rate_limit_read_per_minute: int = 240
+    rate_limit_write_per_minute: int = 30
 
     # Local-dev escape hatch. Never set in production.
     dev_fake_user: str | None = None
@@ -27,9 +39,7 @@ class Settings(BaseSettings):
     # Secrets are injected by the platform and never exposed to the browser.
     google_client_id: str | None = None
     google_client_secret: str | None = None
-    google_redirect_uri: str = (
-        "https://stockpilot.coders.kr/api/auth/google/callback"
-    )
+    google_redirect_uri: str = "https://stockpilot.coders.kr/api/auth/google/callback"
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
 
