@@ -1148,7 +1148,6 @@ export default function TradingTerminal() {
         <b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span>
         <span className="footer-links">
           <a href="https://www.logo.dev" target="_blank" rel="noreferrer">Logos provided by Logo.dev</a>
-          <a href="https://coders.kr">coders.kr에서 호스팅</a>
         </span>
       </footer>
       {confirmingOrder && quote && (
