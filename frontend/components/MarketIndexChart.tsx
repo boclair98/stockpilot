@@ -12,7 +12,7 @@ type IndexPoint = {
   volume: number;
 };
 
-type IndexData = {
+export type IndexData = {
   name: string;
   value: number;
   change: number;
@@ -34,14 +34,29 @@ const shortDate = (value: string) =>
     day: "numeric",
   }).format(new Date(`${value}T00:00:00+09:00`));
 
-export default function MarketIndexChart() {
-  const [data, setData] = useState<IndexData | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function MarketIndexChart({ initialData = null }: { initialData?: IndexData | null }) {
+  const [data, setData] = useState<IndexData | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let active = true;
     let controller: AbortController | null = null;
+    if (initialData?.points?.length) {
+      setData(initialData);
+      setLoading(false);
+      localStorage.setItem("stockpilot_kospi_snapshot", JSON.stringify(initialData));
+    } else {
+      try {
+        const cached = JSON.parse(localStorage.getItem("stockpilot_kospi_snapshot") || "null");
+        if (cached?.points?.length) {
+          setData(cached);
+          setLoading(false);
+        }
+      } catch {
+        localStorage.removeItem("stockpilot_kospi_snapshot");
+      }
+    }
 
     const load = async (initial: boolean) => {
       controller?.abort();
@@ -50,12 +65,17 @@ export default function MarketIndexChart() {
       else setRefreshing(true);
       try {
         const response = await fetch("/api/trading/kospi", {
-          cache: "no-store",
+          cache: "default",
           signal: controller.signal,
         });
         if (!response.ok) throw new Error("KOSPI request failed");
         const next: IndexData = await response.json();
-        if (active && !controller.signal.aborted) setData(next);
+        if (active && !controller.signal.aborted) {
+          setData(next);
+          if (next.points?.length) {
+            localStorage.setItem("stockpilot_kospi_snapshot", JSON.stringify(next));
+          }
+        }
       } catch (reason) {
         if (
           active &&
@@ -71,14 +91,14 @@ export default function MarketIndexChart() {
       }
     };
 
-    void load(true);
+    if (!initialData?.points?.length) void load(true);
     const interval = window.setInterval(() => void load(false), 300_000);
     return () => {
       active = false;
       controller?.abort();
       window.clearInterval(interval);
     };
-  }, []);
+  }, [initialData]);
 
   const chart = useMemo(() => {
     const points = data?.points || [];

@@ -34,6 +34,8 @@
 > [!IMPORTANT]
 > StockPilot의 모든 매수·매도는 서비스 내부 가상원장에만 기록됩니다. 실제 증권계좌로 주문을 보내지 않으며, 계좌번호나 계좌 비밀번호를 요구하지 않습니다.
 
+메인 화면은 국내 대체거래소의 세션 중심 정보 구조에서 영감을 받아 독자적으로 디자인했습니다. NEXTRADE의 로고·이미지·화면 자산을 사용하지 않으며 NEXTRADE와 제휴된 서비스가 아닙니다.
+
 ---
 
 ## StockPilot이 제공하는 경험
@@ -94,7 +96,7 @@ Google 로그인
 | 시장 | 오늘의 시장 요약 | TOP 종목 평균 등락률, 상승 종목 수, 강한 종목·약한 종목 확인 |
 | 탐색 | 전체 종목 통합 검색 | TOP 10에 없는 종목도 이름·코드·티커로 찾기 |
 | 탐색 | 최근 본 종목 6개 | 다시 검색하지 않고 이전 종목으로 이동 |
-| 탐색 | 실제 회사 로고 | 카드에서 기업을 빠르게 식별, 실패 시 이니셜 대체 |
+| 탐색 | 전체 종목 회사 로고 | TOP 종목은 기본 로고, 검색 종목은 Logo.dev CDN 로고로 식별하고 실패 시 이니셜 대체 |
 | 분석 | 1주·1개월·3개월 차트 | 기간 수익률, 고가, 저가, 최근 종가 확인 |
 | 분석 | OpenDART 기업정보 | 대표자, 설립일, 결산월, 홈페이지 확인 |
 | 분석 | 핵심 재무정보 | 최근 공시 기준 주요 재무 수치를 간단히 확인 |
@@ -544,6 +546,7 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | `GET` | `/api/trading/search` | 전체 종목 검색 | 없음 |
 | `GET` | `/api/trading/quote` | 선택 종목 현재가 | 없음 |
 | `GET` | `/api/trading/market-status` | KRX·NXT·미국장 상태 | 없음 |
+| `GET` | `/api/trading/bootstrap` | 첫 화면용 시세·장 상태·KOSPI 캐시 일괄 조회 | 없음 |
 | `GET` | `/api/trading/kospi` | KOSPI 현재값·30거래일 | 없음 |
 | `GET` | `/api/trading/portfolio` | 가상 잔고·보유·주문 | 선택 |
 | `POST` | `/api/trading/orders` | 가상주문 접수 | 필요 |
@@ -575,7 +578,13 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | 장치 | 처리 방식 |
 |---|---|
 | 정적 프론트 | Next.js 정적 산출물을 nginx와 CDN 캐시에 올려 API 요청 없이 화면 뼈대 전달 |
+| 빠른 첫 화면 | 브라우저의 마지막 정상 시세·KOSPI를 즉시 복원한 뒤 bootstrap API 한 번으로 최신 상태 교체 |
+| 지연 로딩 | 아래쪽 기간 차트와 기업 공시는 화면에 가까워질 때만 호출해 첫 진입 API 경쟁 제거 |
 | 공용 Redis | 여러 API 프로세스가 공개 리그 결과와 요청 제한 상태를 공유 |
+| 시세 재시작 복원 | 서버가 재시작돼도 Redis의 마지막 TOP 시세를 복원해 빈 화면 시간을 최소화 |
+| WebSocket 팬아웃 | 접속자마다 JSON을 다시 만들지 않고 1초 시세를 한 번 직렬화해 모든 연결에 공유 |
+| KIS 연결 재사용 | 토큰·현재가 요청에 HTTP keep-alive 연결 풀을 재사용해 TLS 연결 비용 절감 |
+| CDN 공개 캐시 | 시세·검색·KOSPI 공개 응답에 `s-maxage`와 stale 재검증 정책 적용 |
 | 외부 API 보호 | 종목 현재가·뉴스·과거 차트·KOSPI 결과를 인스턴스 간 공유해 KIS 중복 호출 절감 |
 | 캐시 스탬피드 방지 | 캐시가 만료돼도 한 프로세스만 리그를 재계산하고 나머지는 결과를 기다림 |
 | 리그 시세 중복 제거 | 참가자별이 아니라 고유 종목별 한 번만 현재가를 조회 |
@@ -661,6 +670,7 @@ KIS_ENV=paper
 KIS_APP_KEY=
 KIS_APP_SECRET=
 DART_API_KEY=
+LOGO_DEV_PUBLISHABLE_KEY=
 
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -673,6 +683,8 @@ FIREBASE_SERVICE_ACCOUNT_B64=
 SIMULATION_FEE_RATE=0.00015
 SIMULATION_KR_SELL_TAX_RATE=0.002
 ```
+
+전체 검색 종목 로고는 [Logo.dev Dashboard](https://www.logo.dev/)에서 발급한 Publishable key(`pk_...`)를 사용합니다. 키가 없거나 로고가 없는 종목은 기존 기본 로고 또는 종목명 이니셜로 안전하게 대체됩니다.
 
 Google Auth Platform의 승인된 리디렉션 URI에도 다음 주소를 등록합니다.
 
@@ -704,6 +716,7 @@ docker compose up
 - `KIS_APP_KEY`
 - `KIS_APP_SECRET`
 - `DART_API_KEY`
+- `LOGO_DEV_PUBLISHABLE_KEY` — Logo.dev Dashboard의 `pk_...` 공개키
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SESSION_SECRET`

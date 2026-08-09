@@ -99,6 +99,8 @@ class KISMarket:
         self._access_expires_at = 0.0
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
+        self._snapshot_task: asyncio.Task | None = None
+        self._http: httpx.AsyncClient | None = None
         self._socket = None
         self._send_lock = asyncio.Lock()
         self._rest_lock = asyncio.Lock()
@@ -132,14 +134,29 @@ class KISMarket:
     def start(self) -> None:
         if self.configured and (self._task is None or self._task.done()):
             self._stop.clear()
+            if self._http is None:
+                self._http = httpx.AsyncClient(
+                    timeout=httpx.Timeout(15, connect=5),
+                    limits=httpx.Limits(max_connections=30, max_keepalive_connections=15),
+                )
             self._task = asyncio.create_task(self._run(), name="kis-market-stream")
+            self._snapshot_task = asyncio.create_task(
+                self._persist_snapshots(), name="kis-market-snapshot"
+            )
 
     async def stop(self) -> None:
         self._stop.set()
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
+        if self._snapshot_task:
+            self._snapshot_task.cancel()
+            await asyncio.gather(self._snapshot_task, return_exceptions=True)
         self._task = None
+        self._snapshot_task = None
+        if self._http:
+            await self._http.aclose()
+            self._http = None
 
     def snapshot(self, *, top_only: bool = False) -> list[dict]:
         instruments = TOP_INSTRUMENTS if top_only else self._watched.values()
@@ -148,6 +165,37 @@ class KISMarket:
             for item in instruments
             if item.id in self._quotes
         ]
+
+    async def shared_snapshot(self, *, top_only: bool = False) -> list[dict]:
+        """Return local ticks or restore the last healthy snapshot from Redis."""
+        local = self.snapshot(top_only=top_only)
+        if local:
+            return local
+        cached = await traffic_store.get_json("market:quotes:top")
+        if not isinstance(cached, list):
+            return []
+        for row in cached:
+            if isinstance(row, dict) and row.get("id"):
+                self._quotes[str(row["id"])] = row.copy()
+        return self.snapshot(top_only=top_only)
+
+    def _client(self) -> httpx.AsyncClient:
+        if self._http is None:
+            self._http = httpx.AsyncClient(
+                timeout=httpx.Timeout(15, connect=5),
+                limits=httpx.Limits(max_connections=30, max_keepalive_connections=15),
+            )
+        return self._http
+
+    async def _persist_snapshots(self) -> None:
+        while not self._stop.is_set():
+            rows = self.snapshot(top_only=True)
+            if rows:
+                await traffic_store.set_json("market:quotes:top", rows, 300)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=2)
+            except TimeoutError:
+                pass
 
     def quote(
         self, symbol: str, market: str | None = None, exchange: str | None = None
@@ -480,12 +528,11 @@ class KISMarket:
             "appkey": settings.kis_app_key,
             "appsecret": settings.kis_app_secret,
         }
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                f"{self.rest_base}/oauth2/tokenP", json=payload
-            )
-            response.raise_for_status()
-            data = response.json()
+        response = await self._client().post(
+            f"{self.rest_base}/oauth2/tokenP", json=payload
+        )
+        response.raise_for_status()
+        data = response.json()
         self._access_token = data["access_token"]
         self._access_expires_at = now + int(data.get("expires_in", 86400))
         return self._access_token
@@ -496,12 +543,11 @@ class KISMarket:
             "appkey": settings.kis_app_key,
             "secretkey": settings.kis_app_secret,
         }
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                f"{self.rest_base}/oauth2/Approval", json=payload
-            )
-            response.raise_for_status()
-            return response.json()["approval_key"]
+        response = await self._client().post(
+            f"{self.rest_base}/oauth2/Approval", json=payload
+        )
+        response.raise_for_status()
+        return response.json()["approval_key"]
 
     def _headers(self, token: str, tr_id: str) -> dict[str, str]:
         return {
@@ -525,46 +571,46 @@ class KISMarket:
         async with self._rest_lock:
             await self._rate_limit_rest()
             token = await self._token()
-            async with httpx.AsyncClient(timeout=12) as client:
-                if instrument.market == "KR":
-                    response = await client.get(
-                        f"{self.rest_base}/uapi/domestic-stock/v1/quotations/inquire-price",
-                        headers=self._headers(token, "FHKST01010100"),
-                        params={
-                            "FID_COND_MRKT_DIV_CODE": DOMESTIC_REST_MARKET,
-                            "FID_INPUT_ISCD": instrument.symbol,
-                        },
+            client = self._client()
+            if instrument.market == "KR":
+                response = await client.get(
+                    f"{self.rest_base}/uapi/domestic-stock/v1/quotations/inquire-price",
+                    headers=self._headers(token, "FHKST01010100"),
+                    params={
+                        "FID_COND_MRKT_DIV_CODE": DOMESTIC_REST_MARKET,
+                        "FID_INPUT_ISCD": instrument.symbol,
+                    },
+                )
+                data = response.json()
+                if response.is_success and data.get("rt_cd") == "0":
+                    output = data["output"]
+                    self._store(
+                        instrument,
+                        output.get("stck_prpr"),
+                        output.get("prdy_vrss"),
+                        output.get("prdy_ctrt"),
+                        "REST",
                     )
-                    data = response.json()
-                    if response.is_success and data.get("rt_cd") == "0":
-                        output = data["output"]
-                        self._store(
-                            instrument,
-                            output.get("stck_prpr"),
-                            output.get("prdy_vrss"),
-                            output.get("prdy_ctrt"),
-                            "REST",
-                        )
-                else:
-                    response = await client.get(
-                        f"{self.rest_base}/uapi/overseas-price/v1/quotations/price",
-                        headers=self._headers(token, "HHDFS00000300"),
-                        params={
-                            "AUTH": "",
-                            "EXCD": instrument.exchange,
-                            "SYMB": instrument.symbol,
-                        },
+            else:
+                response = await client.get(
+                    f"{self.rest_base}/uapi/overseas-price/v1/quotations/price",
+                    headers=self._headers(token, "HHDFS00000300"),
+                    params={
+                        "AUTH": "",
+                        "EXCD": instrument.exchange,
+                        "SYMB": instrument.symbol,
+                    },
+                )
+                data = response.json()
+                if response.is_success and data.get("rt_cd") == "0":
+                    output = data["output"]
+                    self._store(
+                        instrument,
+                        output.get("last"),
+                        output.get("diff"),
+                        output.get("rate"),
+                        "REST",
                     )
-                    data = response.json()
-                    if response.is_success and data.get("rt_cd") == "0":
-                        output = data["output"]
-                        self._store(
-                            instrument,
-                            output.get("last"),
-                            output.get("diff"),
-                            output.get("rate"),
-                            "REST",
-                        )
 
     async def _seed_quotes(self) -> None:
         for instrument in TOP_INSTRUMENTS:

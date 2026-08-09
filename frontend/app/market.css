@@ -854,3 +854,338 @@
     flex-direction: column;
   }
 }
+
+/* NXT-inspired market terminal: independent visual language, no NXT assets. */
+.app {
+  max-width: 1280px;
+}
+
+.topbar {
+  position: sticky;
+  z-index: 20;
+  top: 10px;
+  height: 64px;
+  margin: 10px 18px 14px;
+  padding: 0 18px;
+  border: 1px solid #ffffff14;
+  border-radius: 18px;
+  background: #11151cf2;
+  color: #fff;
+  box-shadow: 0 12px 32px #151b2630;
+  backdrop-filter: blur(18px);
+}
+
+.brand > span {
+  border-radius: 9px;
+  background: linear-gradient(145deg, #ff3f54, #c91931);
+}
+
+.topbar .league-link,
+.topbar .login,
+.topbar .user-chip {
+  border-color: #ffffff1c;
+  background: #ffffff0d;
+  color: #f7f8fa;
+}
+
+.topbar .top-actions > button {
+  color: #fff;
+}
+
+.topbar .top-actions > button:hover {
+  background: #ffffff14;
+}
+
+.nxt-hero {
+  position: relative;
+  min-height: 430px;
+  align-items: flex-start;
+  overflow: hidden;
+  padding: 54px 54px 146px;
+  border: 1px solid #ffffff12;
+  border-radius: 24px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 78% 20%, #e1253c45 0, transparent 25%),
+    linear-gradient(112deg, #0b0f15 0%, #151b23 54%, #261016 100%);
+  box-shadow: 0 24px 70px #19213024;
+}
+
+.nxt-hero::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  opacity: .19;
+  background-image:
+    linear-gradient(#ffffff18 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff18 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: linear-gradient(90deg, transparent, #000 45%, #000);
+}
+
+.nxt-hero::after {
+  position: absolute;
+  top: -80px;
+  right: 80px;
+  width: 330px;
+  height: 520px;
+  content: "";
+  transform: rotate(28deg);
+  border: 1px solid #f23d5438;
+  border-radius: 50%;
+  box-shadow: 0 0 80px #e42a4030, inset 0 0 70px #e42a401f;
+}
+
+.hero-copy,
+.hero-badge,
+.hero-sessions {
+  position: relative;
+  z-index: 2;
+}
+
+.hero-copy {
+  max-width: 720px;
+}
+
+.hero-kicker {
+  display: block;
+  margin-top: 28px;
+  color: #ff6878;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 2.2px;
+}
+
+.nxt-hero .eyebrow {
+  width: fit-content;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #ffffff24;
+  border-radius: 999px;
+  color: #d6dbe2;
+  background: #ffffff0b;
+  font-size: 11px;
+}
+
+.nxt-hero h1 {
+  margin: 12px 0 16px;
+  font-size: clamp(42px, 5.4vw, 70px);
+  line-height: 1.02;
+  letter-spacing: -4px;
+}
+
+.nxt-hero h1 em {
+  color: #ff4056;
+  font-style: normal;
+}
+
+.nxt-hero .hero-copy > p:last-child {
+  max-width: 620px;
+  color: #aeb7c3;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.nxt-hero .hero-badge {
+  margin-top: 24px;
+  border-color: #ffffff1c;
+  background: #ffffff0d;
+  box-shadow: none;
+}
+
+.nxt-hero .hero-badge svg {
+  color: #ff5b6d;
+}
+
+.nxt-hero .hero-badge small {
+  color: #aeb7c3;
+}
+
+.hero-sessions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) 1.25fr;
+  border-top: 1px solid #ffffff1c;
+  background: #080b10b8;
+  backdrop-filter: blur(16px);
+}
+
+.hero-session {
+  position: relative;
+  min-height: 104px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 20px 24px;
+  border-right: 1px solid #ffffff17;
+}
+
+.hero-session::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  content: "";
+  background: transparent;
+}
+
+.hero-session.active::before {
+  background: #ff4056;
+  box-shadow: 0 0 20px #ff4056;
+}
+
+.hero-session small {
+  color: #7f8996;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 1.3px;
+}
+
+.hero-session.active small {
+  color: #ff6576;
+}
+
+.hero-session b {
+  font-size: 14px;
+}
+
+.hero-session span {
+  color: #9ca6b3;
+  font-size: 10px;
+}
+
+.hero-session-status {
+  border-right: 0;
+  background: #ffffff08;
+}
+
+.market-label {
+  margin-top: 20px;
+  padding-left: 10px;
+  border-left: 3px solid #e52f45;
+}
+
+.market-label span {
+  color: #ca2639;
+  background: #fff0f2;
+}
+
+.watchlist,
+.search-card,
+.portfolio-panel,
+.order-card,
+.balance-card {
+  border-radius: 16px;
+  box-shadow: 0 8px 30px #17202b0b;
+}
+
+.watchlist {
+  gap: 0;
+  border-top: 2px solid #1b222c;
+}
+
+.quote {
+  border-radius: 8px;
+  border-bottom: 1px solid #f0f2f4;
+}
+
+.quote.active {
+  box-shadow: inset 3px 0 #e42e44;
+  background: #fff5f6;
+}
+
+.deferred-mount {
+  margin-top: 18px;
+}
+
+.deferred-placeholder {
+  min-height: inherit;
+  border: 1px solid #eef0f2;
+  border-radius: 16px;
+  background: linear-gradient(100deg, #fff, #f4f6f8, #fff);
+  background-size: 220% 100%;
+  animation: shine 1.6s linear infinite;
+}
+
+.footer-links {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.footer-links a {
+  margin-left: 0;
+}
+
+@media (max-width: 900px) {
+  .nxt-hero {
+    min-height: 500px;
+    padding: 44px 34px 178px;
+  }
+
+  .nxt-hero .hero-badge {
+    display: none;
+  }
+
+  .hero-sessions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .hero-session-status {
+    grid-column: 1 / -1;
+    min-height: 62px;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    top: 5px;
+    margin: 5px 8px 10px;
+  }
+
+  .topbar .growth-link,
+  .topbar .practice-link {
+    display: none;
+  }
+
+  .nxt-hero {
+    min-height: 520px;
+    margin: 0 8px 16px;
+    padding: 34px 22px 220px;
+    border-radius: 18px;
+  }
+
+  .nxt-hero h1 {
+    font-size: 42px;
+    letter-spacing: -3px;
+  }
+
+  .hero-sessions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hero-session {
+    min-height: 98px;
+    padding: 14px 10px;
+  }
+
+  .hero-session b {
+    font-size: 11px;
+  }
+
+  .hero-session span {
+    font-size: 8px;
+  }
+
+  .hero-session-status {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    min-height: 76px;
+  }
+}

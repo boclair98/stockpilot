@@ -7,8 +7,11 @@ import logging
 import zipfile
 from dataclasses import dataclass
 from io import BytesIO
+from urllib.parse import quote
 
 import httpx
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +34,24 @@ class Instrument:
     ws_key: str
     english_name: str = ""
     is_top: bool = False
+    listing_market: str = ""
 
     @property
     def id(self) -> str:
         return f"{self.market}:{self.exchange}:{self.symbol}"
 
     def public(self) -> dict:
+        logo_url = None
+        if settings.logo_dev_publishable_key:
+            ticker = self.symbol
+            if self.market == "KR":
+                suffix = "KQ" if self.listing_market == "KOSDAQ" else "KS"
+                ticker = f"{self.symbol}.{suffix}"
+            logo_url = (
+                f"https://img.logo.dev/ticker/{quote(ticker, safe='')}"
+                f"?token={quote(settings.logo_dev_publishable_key, safe='_-')}"
+                "&size=96&format=webp&retina=true&fallback=404"
+            )
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -46,6 +61,7 @@ class Instrument:
             "currency": self.currency,
             "exchange": self.exchange,
             "isTop": self.is_top,
+            "logoUrl": logo_url,
         }
 
 
@@ -170,7 +186,15 @@ class InstrumentCatalog:
             name = head[21:].decode("cp949", errors="ignore").strip()
             if len(code) == 6 and code.isdigit() and name:
                 items.append(
-                    Instrument(code, name, "KR", "KRW", "KRX", code, exchange_name)
+                    Instrument(
+                        code,
+                        name,
+                        "KR",
+                        "KRW",
+                        "KRX",
+                        code,
+                        listing_market=exchange_name,
+                    )
                 )
         return items
 
