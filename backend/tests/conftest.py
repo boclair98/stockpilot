@@ -18,12 +18,14 @@ running pytest.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from app.core.config import settings
 from app.core.database import Base
+from app.core.identity import SESSION_COOKIE, encode_session
 from app.main import app
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -67,6 +69,23 @@ def fake_user_id() -> UUID:
 
 
 @pytest.fixture
-def signed_in_headers(fake_user_id: UUID) -> dict[str, str]:
-    """Stamp X-Coders-User the way the platform gate would."""
-    return {"X-Coders-User": str(fake_user_id)}
+def signed_in_headers_for() -> Callable[[UUID], dict[str, str]]:
+    """Build the signed Google-session cookie used by production auth."""
+
+    settings.auth_session_secret = "test-only-session-secret-at-least-32-bytes"
+
+    def build(user_id: UUID) -> dict[str, str]:
+        token = encode_session(
+            {"id": str(user_id), "sub": f"test-google-{user_id}", "name": None}
+        )
+        return {"Cookie": f"{SESSION_COOKIE}={token}"}
+
+    return build
+
+
+@pytest.fixture
+def signed_in_headers(
+    fake_user_id: UUID,
+    signed_in_headers_for: Callable[[UUID], dict[str, str]],
+) -> dict[str, str]:
+    return signed_in_headers_for(fake_user_id)
