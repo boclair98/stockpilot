@@ -25,6 +25,16 @@ async def test_anonymous_cannot_post(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_whitespace_post_is_rejected(
+    client: AsyncClient, signed_in_headers: dict[str, str]
+) -> None:
+    r = await client.post(
+        "/api/posts", json={"body": "   \n  "}, headers=signed_in_headers
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_signed_in_post_shows_up_in_feed(
     client: AsyncClient, signed_in_headers: dict[str, str]
 ) -> None:
@@ -40,6 +50,26 @@ async def test_signed_in_post_shows_up_in_feed(
     assert feed.status_code == 200
     bodies = [p["body"] for p in feed.json()]
     assert bodies == ["first post!"]
+
+    deleted = await client.delete(
+        f"/api/posts/{created['id']}", headers=signed_in_headers
+    )
+    assert deleted.status_code == 204
+    assert (await client.get("/api/feed")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_user_cannot_delete_another_users_post(
+    client: AsyncClient, signed_in_headers: dict[str, str]
+) -> None:
+    create = await client.post(
+        "/api/posts", json={"body": "keep me"}, headers=signed_in_headers
+    )
+    other_headers = {"X-Coders-User": "11111111-1111-4111-8111-111111111111"}
+    deleted = await client.delete(
+        f"/api/posts/{create.json()['id']}", headers=other_headers
+    )
+    assert deleted.status_code == 403
 
 
 @pytest.mark.asyncio

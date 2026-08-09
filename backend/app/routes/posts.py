@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,7 +66,10 @@ async def create_post(
     session: AsyncSession = Depends(get_session),
 ) -> PostOut:
     user = await upsert_local_user(session, coders_id)
-    post = Post(author_id=user.id, body=body.body.strip())
+    clean_body = body.body.strip()
+    if not clean_body:
+        raise HTTPException(422, "내용을 입력해 주세요.")
+    post = Post(author_id=user.id, body=clean_body)
     session.add(post)
     await session.flush()
     # Re-fetch with author loaded for the response.
@@ -74,6 +77,25 @@ async def create_post(
         select(Post).options(selectinload(Post.author)).where(Post.id == post.id)
     )
     return _to_out(res.scalar_one())
+
+
+@router.delete("/posts/{post_id}", status_code=204)
+async def delete_post(
+    post_id: UUID,
+    coders_id: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Delete only a post authored by the signed-in user."""
+
+    user = await upsert_local_user(session, coders_id)
+    result = await session.execute(select(Post).where(Post.id == post_id))
+    post = result.scalar_one_or_none()
+    if post is None:
+        raise HTTPException(404, "게시글을 찾을 수 없습니다.")
+    if post.author_id != user.id:
+        raise HTTPException(403, "내가 작성한 글만 삭제할 수 있습니다.")
+    await session.delete(post)
+    return Response(status_code=204)
 
 
 @router.get("/users/{user_id}/posts", response_model=list[PostOut])
