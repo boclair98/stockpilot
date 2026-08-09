@@ -25,6 +25,7 @@ import pytest
 import pytest_asyncio
 from app.core.config import settings
 from app.core.database import Base
+from app.core.database import engine as app_engine
 from app.core.identity import SESSION_COOKIE, encode_session
 from app.main import app
 from httpx import ASGITransport, AsyncClient
@@ -52,6 +53,9 @@ async def _truncate(_engine) -> AsyncIterator[None]:
     async with _engine.begin() as conn:
         await conn.execute(text("TRUNCATE TABLE posts, users RESTART IDENTITY CASCADE"))
     yield
+    # The production engine is module-global. Tests run on function-scoped
+    # event loops, so never carry asyncpg pooled connections into the next loop.
+    await app_engine.dispose()
 
 
 @pytest_asyncio.fixture
