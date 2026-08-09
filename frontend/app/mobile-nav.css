@@ -1,0 +1,9 @@
+@media (max-width: 620px) {
+  .topbar .league-link {
+    display: none;
+  }
+
+  .top-actions {
+    gap: 2px;
+  }
+}

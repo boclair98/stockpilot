@@ -19,7 +19,6 @@ import {
   MessageCircle,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
   Trophy,
   Wifi,
@@ -31,6 +30,7 @@ import DeferredMount from "./DeferredMount";
 import InvestorTools from "./InvestorTools";
 import InstallAppButton from "./InstallAppButton";
 import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
+import MarketHeroCarousel from "./MarketHeroCarousel";
 import OnboardingGuide from "./OnboardingGuide";
 import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
@@ -431,6 +431,13 @@ export default function TradingTerminal() {
         )
       : 0;
   const live = socketConnected && Boolean(status?.connected);
+  const marketConnectionText = live
+    ? "KIS KRX+NXT 통합 시세 연결됨"
+    : status?.configured
+      ? "KIS 통합 시세 연결 중"
+      : status
+        ? "KIS 시세 설정 필요"
+        : "시세를 빠르게 준비하고 있어요";
   const session = useMemo(() => nxtSession(clock), [clock]);
   const marketSessions = useMemo(
     () => [
@@ -666,10 +673,16 @@ export default function TradingTerminal() {
   async function placeOrder() {
     setBusy(true);
     try {
+      // Keep one key for this confirmed submission. Browser/network retries
+      // can no longer create a second simulated fill for the same click.
+      const idempotencyKey = crypto.randomUUID();
       const response = await fetch("/api/trading/orders", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           symbol: activeSymbol,
           market: quote?.market,
@@ -736,25 +749,7 @@ export default function TradingTerminal() {
       </header>
 
       <section className="hero nxt-hero">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            <span className={live ? "live-dot" : "live-dot off"} />
-            {live
-              ? "KIS KRX+NXT 통합 시세 연결됨"
-              : status?.configured
-                ? "KIS 통합 시세 연결 중"
-                : status
-                  ? "KIS 시세 설정 필요"
-                  : "시세를 빠르게 준비하고 있어요"}
-          </p>
-          <span className="hero-kicker">STOCKPILOT MARKET ACCESS</span>
-          <h1>시장을 더 길게,<br /><em>연습은 더 깊게.</em></h1>
-          <p>KRX·NXT 통합 국내 시세와 미국 현지시장 시세로 투자 판단을 연습하세요. 실제 증권 주문은 전송되지 않습니다.</p>
-        </div>
-        <div className="hero-badge">
-          <ShieldCheck size={26} />
-          <span><b>서비스 자체 가상계좌</b><small>실제 계좌번호·비밀번호 불필요</small></span>
-        </div>
+        <MarketHeroCarousel live={live} statusText={marketConnectionText} />
         <div className="hero-sessions" aria-label="NXT 거래 세션">
           {marketSessions.map((item) => (
             <div className={`hero-session${item.active ? " active" : ""}`} key={item.label}>

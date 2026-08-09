@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.core.identity import SESSION_COOKIE, decode_session
+from app.core.security import apply_security_headers
 from app.core.traffic import request_metrics, traffic_store
 from app.routes.auth import router as auth_router
 from app.routes.company import router as company_router
@@ -74,6 +75,7 @@ async def traffic_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id", "")
     if not request_id.isascii() or not 8 <= len(request_id) <= 64:
         request_id = str(uuid4())
+    request.state.request_id = request_id
     started = time.perf_counter()
     status = 500
     await request_metrics.begin()
@@ -94,7 +96,7 @@ async def traffic_middleware(request: Request, call_next):
             )
             if not allowed:
                 status = 429
-                return JSONResponse(
+                response = JSONResponse(
                     status_code=429,
                     content={
                         "detail": "요청이 잠시 많습니다. 잠시 후 다시 시도해 주세요.",
@@ -102,12 +104,15 @@ async def traffic_middleware(request: Request, call_next):
                     },
                     headers={"Retry-After": "60", "X-Request-ID": request_id},
                 )
+                apply_security_headers(response.headers)
+                return response
         response = await call_next(request)
         status = response.status_code
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time"] = (
             f"{(time.perf_counter() - started) * 1000:.1f}ms"
         )
+        apply_security_headers(response.headers)
         return response
     finally:
         await request_metrics.finish(status, (time.perf_counter() - started) * 1000)
@@ -147,6 +152,33 @@ async def liveness() -> JSONResponse:
     Keep it dependency-free; adding a DB hit here would reintroduce false
     'warming' whenever the DB (not the pod) is the slow part."""
     return JSONResponse(content={"status": "ok"})
+
+
+@app.get("/api/health/ready")
+async def readiness() -> JSONResponse:
+    """Dependency-aware probe used before routing traffic to a new instance."""
+
+    database_ready = True
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception:
+        database_ready = False
+    redis_required = bool(settings.redis_url)
+    redis_ready = traffic_store.available
+    ready = database_ready and (redis_ready or not redis_required)
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not-ready",
+            "components": {
+                "database": "ok" if database_ready else "error",
+                "sharedCache": "ok" if redis_ready else "degraded",
+                "marketData": kis_market.status(),
+            },
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/health/traffic")

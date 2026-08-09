@@ -44,7 +44,7 @@ async def _engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(autouse=True)
+@pytest_asyncio.fixture
 async def _truncate(_engine) -> AsyncIterator[None]:
     """Wipe tables before every test so order doesn't matter."""
     async with _engine.begin() as conn:
@@ -53,7 +53,7 @@ async def _truncate(_engine) -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(_truncate) -> AsyncIterator[AsyncClient]:
     """ASGI client — no real network."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
