@@ -35,7 +35,7 @@ TEST_DATABASE_URL = os.getenv(
 )
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def _engine():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
