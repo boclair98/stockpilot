@@ -12,9 +12,11 @@ import {
   Clock3,
   Gauge,
   History,
+  HelpCircle,
   LogIn,
   LogOut,
   PieChart,
+  MessageCircle,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -27,7 +29,9 @@ import {
 import CompanyInsight from "./CompanyInsight";
 import DeferredMount from "./DeferredMount";
 import InvestorTools from "./InvestorTools";
+import InstallAppButton from "./InstallAppButton";
 import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
+import OnboardingGuide from "./OnboardingGuide";
 import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
 
@@ -194,6 +198,7 @@ export default function TradingTerminal() {
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [stressMove, setStressMove] = useState(-5);
+  const [guideOpen, setGuideOpen] = useState(false);
   const toastTimer = useRef<number | null>(null);
 
   const notify = useCallback((message: string) => {
@@ -237,7 +242,11 @@ export default function TradingTerminal() {
     };
     try {
       const saved = JSON.parse(localStorage.getItem("stockpilot_quote_snapshot") || "[]");
-      if (Array.isArray(saved) && saved.length) setQuotes(saved);
+      if (Array.isArray(saved) && saved.length) {
+        window.setTimeout(() => {
+          if (!stopped) setQuotes(saved);
+        }, 0);
+      }
     } catch {
       localStorage.removeItem("stockpilot_quote_snapshot");
     }
@@ -296,6 +305,28 @@ export default function TradingTerminal() {
     update();
     const timer = window.setInterval(update, 30_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        if (localStorage.getItem("stockpilot_onboarding_v2") !== "done") {
+          setGuideOpen(true);
+        }
+      } catch {
+        // Private browsing can block storage; the guide still remains available in the header.
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const closeGuide = useCallback(() => {
+    try {
+      localStorage.setItem("stockpilot_onboarding_v2", "done");
+    } catch {
+      // The in-memory close still works when storage is unavailable.
+    }
+    setGuideOpen(false);
   }, []);
 
   useEffect(() => {
@@ -674,6 +705,9 @@ export default function TradingTerminal() {
           <a className="league-link growth-link" href="/growth"><Gauge size={16} /> 성장 허브</a>
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
+          <a className="league-link lounge-link" href="/lounge"><MessageCircle size={16} /> 투자 라운지</a>
+          <InstallAppButton />
+          <button type="button" className="help-button" aria-label="처음 이용 안내" title="처음 이용 안내" onClick={() => setGuideOpen(true)}><HelpCircle size={19} /></button>
           <button aria-label="검색"><Search size={19} /></button>
           <button
             className="alert-button"
@@ -1145,11 +1179,15 @@ export default function TradingTerminal() {
         </aside>
       </section>
       <footer>
-        <b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span>
+        <b>StockPilot</b><span className="service-footer-note">KIS 실제 시세 기반 자체 가상투자 서비스 · 실제 주문이 체결되지 않아요</span>
         <span className="footer-links">
+          <a href="/guide">이용 가이드</a>
+          <a href="/privacy">개인정보처리방침</a>
+          <a href="/terms">이용약관</a>
           <a href="https://www.logo.dev" target="_blank" rel="noreferrer">Logos provided by Logo.dev</a>
         </span>
       </footer>
+      <OnboardingGuide open={guideOpen} onClose={closeGuide} />
       {confirmingOrder && quote && (
         <div
           className="order-confirm-backdrop"

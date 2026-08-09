@@ -42,16 +42,22 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
   useEffect(() => {
     let active = true;
     let controller: AbortController | null = null;
+    let hydrateTimer: number | null = null;
     if (initialData?.points?.length) {
-      setData(initialData);
-      setLoading(false);
       localStorage.setItem("stockpilot_kospi_snapshot", JSON.stringify(initialData));
+      hydrateTimer = window.setTimeout(() => {
+        if (active) {
+          setData(initialData);
+          setLoading(false);
+        }
+      }, 0);
     } else {
       try {
         const cached = JSON.parse(localStorage.getItem("stockpilot_kospi_snapshot") || "null");
         if (cached?.points?.length) {
-          setData(cached);
-          setLoading(false);
+          hydrateTimer = window.setTimeout(() => {
+            if (active) setData(cached);
+          }, 0);
         }
       } catch {
         localStorage.removeItem("stockpilot_kospi_snapshot");
@@ -96,6 +102,7 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
     return () => {
       active = false;
       controller?.abort();
+      if (hydrateTimer !== null) window.clearTimeout(hydrateTimer);
       window.clearInterval(interval);
     };
   }, [initialData]);

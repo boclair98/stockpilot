@@ -57,3 +57,22 @@ export async function createPost(body: string): Promise<Post> {
     return r.json();
   });
 }
+
+export async function deletePost(postId: string): Promise<void> {
+  return tracked(async () => {
+    const r = await fetch(`/api/posts/${postId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!r.ok) {
+      let detail = `삭제하지 못했어요 (${r.status})`;
+      try {
+        const j = await r.json();
+        if (j?.detail) detail = String(j.detail);
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(detail);
+    }
+  });
+}
