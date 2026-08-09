@@ -13,6 +13,11 @@ import "./growth.css";
 export const metadata = {
   title: "StockPilot — KRX·NXT 통합 시세 가상투자",
   description: "KIS KRX·NXT 통합 및 미국 주식 시세로 연습하는 가상투자 서비스",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+    apple: "/icons/stockpilot.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
