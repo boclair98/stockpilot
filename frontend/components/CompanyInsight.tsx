@@ -1,11 +1,17 @@
 "use client";
 
 import {
+  ArrowUpRight,
+  BadgeCheck,
   Building2,
+  CalendarDays,
   ExternalLink,
-  FileText,
+  Globe2,
   Landmark,
+  MapPin,
   RefreshCw,
+  UserRound,
+  WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -69,6 +75,21 @@ function dateText(value: string | null | undefined) {
   return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
 }
 
+function disclosureKind(title: string) {
+  if (/사업보고서|반기보고서|분기보고서/.test(title)) return "정기공시";
+  if (/임원|주요주주|소유상황|지분/.test(title)) return "지분공시";
+  if (/결정|계약|취득|처분|합병/.test(title)) return "경영공시";
+  return "수시공시";
+}
+
+function disclosureDate(value: string) {
+  if (value.length !== 8) return { year: "", day: value };
+  return {
+    year: value.slice(0, 4),
+    day: `${value.slice(4, 6)}.${value.slice(6, 8)}`,
+  };
+}
+
 export default function CompanyInsight({
   symbol,
   market,
@@ -79,6 +100,7 @@ export default function CompanyInsight({
   const [data, setData] = useState<CompanyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (market !== "KR" || !/^\d{6}$/.test(symbol)) {
@@ -107,7 +129,7 @@ export default function CompanyInsight({
         });
     });
     return () => controller.abort();
-  }, [market, symbol]);
+  }, [market, refreshKey, symbol]);
 
   if (market !== "KR") return null;
 
@@ -115,10 +137,11 @@ export default function CompanyInsight({
     <section className="company-insight">
       <div className="section-head">
         <div>
+          <span className="section-kicker">COMPANY INSIGHT</span>
           <h2>기업정보와 공시</h2>
-          <p>금융감독원 OpenDART에서 확인한 공식 정보예요</p>
+          <p>복잡한 공식 정보를 투자 전에 읽기 쉽게 정리했어요</p>
         </div>
-        <span className="dart-source"><Landmark size={13} /> OpenDART</span>
+        <span className="dart-source"><BadgeCheck size={14} /> OpenDART 공식 데이터</span>
       </div>
 
       {loading ? (
@@ -127,47 +150,61 @@ export default function CompanyInsight({
         </div>
       ) : failed ? (
         <div className="company-state">
-          <span>잠시 후 기업정보를 다시 확인해 주세요.</span>
+          <span className="company-state-icon"><Landmark size={22} /></span>
+          <span><b>기업정보를 불러오지 못했어요</b><small>연결 상태를 확인한 뒤 다시 시도해 주세요.</small></span>
+          <button type="button" onClick={() => setRefreshKey((key) => key + 1)}>다시 불러오기</button>
         </div>
       ) : !data?.available ? (
         <div className="company-state">
-          <span>이 종목의 DART 기업정보를 찾지 못했어요.</span>
+          <span className="company-state-icon"><Building2 size={22} /></span>
+          <span><b>DART 기업정보가 아직 없어요</b><small>상장 구분이나 공시 등록 상태에 따라 제공되지 않을 수 있어요.</small></span>
         </div>
       ) : (
         <>
           <div className="company-profile">
             <span className="company-building"><Building2 size={23} /></span>
-            <div>
-              <h3>{data.profile?.name || symbol}</h3>
+            <div className="company-profile-copy">
+              <div className="company-name-row">
+                <h3>{data.profile?.name || symbol}</h3>
+                <span className="market-chip">
+                  {marketName[data.profile?.market || ""] || "상장기업"}
+                </span>
+              </div>
               <p>{data.profile?.englishName || symbol}</p>
             </div>
-            <span className="market-chip">
-              {marketName[data.profile?.market || ""] || "상장기업"}
-            </span>
+            <span className="company-verified"><BadgeCheck size={14} /> 공식 확인</span>
           </div>
 
           <div className="company-facts">
-            <span><small>대표자</small><b>{data.profile?.ceo || "—"}</b></span>
-            <span><small>설립일</small><b>{dateText(data.profile?.establishedAt)}</b></span>
-            <span><small>결산월</small><b>{data.profile?.fiscalMonth ? `${Number(data.profile.fiscalMonth)}월` : "—"}</b></span>
+            <article><span><UserRound size={15} /></span><div><small>대표자</small><b>{data.profile?.ceo || "—"}</b></div></article>
+            <article><span><CalendarDays size={15} /></span><div><small>설립일</small><b>{dateText(data.profile?.establishedAt)}</b></div></article>
+            <article><span><WalletCards size={15} /></span><div><small>결산월</small><b>{data.profile?.fiscalMonth ? `${Number(data.profile.fiscalMonth)}월` : "—"}</b></div></article>
             {data.profile?.homepage && (
-              <a href={data.profile.homepage} target="_blank" rel="noreferrer">
-                홈페이지 <ExternalLink size={11} />
+              <a className="company-homepage" href={data.profile.homepage} target="_blank" rel="noreferrer">
+                <Globe2 size={14} /> 공식 홈페이지 <ExternalLink size={12} />
               </a>
             )}
           </div>
 
+          {data.profile?.address && (
+            <p className="company-address"><MapPin size={13} /> {data.profile.address}</p>
+          )}
+
           {data.financials && data.financials.metrics.length > 0 && (
             <div className="financial-block">
               <div className="financial-title">
-                <b>핵심 재무정보</b>
-                <span>{data.financials.year} {data.financials.reportName} · {data.financials.scope}</span>
+                <div>
+                  <span className="insight-section-icon finance"><WalletCards size={16} /></span>
+                  <span><b>핵심 재무정보</b><small>규모와 손익을 빠르게 비교해 보세요</small></span>
+                </div>
+                <span className="data-period">{data.financials.year} {data.financials.reportName} · {data.financials.scope}</span>
               </div>
               <div className="financial-grid">
-                {data.financials.metrics.map((metric) => (
-                  <article key={metric.key}>
+                {data.financials.metrics.map((metric, index) => (
+                  <article key={metric.key} data-tone={index % 3}>
                     <small>{metric.label}</small>
                     <strong>{compactMoney(metric.value, metric.currency)}</strong>
+                    <span>공시 기준</span>
                   </article>
                 ))}
               </div>
@@ -176,29 +213,34 @@ export default function CompanyInsight({
 
           <div className="disclosure-block">
             <div className="financial-title">
-              <b>최근 공시</b>
-              <span>최근 1년</span>
+              <div>
+                <span className="insight-section-icon disclosure"><Landmark size={16} /></span>
+                <span><b>최근 공시</b><small>중요한 공식 발표를 시간순으로 확인해요</small></span>
+              </div>
+              <span className="data-period">최근 1년 · 최대 5건</span>
             </div>
             {data.disclosures?.length ? (
               <div className="disclosure-list">
-                {data.disclosures.slice(0, 5).map((item) => (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    key={item.receiptNo}
-                  >
-                    <span className="disclosure-icon"><FileText size={15} /></span>
-                    <span><b>{item.title}</b><small>{dateText(item.date)} · {item.submitter}</small></span>
-                    <ExternalLink size={13} />
-                  </a>
-                ))}
+                {data.disclosures.slice(0, 5).map((item) => {
+                  const date = disclosureDate(item.date);
+                  return (
+                    <a href={item.url} target="_blank" rel="noreferrer" key={item.receiptNo}>
+                      <span className="disclosure-date"><b>{date.day}</b><small>{date.year}</small></span>
+                      <span className="disclosure-copy">
+                        <em>{disclosureKind(item.title)}</em>
+                        <b>{item.title}</b>
+                        <small>{item.submitter} · DART 원문</small>
+                      </span>
+                      <span className="disclosure-open">열기 <ArrowUpRight size={14} /></span>
+                    </a>
+                  );
+                })}
               </div>
             ) : (
               <p className="no-disclosure">최근 1년간 조회된 공시가 없어요.</p>
             )}
           </div>
-          <p className="dart-note">재무정보는 공시 보고서 기준이며 투자 권유 자료가 아닙니다.</p>
+          <p className="dart-note"><BadgeCheck size={12} /> 금융감독원 공시 보고서 기준 · 투자 권유 자료가 아닙니다.</p>
         </>
       )}
     </section>

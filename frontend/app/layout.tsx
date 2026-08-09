@@ -9,6 +9,7 @@ import "./rooms.css";
 import "./practice.css";
 import "./order-safety.css";
 import "./growth.css";
+import "./polish.css";
 
 export const metadata = {
   title: "StockPilot — KRX·NXT 통합 시세 가상투자",
