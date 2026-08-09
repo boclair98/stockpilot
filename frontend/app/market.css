@@ -2,6 +2,19 @@
   margin-bottom: 16px;
 }
 
+/* Hide the optional platform support/donation launcher on every screen. */
+[data-coders-support],
+coders-support,
+#coders-support,
+.coders-support,
+iframe[src*="coders.kr"][src*="support"],
+iframe[title*="후원"],
+iframe[title*="support" i] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .market-label {
   display: flex;
   align-items: center;
