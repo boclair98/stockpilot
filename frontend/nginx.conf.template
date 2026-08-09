@@ -78,6 +78,16 @@ server {
     try_files $uri =404;
   }
 
+  # `.webmanifest` is not included in every nginx mime.types release.
+  # Serve the install manifest with the standard PWA media type so Chrome,
+  # Edge and other install-capable browsers can identify it consistently.
+  location = /manifest.webmanifest {
+    default_type application/manifest+json;
+    expires -1;
+    add_header Cache-Control "no-cache, must-revalidate";
+    try_files $uri =404;
+  }
+
   # SPA fallback: any unknown path serves the closest matching exported
   # HTML, defaulting to /index.html so client-side routing can pick up.
   location / {
