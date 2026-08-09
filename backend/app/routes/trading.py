@@ -10,20 +10,26 @@ import sqlalchemy as sa
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     HTTPException,
     Query,
+    Request,
     Response,
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
+from app.core.order_integrity import normalize_idempotency_key, request_fingerprint
 from app.core.traffic import traffic_store
 from app.models import Position, TradeOrder, TradingAccount
+from app.services.audit import record_audit
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 
@@ -284,9 +290,29 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
             Decimal(order.limit_price) if order.limit_price is not None else None,
             Decimal(order.trigger_price) if order.trigger_price is not None else None,
         )
+        previous_status = order.status
         order.status = next_status
+        if previous_status != next_status:
+            record_audit(
+                session,
+                actor_id=order.owner_id,
+                event_type="ORDER_TRIGGERED",
+                entity_id=order.id,
+                request_id=f"matcher:{order.id}",
+                details={"from": previous_status, "status": next_status},
+            )
         if should_execute:
             await execute(session, order, instrument, price)
+            record_audit(
+                session,
+                actor_id=order.owner_id,
+                event_type=(
+                    "ORDER_FILLED" if order.status == "FILLED" else "ORDER_REJECTED"
+                ),
+                entity_id=order.id,
+                request_id=f"matcher:{order.id}",
+                details={"fillPrice": str(order.fill_price), "status": order.status},
+            )
 
 
 class OrderIn(BaseModel):
@@ -298,6 +324,18 @@ class OrderIn(BaseModel):
     quantity: Decimal = Field(gt=0, le=10000)
     limitPrice: Decimal | None = Field(default=None, gt=0)
     triggerPrice: Decimal | None = Field(default=None, gt=0)
+
+
+def order_receipt(
+    row: TradeOrder, currency: str, *, replayed: bool = False
+) -> dict:
+    return {
+        "id": str(row.id),
+        "status": row.status,
+        "fillPrice": float(row.fill_price) if row.fill_price else None,
+        "currency": currency,
+        "replayed": replayed,
+    }
 
 
 @router.get("/quotes")
@@ -466,12 +504,18 @@ async def portfolio(
     }
 
 
-@router.post("/orders", status_code=201)
+@router.post("/orders", status_code=201, response_model=None)
 async def order(
     payload: OrderIn,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     owner: UUID = Depends(require_identity),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+):
+    try:
+        replay_key = normalize_idempotency_key(idempotency_key)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     symbol = payload.symbol.upper()
     side = payload.side.upper()
     order_type = payload.orderType.upper()
@@ -489,6 +533,34 @@ async def order(
         raise HTTPException(422, "지정가를 입력하세요.")
     if order_type in {"STOP", "STOP_LIMIT"} and payload.triggerPrice is None:
         raise HTTPException(422, "감시 가격을 입력하세요.")
+
+    fingerprint = request_fingerprint(
+        {
+            "symbol": symbol,
+            "exchange": instrument.exchange,
+            "side": side,
+            "orderType": order_type,
+            "quantity": payload.quantity,
+            "limitPrice": payload.limitPrice,
+            "triggerPrice": payload.triggerPrice,
+        }
+    )
+    existing = (
+        await session.execute(
+            sa.select(TradeOrder).where(
+                TradeOrder.owner_id == owner,
+                TradeOrder.idempotency_key == replay_key,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        if existing.request_fingerprint != fingerprint:
+            raise HTTPException(409, "같은 요청 키를 다른 주문에 다시 사용할 수 없습니다.")
+        receipt = order_receipt(existing, instrument.currency, replayed=True)
+        if existing.status == "REJECTED":
+            receipt["detail"] = "이 주문은 이미 거절 처리되었습니다."
+            return JSONResponse(status_code=409, content=receipt)
+        return JSONResponse(status_code=200, content=receipt)
     if side == "SELL":
         held, reserved = await sell_capacity(
             session, owner, symbol, instrument.exchange
@@ -503,6 +575,8 @@ async def order(
     price = Decimal(str(quote["price"]))
     row = TradeOrder(
         owner_id=owner,
+        idempotency_key=replay_key,
+        request_fingerprint=fingerprint,
         symbol=symbol,
         exchange=instrument.exchange,
         side=side,
@@ -511,8 +585,49 @@ async def order(
         limit_price=payload.limitPrice,
         trigger_price=payload.triggerPrice,
     )
-    session.add(row)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(row)
+            await session.flush()
+    except IntegrityError as error:
+        # A concurrent retry can race the optimistic lookup. The unique key
+        # resolves that race; return the winner rather than executing twice.
+        existing = (
+            await session.execute(
+                sa.select(TradeOrder).where(
+                    TradeOrder.owner_id == owner,
+                    TradeOrder.idempotency_key == replay_key,
+                )
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            raise HTTPException(
+                409, "동일 주문이 처리 중입니다. 잠시 후 확인하세요."
+            ) from error
+        if existing.request_fingerprint != fingerprint:
+            raise HTTPException(
+                409, "같은 요청 키를 다른 주문에 다시 사용할 수 없습니다."
+            ) from error
+        return JSONResponse(
+            status_code=200,
+            content=order_receipt(existing, instrument.currency, replayed=True),
+        )
+
+    request_id = request.state.request_id
+    record_audit(
+        session,
+        actor_id=owner,
+        event_type="ORDER_ACCEPTED",
+        entity_id=row.id,
+        request_id=request_id,
+        details={
+            "symbol": symbol,
+            "exchange": instrument.exchange,
+            "side": side,
+            "orderType": order_type,
+            "quantity": str(payload.quantity),
+        },
+    )
 
     row.status, should_execute = order_state(
         order_type,
@@ -525,23 +640,40 @@ async def order(
     if should_execute:
         await execute(session, row, instrument, price)
         if row.status == "REJECTED":
-            if side == "BUY":
-                raise HTTPException(
-                    409, "가상 예수금이 부족해 주문을 체결할 수 없습니다."
-                )
-            raise HTTPException(409, "보유 수량이 부족해 주문을 체결할 수 없습니다.")
+            detail = (
+                "가상 예수금이 부족해 주문을 체결할 수 없습니다."
+                if side == "BUY"
+                else "보유 수량이 부족해 주문을 체결할 수 없습니다."
+            )
+            record_audit(
+                session,
+                actor_id=owner,
+                event_type="ORDER_REJECTED",
+                entity_id=row.id,
+                request_id=request_id,
+                details={"reason": detail, "status": row.status},
+            )
+            receipt = order_receipt(row, instrument.currency)
+            receipt["detail"] = detail
+            # Returning (instead of raising) lets the transaction commit the
+            # rejected order and its audit evidence while preserving HTTP 409.
+            return JSONResponse(status_code=409, content=receipt)
+        record_audit(
+            session,
+            actor_id=owner,
+            event_type="ORDER_FILLED",
+            entity_id=row.id,
+            request_id=request_id,
+            details={"fillPrice": str(row.fill_price), "status": row.status},
+        )
 
-    return {
-        "id": str(row.id),
-        "status": row.status,
-        "fillPrice": float(row.fill_price) if row.fill_price else None,
-        "currency": instrument.currency,
-    }
+    return order_receipt(row, instrument.currency)
 
 
 @router.delete("/orders/{order_id}")
 async def cancel_order(
     order_id: UUID,
+    request: Request,
     owner: UUID = Depends(require_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -557,6 +689,14 @@ async def cancel_order(
     if row.status not in {"OPEN", "TRIGGERED"}:
         raise HTTPException(409, "대기 중인 주문만 취소할 수 있습니다.")
     row.status = "CANCELED"
+    record_audit(
+        session,
+        actor_id=owner,
+        event_type="ORDER_CANCELED",
+        entity_id=row.id,
+        request_id=request.state.request_id,
+        details={"previousStatus": "OPEN_OR_TRIGGERED", "status": row.status},
+    )
     return {"id": str(row.id), "status": row.status}
 
 

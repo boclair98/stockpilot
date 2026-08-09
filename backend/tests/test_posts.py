@@ -7,6 +7,9 @@ land in the feed.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 
@@ -60,12 +63,16 @@ async def test_signed_in_post_shows_up_in_feed(
 
 @pytest.mark.asyncio
 async def test_user_cannot_delete_another_users_post(
-    client: AsyncClient, signed_in_headers: dict[str, str]
+    client: AsyncClient,
+    signed_in_headers: dict[str, str],
+    signed_in_headers_for: Callable[[UUID], dict[str, str]],
 ) -> None:
     create = await client.post(
         "/api/posts", json={"body": "keep me"}, headers=signed_in_headers
     )
-    other_headers = {"X-Coders-User": "11111111-1111-4111-8111-111111111111"}
+    other_headers = signed_in_headers_for(
+        UUID("11111111-1111-4111-8111-111111111111")
+    )
     deleted = await client.delete(
         f"/api/posts/{create.json()['id']}", headers=other_headers
     )
@@ -74,11 +81,13 @@ async def test_user_cannot_delete_another_users_post(
 
 @pytest.mark.asyncio
 async def test_me_lazily_creates_local_user(
-    client: AsyncClient, signed_in_headers: dict[str, str]
+    client: AsyncClient,
+    signed_in_headers: dict[str, str],
+    fake_user_id: UUID,
 ) -> None:
     """First-sight visitor → a row gets created and /api/me returns it."""
     r = await client.get("/api/me", headers=signed_in_headers)
     assert r.status_code == 200
     me = r.json()
-    assert me["coders_id"] == signed_in_headers["X-Coders-User"]
+    assert me["coders_id"] == str(fake_user_id)
     assert me["display_name"].startswith("user-")

@@ -94,6 +94,8 @@ class TradeOrder(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         sa.UUID(as_uuid=True), nullable=False, index=True
     )
+    idempotency_key: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
     exchange: Mapped[str] = mapped_column(
         sa.String(8), nullable=False, default="KRX", server_default="KRX"
@@ -114,6 +116,40 @@ class TradeOrder(Base):
     status: Mapped[str] = mapped_column(sa.String(12), nullable=False, default="OPEN")
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), index=True
+    )
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "owner_id", "idempotency_key", name="uq_trade_orders_owner_idempotency"
+        ),
+    )
+
+
+class AuditEvent(Base):
+    """Append-only evidence for security and trading investigations.
+
+    The application exposes no update/delete path for this table. Production
+    retention and export controls are documented in BROKERAGE_READINESS.md.
+    """
+
+    __tablename__ = "audit_events"
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    actor_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(sa.String(48), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    request_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, index=True)
+    details: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        nullable=False,
+        index=True,
     )
 
 
