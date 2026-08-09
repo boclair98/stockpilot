@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     rate_limit_read_per_minute: int = 240
     rate_limit_write_per_minute: int = 30
 
+    # Optional publishable key from logo.dev. This key is intentionally safe
+    # to include in image URLs returned to the browser.
+    logo_dev_publishable_key: str | None = None
+
     # Local-dev escape hatch. Never set in production.
     dev_fake_user: str | None = None
 

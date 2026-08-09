@@ -25,8 +25,9 @@ import {
 } from "lucide-react";
 
 import CompanyInsight from "./CompanyInsight";
+import DeferredMount from "./DeferredMount";
 import InvestorTools from "./InvestorTools";
-import MarketIndexChart from "./MarketIndexChart";
+import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
 import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
 
@@ -47,6 +48,7 @@ type Quote = {
   source: string;
   venue: string;
   isTop: boolean;
+  logoUrl?: string | null;
 };
 type Position = {
   symbol: string;
@@ -61,6 +63,7 @@ type Position = {
   profit: number;
   returnRate: number;
   exchange: string;
+  logoUrl?: string | null;
 };
 type Order = {
   id: string;
@@ -95,6 +98,7 @@ type SearchItem = {
   market: Market;
   currency: Currency;
   exchange: string;
+  logoUrl?: string | null;
 };
 type Me = {
   display_name: string;
@@ -169,6 +173,7 @@ export default function TradingTerminal() {
     orders: [],
   });
   const [status, setStatus] = useState<MarketStatus | null>(null);
+  const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
   const [selected, setSelected] = useState("KR:KRX:005930");
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [kind, setKind] = useState<"MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT">("MARKET");
@@ -215,11 +220,42 @@ export default function TradingTerminal() {
   }, []);
 
   useEffect(() => {
-    const initialPortfolioTimer = window.setTimeout(refreshPortfolio, 0);
-    const portfolioTimer = window.setInterval(refreshPortfolio, 5000);
+    const initialPortfolioTimer = window.setTimeout(refreshPortfolio, 150);
+    const portfolioTimer = window.setInterval(() => {
+      if (!document.hidden) void refreshPortfolio();
+    }, 10_000);
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let stopped = false;
+    let lastSnapshotSaved = 0;
+    const bootstrapController = new AbortController();
+    const saveSnapshot = (rows: Quote[]) => {
+      const now = Date.now();
+      if (now - lastSnapshotSaved < 5000) return;
+      lastSnapshotSaved = now;
+      localStorage.setItem("stockpilot_quote_snapshot", JSON.stringify(rows));
+    };
+    try {
+      const saved = JSON.parse(localStorage.getItem("stockpilot_quote_snapshot") || "[]");
+      if (Array.isArray(saved) && saved.length) setQuotes(saved);
+    } catch {
+      localStorage.removeItem("stockpilot_quote_snapshot");
+    }
+    void fetch("/api/trading/bootstrap", {
+      cache: "default",
+      signal: bootstrapController.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || stopped) return;
+        if (Array.isArray(data.quotes) && data.quotes.length) {
+          setQuotes(data.quotes);
+          saveSnapshot(data.quotes);
+        }
+        if (data.status) setStatus(data.status);
+        if (data.kospi?.points?.length) setBootstrapKospi(data.kospi);
+      })
+      .catch(() => undefined);
     const connect = () => {
       socket = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/trading/ws`,
@@ -230,6 +266,7 @@ export default function TradingTerminal() {
         if (message.type === "quotes") {
           setQuotes(message.data);
           setStatus(message.status);
+          saveSnapshot(message.data);
         }
       };
       socket.onclose = () => {
@@ -238,12 +275,18 @@ export default function TradingTerminal() {
       };
       socket.onerror = () => socket?.close();
     };
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void refreshPortfolio();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     connect();
     return () => {
       stopped = true;
+      bootstrapController.abort();
       window.clearTimeout(initialPortfolioTimer);
       window.clearInterval(portfolioTimer);
       clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       socket?.close();
     };
   }, [refreshPortfolio]);
@@ -358,6 +401,14 @@ export default function TradingTerminal() {
       : 0;
   const live = socketConnected && Boolean(status?.connected);
   const session = useMemo(() => nxtSession(clock), [clock]);
+  const marketSessions = useMemo(
+    () => [
+      { label: "프리마켓", time: "08:00 – 08:50", active: session.label.includes("프리마켓") },
+      { label: "메인마켓", time: "09:00:30 – 15:20", active: session.label.includes("메인마켓") },
+      { label: "애프터마켓", time: "15:40 – 20:00", active: session.label.includes("애프터마켓") },
+    ],
+    [session.label],
+  );
   const positionValues = useMemo(
     () =>
       portfolio.positions.reduce(
@@ -492,6 +543,7 @@ export default function TradingTerminal() {
       market: item.market,
       currency: item.currency,
       exchange: item.exchange,
+      logoUrl: item.logoUrl,
     });
   }
 
@@ -516,6 +568,7 @@ export default function TradingTerminal() {
         market: data.market,
         currency: data.currency,
         exchange: data.exchange,
+        logoUrl: data.logoUrl,
       });
       setSearchResults([]);
       setSearchQuery("");
@@ -648,22 +701,39 @@ export default function TradingTerminal() {
         </div>
       </header>
 
-      <section className="hero">
-        <div>
+      <section className="hero nxt-hero">
+        <div className="hero-copy">
           <p className="eyebrow">
             <span className={live ? "live-dot" : "live-dot off"} />
             {live
               ? "KIS KRX+NXT 통합 시세 연결됨"
               : status?.configured
                 ? "KIS 통합 시세 연결 중"
-                : "시세 설정 필요"}
+                : status
+                  ? "KIS 시세 설정 필요"
+                  : "시세를 빠르게 준비하고 있어요"}
           </p>
-          <h1>실제 시세로 연습하는<br />나의 가상 투자</h1>
-          <p>국내는 KRX·NXT 통합, 미국은 현지시장 KIS 시세로 거래해요. 실제 증권 주문은 전송되지 않습니다.</p>
+          <span className="hero-kicker">STOCKPILOT MARKET ACCESS</span>
+          <h1>시장을 더 길게,<br /><em>연습은 더 깊게.</em></h1>
+          <p>KRX·NXT 통합 국내 시세와 미국 현지시장 시세로 투자 판단을 연습하세요. 실제 증권 주문은 전송되지 않습니다.</p>
         </div>
         <div className="hero-badge">
           <ShieldCheck size={26} />
           <span><b>서비스 자체 가상계좌</b><small>실제 계좌번호·비밀번호 불필요</small></span>
+        </div>
+        <div className="hero-sessions" aria-label="NXT 거래 세션">
+          {marketSessions.map((item) => (
+            <div className={`hero-session${item.active ? " active" : ""}`} key={item.label}>
+              <small>{item.active ? "NOW TRADING" : "SESSION"}</small>
+              <b>{item.label}</b>
+              <span>{item.time}</span>
+            </div>
+          ))}
+          <div className="hero-session hero-session-status">
+            <small>MARKET STATUS</small>
+            <b>{session.label}</b>
+            <span>{session.detail}</span>
+          </div>
         </div>
       </section>
 
@@ -690,7 +760,7 @@ export default function TradingTerminal() {
         </article>
       </section>
 
-      <MarketIndexChart />
+      <MarketIndexChart initialData={bootstrapKospi} />
 
       <section className="insight-grid" aria-label="시장과 내 투자 체크업">
         <article className="pulse-card">
@@ -795,7 +865,7 @@ export default function TradingTerminal() {
                     key={item.id}
                     onClick={() => selectTopQuote(item)}
                   >
-                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} />
+                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} logoUrl={item.logoUrl} />
                     <span className="company"><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span>
                     <span className="quote-price">
                       <b>{money(item.price, item.currency)}</b>
@@ -835,7 +905,7 @@ export default function TradingTerminal() {
               <div className="search-results">
                 {searching ? <p className="search-state"><RefreshCw className="spin" size={16} /> 종목을 찾고 있어요</p> : searchResults.length ? searchResults.map((item) => (
                   <button key={item.id} onClick={() => chooseSearchResult(item)}>
-                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} />
+                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} logoUrl={item.logoUrl} />
                     <span><b>{item.name}</b><small>{item.englishName || item.symbol}</small></span>
                     <span><b>{item.symbol}</b><small>{item.market === "KR" ? "한국" : "미국"} · {item.exchange}</small></span>
                     <ChevronRight size={17} />
@@ -857,6 +927,7 @@ export default function TradingTerminal() {
                         symbol={item.symbol}
                         name={item.name}
                         color={colorFor(item.symbol)}
+                        logoUrl={item.logoUrl}
                       />
                       <span><b>{item.name}</b><small>{item.symbol}</small></span>
                     </button>
@@ -866,18 +937,22 @@ export default function TradingTerminal() {
             )}
           </div>
 
-          <StockTrendPanel
-            symbol={activeSymbol}
-            name={selectedName}
-            market={quote?.market ?? "KR"}
-            exchange={quote?.exchange ?? "KRX"}
-            currency={quote?.currency ?? "KRW"}
-          />
+          <DeferredMount minHeight={360}>
+            <StockTrendPanel
+              symbol={activeSymbol}
+              name={selectedName}
+              market={quote?.market ?? "KR"}
+              exchange={quote?.exchange ?? "KRX"}
+              currency={quote?.currency ?? "KRW"}
+            />
+          </DeferredMount>
 
-          <CompanyInsight
-            symbol={activeSymbol}
-            market={quote?.market ?? "KR"}
-          />
+          <DeferredMount minHeight={320}>
+            <CompanyInsight
+              symbol={activeSymbol}
+              market={quote?.market ?? "KR"}
+            />
+          </DeferredMount>
 
           <InvestorTools
             authenticated={portfolio.authenticated}
@@ -913,7 +988,7 @@ export default function TradingTerminal() {
                 const profit = position.profit ?? (price - position.averagePrice) * position.quantity;
                 return (
                   <div className="holding" key={`${position.exchange}:${position.symbol}`}>
-                    <StockLogo symbol={position.symbol} name={position.name} color={colorFor(position.symbol)} />
+                    <StockLogo symbol={position.symbol} name={position.name} color={colorFor(position.symbol)} logoUrl={position.logoUrl} />
                     <span><b>{position.name}</b><small>{position.quantity}주 · 평균 {money(position.averagePrice, position.currency)}</small></span>
                     <span><b>{money(price * position.quantity, position.currency)}</b><small className={profit >= 0 ? "up" : "down"}>{profit >= 0 ? "+" : ""}{money(profit, position.currency)} · {(position.returnRate ?? 0).toFixed(2)}%</small></span>
                   </div>
@@ -927,7 +1002,7 @@ export default function TradingTerminal() {
 
         <aside className="order-card">
           <div className="order-stock">
-            <StockLogo symbol={activeSymbol} name={selectedName} color={colorFor(activeSymbol)} large />
+            <StockLogo symbol={activeSymbol} name={selectedName} color={colorFor(activeSymbol)} logoUrl={quote?.logoUrl} large />
             <div><h2>{selectedName}</h2><p>{activeSymbol} · {quote?.market === "KR" ? "KRX+NXT 통합" : quote?.exchange ?? "KIS"}</p></div>
             <span className="current">
               <b>{quote ? money(quote.price, quote.currency) : "—"}</b>
@@ -1069,7 +1144,13 @@ export default function TradingTerminal() {
           )}
         </aside>
       </section>
-      <footer><b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span><a href="https://coders.kr">coders.kr에서 호스팅</a></footer>
+      <footer>
+        <b>StockPilot</b><span>KIS 실제 시세 기반 자체 가상투자 서비스</span>
+        <span className="footer-links">
+          <a href="https://www.logo.dev" target="_blank" rel="noreferrer">Logos provided by Logo.dev</a>
+          <a href="https://coders.kr">coders.kr에서 호스팅</a>
+        </span>
+      </footer>
       {confirmingOrder && quote && (
         <div
           className="order-confirm-backdrop"

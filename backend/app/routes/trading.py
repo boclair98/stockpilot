@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -10,6 +12,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -19,11 +22,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
+from app.core.traffic import traffic_store
 from app.models import Position, TradeOrder, TradingAccount
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
+
+
+class QuoteFanout:
+    """Serialize each market tick once, then fan it out to every connected client."""
+
+    def __init__(self) -> None:
+        self._subscribers: set[asyncio.Queue[str]] = set()
+        self._task: asyncio.Task | None = None
+
+    def subscribe(self) -> asyncio.Queue[str]:
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+        self._subscribers.add(queue)
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._run(), name="quote-websocket-fanout")
+        return queue
+
+    def unsubscribe(self, queue: asyncio.Queue[str]) -> None:
+        self._subscribers.discard(queue)
+
+    async def _run(self) -> None:
+        while True:
+            if not self._subscribers:
+                await asyncio.sleep(0.5)
+                continue
+            try:
+                rows = await kis_market.shared_snapshot()
+            except Exception:
+                rows = kis_market.snapshot()
+            payload = json.dumps(
+                {"type": "quotes", "data": rows, "status": kis_market.status()},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            for queue in tuple(self._subscribers):
+                if queue.full():
+                    try:
+                        queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+                queue.put_nowait(payload)
+            await asyncio.sleep(1)
+
+
+quote_fanout = QuoteFanout()
 
 
 def simulation_charges(
@@ -253,26 +301,42 @@ class OrderIn(BaseModel):
 
 
 @router.get("/quotes")
-async def quotes() -> list[dict]:
-    return kis_market.snapshot(top_only=True)
+async def quotes(response: Response) -> list[dict]:
+    response.headers["Cache-Control"] = "public, max-age=1, s-maxage=2, stale-while-revalidate=30"
+    return await kis_market.shared_snapshot(top_only=True)
+
+
+@router.get("/bootstrap")
+async def bootstrap(response: Response) -> dict:
+    response.headers["Cache-Control"] = "public, max-age=2, s-maxage=5, stale-while-revalidate=60"
+    return {
+        "quotes": await kis_market.shared_snapshot(top_only=True),
+        "status": kis_market.status(),
+        "kospi": await traffic_store.get_json("market:index:kospi"),
+        "asOf": datetime.now(UTC).isoformat(),
+    }
 
 
 @router.get("/search")
 async def search(
+    response: Response,
     q: str = Query(min_length=1, max_length=60),
     market: str = Query(default="ALL", pattern="^(ALL|KR|US)$"),
     limit: int = Query(default=20, ge=1, le=30),
 ) -> dict:
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=3600"
     items = await instrument_catalog.search(q, market, limit)
     return {"query": q, "total": len(items), "items": items}
 
 
 @router.get("/quote")
 async def quote(
+    response: Response,
     symbol: str = Query(min_length=1, max_length=12),
     market: str = Query(pattern="^(KR|US)$"),
     exchange: str = Query(min_length=3, max_length=8),
 ) -> dict:
+    response.headers["Cache-Control"] = "public, max-age=1, s-maxage=2, stale-while-revalidate=30"
     instrument = await instrument_catalog.get(symbol, market, exchange)
     if not instrument:
         raise HTTPException(404, "종목을 찾을 수 없습니다.")
@@ -283,12 +347,14 @@ async def quote(
 
 
 @router.get("/market-status")
-async def market_status() -> dict:
+async def market_status(response: Response) -> dict:
+    response.headers["Cache-Control"] = "public, max-age=2, s-maxage=5, stale-while-revalidate=30"
     return kis_market.status()
 
 
 @router.get("/kospi")
-async def kospi() -> dict:
+async def kospi(response: Response) -> dict:
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=3600"
     return await kis_market.kospi_history()
 
 
@@ -353,6 +419,7 @@ async def portfolio(
                 "market": instrument.market,
                 "currency": instrument.currency,
                 "exchange": position.exchange,
+                "logoUrl": instrument.public().get("logoUrl"),
                 "quantity": float(quantity),
                 "averagePrice": float(average_price),
                 "currentPrice": float(current_price),
@@ -496,15 +563,11 @@ async def cancel_order(
 @router.websocket("/ws")
 async def websocket_quotes(websocket: WebSocket) -> None:
     await websocket.accept()
+    queue = quote_fanout.subscribe()
     try:
         while True:
-            await websocket.send_json(
-                {
-                    "type": "quotes",
-                    "data": kis_market.snapshot(),
-                    "status": kis_market.status(),
-                }
-            )
-            await asyncio.sleep(1)
+            await websocket.send_text(await queue.get())
     except WebSocketDisconnect:
         pass
+    finally:
+        quote_fanout.unsubscribe(queue)

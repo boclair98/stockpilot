@@ -56,18 +56,21 @@ export default function StockLogo({
   symbol,
   name,
   color,
+  logoUrl,
   large = false,
 }: {
   symbol: string;
   name: string;
   color: string;
+  logoUrl?: string | null;
   large?: boolean;
 }) {
   const normalized = symbol.toUpperCase();
   const brand = useMemo(() => brands[normalized], [normalized]);
   const [failedSource, setFailedSource] = useState("");
+  const source = logoUrl || brand?.src || "";
 
-  const showImage = Boolean(brand?.src && failedSource !== brand.src);
+  const showImage = Boolean(source && failedSource !== source);
 
   return (
     <span
@@ -77,10 +80,10 @@ export default function StockLogo({
     >
       {showImage ? (
         <img
-          src={brand?.src}
+          src={source}
           alt={`${name} 로고`}
           loading="lazy"
-          onError={() => setFailedSource(brand?.src || "")}
+          onError={() => setFailedSource(source)}
         />
       ) : (
         name.trim().charAt(0) || normalized.charAt(0)

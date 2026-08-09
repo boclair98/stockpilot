@@ -1,3 +1,4 @@
+import asyncio
 import time
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -19,6 +20,7 @@ from app.routes.league import router as league_router
 from app.routes.posts import router as posts_router
 from app.routes.trading import router as trading_router
 from app.routes.users import router as users_router
+from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.price_alert_notifier import price_alert_notifier
 
@@ -28,9 +30,19 @@ async def lifespan(app: FastAPI):
     await traffic_store.start()
     kis_market.start()
     price_alert_notifier.start()
+    async def warm_instrument_catalog() -> None:
+        # Give the above-the-fold bootstrap priority, then prepare first search.
+        await asyncio.sleep(3)
+        await instrument_catalog.ensure_loaded()
+
+    catalog_task = asyncio.create_task(
+        warm_instrument_catalog(), name="instrument-catalog-warmup"
+    )
     try:
         yield
     finally:
+        catalog_task.cancel()
+        await asyncio.gather(catalog_task, return_exceptions=True)
         await price_alert_notifier.stop()
         await kis_market.stop()
         await traffic_store.close()
