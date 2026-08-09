@@ -1,11 +1,13 @@
 <div align="center">
 
+<img src="frontend/app/icon.svg" width="88" alt="StockPilot 앱 아이콘" />
+
 # StockPilot
 
-### 실제 시세로 배우고, 가상자산으로 겨루는 주식 투자 연습 서비스
+### 시장을 더 길게, 연습은 더 깊게.
 
-한국 `KRX·NXT 통합 시세`와 미국 주식 시세를 보면서<br />
-검색 → 분석 → 가상주문 → 투자일지·복기 → 수익률 리그와 1:1 배틀까지 한 번에 경험합니다.
+한국 `KRX·NXT 통합 시세`와 미국 주식 실제 시세를 보면서<br />
+검색 → 분석 → 가상주문 → 투자일지·복기 → 수익률 리그와 1:1 배틀까지 경험하는 투자 연습 서비스입니다.
 
 <p>
   <a href="https://stockpilot.coders.kr">
@@ -21,13 +23,22 @@
   <img src="https://img.shields.io/badge/Company_Data-OpenDART-1F6FEB?style=flat-square" alt="OpenDART" />
   <img src="https://img.shields.io/badge/Trading-100%25_Virtual-F2A93B?style=flat-square" alt="100% 가상투자" />
   <img src="https://img.shields.io/badge/Auth-Google_Only-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google 로그인" />
+  <img src="https://img.shields.io/badge/Realtime-WebSocket-EF4B55?style=flat-square" alt="WebSocket 실시간 시세" />
+  <img src="https://img.shields.io/badge/Cache-Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis 캐시" />
 </p>
 
 <a href="https://stockpilot.coders.kr">
-  <img src="docs/images/stockpilot-kospi-live.png" width="720" alt="StockPilot 운영 화면" />
+  <img src="docs/images/stockpilot-nxt-live.png" width="760" alt="StockPilot NXT 스타일 운영 화면" />
 </a>
 
 **[지금 StockPilot 사용하기 →](https://stockpilot.coders.kr)**
+
+<p>
+  <a href="#전체-기능-지도">전체 기능</a> ·
+  <a href="#기능을-하나씩-알아보기">기능 설명</a> ·
+  <a href="#서비스-구조">서비스 구조</a> ·
+  <a href="#로컬에서-실행하기">로컬 실행</a>
+</p>
 
 </div>
 
@@ -35,6 +46,28 @@
 > StockPilot의 모든 매수·매도는 서비스 내부 가상원장에만 기록됩니다. 실제 증권계좌로 주문을 보내지 않으며, 계좌번호나 계좌 비밀번호를 요구하지 않습니다.
 
 메인 화면은 국내 대체거래소의 세션 중심 정보 구조에서 영감을 받아 독자적으로 디자인했습니다. NEXTRADE의 로고·이미지·화면 자산을 사용하지 않으며 NEXTRADE와 제휴된 서비스가 아닙니다.
+
+---
+
+## 현재 운영 버전 핵심 업데이트
+
+| 업데이트 | 적용 내용 |
+|---|---|
+| NXT 스타일 메인 UI | 프리마켓·메인마켓·애프터마켓 세션을 전면에 배치한 다크 레드 시장 화면 |
+| 더 빠른 첫 진입 | 마지막 정상 시세 즉시 복원, bootstrap 일괄 조회, 지연 로딩, CDN 공개 캐시 |
+| 전체 종목 식별 강화 | TOP 10뿐 아니라 검색 가능한 한국·미국 종목에도 회사 로고와 안전한 이니셜 대체 적용 |
+| 대규모 접속 대비 | Redis 공용 캐시, 분산 single-flight, WebSocket 직렬화 공유, 요청 제한과 트래픽 지표 |
+| 브라우저 브랜드 경험 | 기본 지구본 대신 StockPilot 상승 차트 전용 파비콘 적용 |
+| 깔끔한 운영 화면 | 서비스와 무관한 우측 하단 지원 위젯과 호스팅 문구 제거 |
+
+### 서비스 바로가기
+
+| 화면 | 링크 | 할 수 있는 일 |
+|---|---|---|
+| 가상투자 홈 | [열기](https://stockpilot.coders.kr) | 시장 확인, 종목 검색, 분석, 주문, 포트폴리오 |
+| 성장 허브 | [열기](https://stockpilot.coders.kr/growth) | 5분 챌린지, 투자일지, 복기, 실력점수, 주간 성적표 |
+| 시세 연습 | [열기](https://stockpilot.coders.kr/practice) | 미래 가격을 가린 과거 차트 리플레이 |
+| 수익률 리그 | [열기](https://stockpilot.coders.kr/league) | 공개 리그, 비공개 시즌전, 친구와 1:1 배틀 |
 
 ---
 
@@ -66,11 +99,11 @@ Google 로그인
 <table>
   <tr>
     <td align="center" width="58%">
-      <img src="docs/images/stockpilot-overview-hd.png" width="440" alt="StockPilot 시장과 가상자산 화면" />
+      <img src="docs/images/stockpilot-nxt-live.png" width="460" alt="StockPilot NXT 스타일 시장 화면" />
       <br />
-      <b>시장·자산 대시보드</b>
+      <b>KRX·NXT 시장 대시보드</b>
       <br />
-      <sub>가상자산, 장 운영 상태, 한국·미국 주요 종목을 한 화면에서 확인</sub>
+      <sub>거래 세션, 가상자산, 한국·미국 주요 종목을 한 화면에서 확인</sub>
     </td>
     <td align="center" width="42%">
       <img src="docs/images/stockpilot-search.jpg" width="250" alt="StockPilot 전체 종목 검색 화면" />
@@ -133,6 +166,7 @@ Google 로그인
 | 경쟁 | 친구와 1:1 투자 배틀 | 초대 링크로 1·3·7일 대결, 최대 2명·보유 종목 비공개 |
 | 사용자 | Google 로그인 | 하나의 Google 계정으로 가상자산과 기록 보존 |
 | 사용자 | 사용자별 데이터 분리 | 잔고, 주문, 관심종목, 알림, 리그 기록을 계정별 관리 |
+| 브랜드 | 전용 브라우저 아이콘 | 탭·즐겨찾기에서 기본 지구본 대신 StockPilot을 바로 식별 |
 
 ---
 
@@ -534,6 +568,7 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | Company Data | 금융감독원 OpenDART |
 | Push | Firebase Cloud Messaging, Web Push |
 | Infrastructure | Docker, Docker Compose, coders.kr |
+| Browser identity | Next.js Metadata, SVG favicon, Apple touch icon |
 
 ### 주요 API
 
@@ -632,6 +667,7 @@ backend/
 
 frontend/
   app/
+    icon.svg              브라우저 탭·즐겨찾기용 StockPilot 아이콘
     page.tsx              메인 가상투자
     practice/page.tsx     과거 시세 리플레이
     league/page.tsx       공개·비공개 리그
@@ -654,6 +690,7 @@ compose.yaml              로컬 개발 환경
 coders.yaml               coders.kr 배포 설정
 ```
 
+<a id="로컬에서-실행하기"></a>
 <details>
 <summary><b>로컬에서 실행하기</b></summary>
 
