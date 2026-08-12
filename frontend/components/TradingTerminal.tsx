@@ -19,7 +19,9 @@ import {
   MessageCircle,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
+  Target,
   Trophy,
   Wifi,
   X,
@@ -77,7 +79,24 @@ type Order = {
   orderType: string;
   quantity: number;
   fillPrice: number | null;
+  referencePrice?: number | null;
+  spreadBps?: number | null;
+  slippageBps?: number | null;
+  participationRate?: number | null;
   status: string;
+  createdAt: string;
+};
+type Protection = {
+  id: string;
+  symbol: string;
+  exchange: string;
+  quantity: number;
+  takeProfitPrice: number;
+  stopLossPrice: number;
+  status: string;
+  triggerReason: string | null;
+  exitOrderId: string | null;
+  triggeredAt: string | null;
   createdAt: string;
 };
 type Portfolio = {
@@ -85,6 +104,7 @@ type Portfolio = {
   cash: Record<Currency, number>;
   positions: Position[];
   orders: Order[];
+  protections: Protection[];
 };
 type MarketStatus = {
   configured: boolean;
@@ -175,6 +195,7 @@ export default function TradingTerminal() {
     cash: { KRW: 100_000_000, USD: 100_000 },
     positions: [],
     orders: [],
+    protections: [],
   });
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
@@ -198,6 +219,9 @@ export default function TradingTerminal() {
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [stressMove, setStressMove] = useState(-5);
+  const [protectionQuantity, setProtectionQuantity] = useState("1");
+  const [takeProfitPrice, setTakeProfitPrice] = useState("");
+  const [stopLossPrice, setStopLossPrice] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
   const toastTimer = useRef<number | null>(null);
 
@@ -403,9 +427,19 @@ export default function TradingTerminal() {
         order.exchange === quote?.exchange,
     )
     .reduce((sum, order) => sum + order.quantity, 0);
+  const activeProtections = portfolio.protections.filter(
+    (plan) =>
+      plan.status === "ACTIVE" &&
+      plan.symbol === activeSymbol &&
+      plan.exchange === quote?.exchange,
+  );
+  const protectedSellQuantity = activeProtections.reduce(
+    (sum, plan) => sum + plan.quantity,
+    0,
+  );
   const availableSellQuantity = Math.max(
     0,
-    (activePosition?.quantity ?? 0) - pendingSellQuantity,
+    (activePosition?.quantity ?? 0) - pendingSellQuantity - protectedSellQuantity,
   );
   const requestedQuantity = Number(quantity);
   const sellIssue =
@@ -514,6 +548,17 @@ export default function TradingTerminal() {
       largest && largestTotal > 0 ? (largest.marketValue / largestTotal) * 100 : 0;
     const winners = portfolio.positions.filter((position) => position.profit > 0).length;
     const losers = portfolio.positions.filter((position) => position.profit < 0).length;
+    const protectedValue = portfolio.protections
+      .filter((plan) => plan.status === "ACTIVE")
+      .reduce((sum, plan) => {
+        const position = portfolio.positions.find(
+          (item) => item.symbol === plan.symbol && item.exchange === plan.exchange,
+        );
+        if (!position) return sum;
+        return sum + Math.min(plan.quantity, position.quantity) * position.currentPrice;
+      }, 0);
+    const totalInvested = invested.KRW + invested.USD;
+    const protectionCoverage = totalInvested > 0 ? (protectedValue / totalInvested) * 100 : 0;
     const notices: string[] = [];
     const stressLoss = {
       KRW: invested.KRW * (stressMove / 100),
@@ -525,401 +570,7 @@ export default function TradingTerminal() {
       notices.push("아직 보유 종목이 없어 현금 중심의 안정 상태예요.");
     } else {
       if (concentration >= 55 && largest) {
-        notices.push(`${largest.name} 비중이 ${concentration.toFixed(0)}%로 높아요.`);
-      }
-      if (cashRatio.KRW < 8 && cashRatio.USD < 8) {
-        notices.push("원화와 달러 현금 비중이 모두 낮아 추가 주문 여력이 작아요.");
-      } else if (cashRatio.KRW > 80 && cashRatio.USD > 80) {
-        notices.push("현금 비중이 높아 아직 시장 노출이 작은 편이에요.");
-      }
-      if (losers > winners && losers > 0) {
-        notices.push("손실 중인 종목이 더 많아 손절·목표가 알림을 점검해 보세요.");
-      }
-      if (!notices.length) {
-        notices.push("현금, 보유 비중, 손익 균형이 무난한 상태예요.");
-      }
-    }
-    return {
-      cashRatio,
-      concentration,
-      largest,
-      losers,
-      notices: notices.slice(0, 3),
-      positionCount: portfolio.positions.length,
-      stressLoss,
-      winners,
-    };
-  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, positionValues, stressMove]);
-
-  const rememberStock = useCallback((item: SearchItem) => {
-    setRecentStocks((current) => {
-      const next = [
-        item,
-        ...current.filter(
-          (entry) =>
-            !(
-              entry.symbol === item.symbol &&
-              entry.exchange === item.exchange &&
-              entry.market === item.market
-            ),
-        ),
-      ].slice(0, 6);
-      localStorage.setItem("stockpilot_recent_stocks", JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  function selectTopQuote(item: Quote) {
-    setSelected(item.id);
-    setLimitPrice(String(item.price));
-    setTriggerPrice(String(item.price));
-    rememberStock({
-      id: item.id,
-      symbol: item.symbol,
-      name: item.name,
-      englishName: "",
-      market: item.market,
-      currency: item.currency,
-      exchange: item.exchange,
-      logoUrl: item.logoUrl,
-    });
-  }
-
-  async function chooseSearchResult(item: SearchItem) {
-    setSearching(true);
-    try {
-      const response = await fetch(
-        `/api/trading/quote?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}&exchange=${item.exchange}`,
-        { cache: "no-store" },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "시세를 불러오지 못했어요.");
-      setQuotes((current) => [...current.filter((entry) => entry.id !== data.id), data]);
-      setSelected(data.id);
-      setLimitPrice(String(data.price));
-      setTriggerPrice(String(data.price));
-      rememberStock({
-        id: data.id,
-        symbol: data.symbol,
-        name: data.name,
-        englishName: item.englishName || "",
-        market: data.market,
-        currency: data.currency,
-        exchange: data.exchange,
-        logoUrl: data.logoUrl,
-      });
-      setSearchResults([]);
-      setSearchQuery("");
-      document.querySelector(".order-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
-    } finally {
-      setSearching(false);
-    }
-  }
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    location.href = "/";
-  }
-
-  async function cancelOrder(orderId: string) {
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/trading/orders/${orderId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "주문을 취소하지 못했어요.");
-      notify("대기 중인 지정가 가상주문을 취소했어요.");
-      await refreshPortfolio();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function setQuickQuantity(percent: number) {
-    const maximum =
-      side === "SELL" && portfolio.authenticated
-        ? availableSellQuantity
-        : maxBuyQuantity;
-    const next =
-      percent === 100
-        ? maximum
-        : Math.floor(maximum * (percent / 100));
-    setQuantity(String(Math.max(1, next)));
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!portfolio.authenticated) {
-      location.href = `/api/auth/google/login?return_to=${encodeURIComponent(location.pathname + location.search)}`;
-      return;
-    }
-    if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
-      notify("주문 수량을 1주 이상 입력해 주세요.");
-      return;
-    }
-    if (sellIssue) {
-      notify(sellIssue);
-      return;
-    }
-    setConfirmingOrder(true);
-  }
-
-  async function placeOrder() {
-    setBusy(true);
-    try {
-      // Keep one key for this confirmed submission. Browser/network retries
-      // can no longer create a second simulated fill for the same click.
-      const idempotencyKey = crypto.randomUUID();
-      const response = await fetch("/api/trading/orders", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": idempotencyKey,
-        },
-        body: JSON.stringify({
-          symbol: activeSymbol,
-          market: quote?.market,
-          exchange: quote?.exchange,
-          side,
-          orderType: kind,
-          quantity: Number(quantity),
-          limitPrice: ["LIMIT", "STOP_LIMIT"].includes(kind) ? Number(limitPrice) : null,
-          triggerPrice: ["STOP", "STOP_LIMIT"].includes(kind) ? Number(triggerPrice) : null,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "주문을 접수하지 못했어요.");
-      notify(
-        data.status === "FILLED"
-          ? `${selectedName} 가상주문이 ${money(data.fillPrice, data.currency)}에 체결됐어요.`
-          : `${selectedName} 지정가 가상주문을 접수했어요.`,
-      );
-      await refreshPortfolio();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
-    } finally {
-      setBusy(false);
-      setConfirmingOrder(false);
-    }
-  }
-
-  return (
-    <main className="app">
-      <header className="topbar">
-        <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
-        <div className="top-actions">
-          <a className="league-link growth-link" href="/growth"><Gauge size={16} /> 성장 허브</a>
-          <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
-          <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
-          <a className="league-link lounge-link" href="/lounge"><MessageCircle size={16} /> 투자 라운지</a>
-          <InstallAppButton />
-          <button type="button" className="help-button" aria-label="처음 이용 안내" title="처음 이용 안내" onClick={() => setGuideOpen(true)}><HelpCircle size={19} /></button>
-          <button aria-label="검색"><Search size={19} /></button>
-          <button
-            className="alert-button"
-            aria-label={unreadAlerts ? `읽지 않은 알림 ${unreadAlerts}개` : "알림"}
-            onClick={() => setAlertFocusKey((value) => value + 1)}
-          >
-            <Bell size={19} />
-            {unreadAlerts > 0 && (
-              <span className="alert-count">{unreadAlerts > 99 ? "99+" : unreadAlerts}</span>
-            )}
-          </button>
-          {portfolio.authenticated ? (
-            <button className="user-chip" onClick={logout} title="로그아웃">
-              {me?.picture ? <span className="avatar profile-photo" style={{ backgroundImage: `url("${me.picture}")` }} /> : <span className="avatar">{me?.display_name?.[0] || "G"}</span>}
-              <span>{me?.display_name || "내 계정"}</span><LogOut size={14} />
-            </button>
-          ) : (
-            <a
-              className="login"
-              href="/api/auth/google/login?return_to=%2F"
-            >
-              <LogIn size={16} /> Google로 로그인
-            </a>
-          )}
-        </div>
-      </header>
-
-      <section className="hero nxt-hero">
-        <MarketHeroCarousel live={live} statusText={marketConnectionText} />
-        <div className="hero-sessions" aria-label="NXT 거래 세션">
-          {marketSessions.map((item) => (
-            <div className={`hero-session${item.active ? " active" : ""}`} key={item.label}>
-              <small>{item.active ? "NOW TRADING" : "SESSION"}</small>
-              <b>{item.label}</b>
-              <span>{item.time}</span>
-            </div>
-          ))}
-          <div className="hero-session hero-session-status">
-            <small>MARKET STATUS</small>
-            <b>{session.label}</b>
-            <span>{session.detail}</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="summary">
-        <article className="balance-card">
-          <div className="card-title"><span>내 가상자산</span><small>KRW · USD</small></div>
-          <strong>{money(portfolio.cash.KRW + positionValues.KRW, "KRW")}</strong>
-          <div className="balance-detail">
-            <span>원화 주문 가능 <b>{money(portfolio.cash.KRW, "KRW")}</b></span>
-            <span>달러 주문 가능 <b>{money(portfolio.cash.USD, "USD")}</b></span>
-            <span>국내 평가손익 <b className={performance.KRW >= 0 ? "up" : "down"}>{money(performance.KRW, "KRW")}</b></span>
-            <span>미국 평가손익 <b className={performance.USD >= 0 ? "up" : "down"}>{money(performance.USD, "USD")}</b></span>
-          </div>
-        </article>
-        <article className="guide-card">
-          <CircleDollarSign size={23} />
-          <div><b>시작 가상자금</b><p>1억원과 $100,000가 사용자별로 별도 관리돼요.</p></div>
-          <ChevronRight size={18} />
-        </article>
-        <article className="market-clock-card">
-          <Clock3 size={23} />
-          <div><b>{session.label}</b><p>{session.detail}</p></div>
-          <span>KRX+NXT</span>
-        </article>
-      </section>
-
-      <MarketIndexChart initialData={bootstrapKospi} />
-
-      <section className="insight-grid" aria-label="시장과 내 투자 체크업">
-        <article className="pulse-card">
-          <div className="insight-title">
-            <span><BarChart3 size={16} /> 오늘의 시장 요약</span>
-            <small>{marketPulse.total ? `${marketPulse.total}개 주요 종목 기준` : "시세 수신 대기"}</small>
-          </div>
-          <strong className={marketPulse.average >= 0 ? "up" : "down"}>
-            {percentText(marketPulse.average)}
-          </strong>
-          <p>
-            주요 종목 중 {marketPulse.risingCount}개가 상승 중이에요.
-            {marketPulse.riser && marketPulse.faller
-              ? ` 강한 종목은 ${marketPulse.riser.name}, 약한 종목은 ${marketPulse.faller.name}입니다.`
-              : " 시세가 들어오면 상승·하락 종목을 자동으로 요약해요."}
-          </p>
-          <div className="pulse-movers">
-            <span>
-              <small>상승 선두</small>
-              <b>{marketPulse.riser ? marketPulse.riser.name : "—"}</b>
-              <em className="up">{marketPulse.riser ? percentText(marketPulse.riser.changePercent) : "—"}</em>
-            </span>
-            <span>
-              <small>하락 선두</small>
-              <b>{marketPulse.faller ? marketPulse.faller.name : "—"}</b>
-              <em className="down">{marketPulse.faller ? percentText(marketPulse.faller.changePercent) : "—"}</em>
-            </span>
-          </div>
-        </article>
-
-        <article className="checkup-card">
-          <div className="insight-title">
-            <span><Gauge size={16} /> 내 투자 체크업</span>
-            <small>{portfolioCheck.positionCount}개 보유 종목</small>
-          </div>
-          <div className="checkup-metrics">
-            <span>
-              <small>원화 현금</small>
-              <b>{portfolioCheck.cashRatio.KRW.toFixed(0)}%</b>
-            </span>
-            <span>
-              <small>달러 현금</small>
-              <b>{portfolioCheck.cashRatio.USD.toFixed(0)}%</b>
-            </span>
-            <span>
-              <small>최대 비중</small>
-              <b>{portfolioCheck.concentration.toFixed(0)}%</b>
-            </span>
-            <span>
-              <small>손익 종목</small>
-              <b>{portfolioCheck.winners}/{portfolioCheck.losers}</b>
-            </span>
-          </div>
-          <div className="checkup-advice">
-            <PieChart size={16} />
-            <div>
-              {portfolioCheck.notices.map((notice) => (
-                <p key={notice}>{notice}</p>
-              ))}
-            </div>
-          </div>
-          <div className="stress-test">
-            <div className="stress-head">
-              <span><BrainCircuit size={15} /> 급락 스트레스 테스트</span>
-              <div>
-                {[-1, -3, -5, -10].map((move) => (
-                  <button
-                    className={stressMove === move ? "active" : ""}
-                    key={move}
-                    onClick={() => setStressMove(move)}
-                    type="button"
-                  >
-                    {move}%
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="stress-result">
-              <span><small>국내 보유분 예상 변동</small><b>{money(portfolioCheck.stressLoss.KRW, "KRW")}</b></span>
-              <span><small>미국 보유분 예상 변동</small><b>{money(portfolioCheck.stressLoss.USD, "USD")}</b></span>
-            </div>
-            <p>모든 보유 종목이 같은 폭으로 움직인 단순 가정이며, 실제 손실 예측이나 투자 조언이 아닙니다.</p>
-          </div>
-        </article>
-      </section>
-
-      <section className="content">
-        <div className="market-column">
-          <div className="section-head">
-            <div><h2>실시간 주요 종목 TOP 10</h2><p>국내는 KRX+NXT 통합 시세를 1초마다 화면에 반영해요</p></div>
-            <span className="source"><Wifi size={13} /> {quote?.source || "KIS 연결 중"}</span>
-          </div>
-          {([["한국", krTop], ["미국", usTop]] as const).map(([label, items]) => (
-            <div className="market-block" key={label}>
-              <div className="market-label"><b>{label} 주식</b><span>{label === "한국" ? "KRX+NXT · TOP 10" : "TOP 10"}</span></div>
-              <div className="watchlist">
-                {items.length === 0
-                  ? [...Array(10)].map((_, index) => <div className="quote skeleton" key={index} />)
-                  : items.map((item) => (
-                  <button
-                    className={`quote ${selected === item.id ? "active" : ""}`}
-                    key={item.id}
-                    onClick={() => selectTopQuote(item)}
-                  >
-                    <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} logoUrl={item.logoUrl} />
-                    <span className="company"><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span>
-                    <span className="quote-price">
-                      <b>{money(item.price, item.currency)}</b>
-                      <small className={item.changePercent >= 0 ? "up" : "down"}>
-                        {item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%
-                      </small>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="search-card">
-            <div className="section-head">
-              <div><h2>모든 종목 검색</h2><p>종목명이나 종목코드·티커를 입력하세요</p></div>
-            </div>
-            <div className="search-controls">
-              <div className="search-input"><Search size={18} /><input value={searchQuery} onChange={(event) => {
-                const value = event.target.value;
-                setSearchQuery(value);
-                if (value.trim()) {
-                  setSearching(true);
-                } else {
-                  setSearchResults([]);
+        notices.push(`${largest.nam…4888 tokens truncated…ts([]);
                   setSearching(false);
                 }
               }} placeholder="예: 삼성전자, 카카오, AAPL, PLTR" /></div>
@@ -1147,6 +798,68 @@ export default function TradingTerminal() {
             </button>
             <p className="disclaimer">국내 시세는 KIS KRX+NXT 통합(UN), 체결과 자산은 StockPilot 내부 가상 데이터입니다.</p>
           </form>
+          {portfolio.authenticated && (
+            <section className="position-protection" aria-labelledby="position-protection-title">
+              <div className="protection-title">
+                <span><ShieldCheck size={16} /></span>
+                <div>
+                  <h3 id="position-protection-title">익절·손절 동시 보호</h3>
+                  <p>둘 중 먼저 도달한 가격으로 가상 청산하고 나머지는 자동 취소해요.</p>
+                </div>
+              </div>
+              {activePosition ? (
+                <>
+                  <form onSubmit={createProtection}>
+                    <label>보호 수량
+                      <input
+                        type="number"
+                        min="1"
+                        max={Math.max(1, availableSellQuantity)}
+                        value={protectionQuantity}
+                        onChange={(event) => setProtectionQuantity(event.target.value)}
+                      />
+                    </label>
+                    <label>익절 가격
+                      <input
+                        type="number"
+                        min="0.01"
+                        step={quote?.currency === "KRW" ? "1" : "0.01"}
+                        placeholder={quote ? String(Math.round(quote.price * 1.1 * (quote.currency === "KRW" ? 1 : 100)) / (quote.currency === "KRW" ? 1 : 100)) : ""}
+                        value={takeProfitPrice}
+                        onChange={(event) => setTakeProfitPrice(event.target.value)}
+                      />
+                    </label>
+                    <label>손절 가격
+                      <input
+                        type="number"
+                        min="0.01"
+                        step={quote?.currency === "KRW" ? "1" : "0.01"}
+                        placeholder={quote ? String(Math.round(quote.price * 0.95 * (quote.currency === "KRW" ? 1 : 100)) / (quote.currency === "KRW" ? 1 : 100)) : ""}
+                        value={stopLossPrice}
+                        onChange={(event) => setStopLossPrice(event.target.value)}
+                      />
+                    </label>
+                    <button disabled={busy || availableSellQuantity <= 0}>
+                      <Target size={14} /> 보호 설정
+                    </button>
+                  </form>
+                  {activeProtections.length > 0 && (
+                    <div className="protection-list">
+                      {activeProtections.map((plan) => (
+                        <article key={plan.id}>
+                          <span><b>{plan.quantity}주 보호 중</b><small>익절 {money(plan.takeProfitPrice, quote?.currency ?? "KRW")} · 손절 {money(plan.stopLossPrice, quote?.currency ?? "KRW")}</small></span>
+                          <button type="button" disabled={busy} onClick={() => cancelProtection(plan.id)}>취소</button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                  <small className="protection-disclaimer">5초 간격으로 실제 KIS 시세를 확인하며, 체결 시 모의 호가 차이와 슬리피지를 반영해요.</small>
+                </>
+              ) : (
+                <p className="protection-empty">선택한 종목을 보유하면 익절·손절 가격을 함께 설정할 수 있어요.</p>
+              )}
+            </section>
+          )}
           {portfolio.orders.length > 0 && (
             <div className="orders">
               <h3>최근 가상주문</h3>
@@ -1165,6 +878,9 @@ export default function TradingTerminal() {
                               ? "취소"
                               : "거절"}
                     </em>
+                    {order.status === "FILLED" && order.slippageBps != null && (
+                      <small className="execution-quality">체결비용 {order.slippageBps.toFixed(1)}bp</small>
+                    )}
                     {["OPEN", "TRIGGERED"].includes(order.status) && <button type="button" disabled={busy} onClick={() => cancelOrder(order.id)}>주문취소</button>}
                   </span>
                 </div>
@@ -1246,3 +962,4 @@ export default function TradingTerminal() {
     </main>
   );
 }
+
