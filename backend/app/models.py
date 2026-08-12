@@ -95,7 +95,9 @@ class TradeOrder(Base):
         sa.UUID(as_uuid=True), nullable=False, index=True
     )
     idempotency_key: Mapped[str | None] = mapped_column(sa.String(128), nullable=True)
-    request_fingerprint: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(
+        sa.String(64), nullable=True
+    )
     symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
     exchange: Mapped[str] = mapped_column(
         sa.String(8), nullable=False, default="KRX", server_default="KRX"
@@ -113,6 +115,8 @@ class TradeOrder(Base):
         sa.Numeric(18, 4), nullable=False, default=0, server_default="0"
     )
     realized_pnl: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
+    risk_code: Mapped[str | None] = mapped_column(sa.String(32))
+    reject_reason: Mapped[str | None] = mapped_column(sa.String(200))
     status: Mapped[str] = mapped_column(sa.String(12), nullable=False, default="OPEN")
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), index=True
@@ -145,6 +149,60 @@ class AuditEvent(Base):
     )
     request_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, index=True)
     details: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        nullable=False,
+        index=True,
+    )
+
+
+class TradingControl(Base):
+    """Single-row operational kill switch and pre-trade risk limits."""
+
+    __tablename__ = "trading_controls"
+    scope: Mapped[str] = mapped_column(sa.String(16), primary_key=True)
+    halted: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
+    )
+    halt_reason: Mapped[str | None] = mapped_column(sa.String(200))
+    max_order_notional_krw: Mapped[Decimal] = mapped_column(
+        sa.Numeric(18, 0), nullable=False, default=100_000_000
+    )
+    max_order_notional_usd: Mapped[Decimal] = mapped_column(
+        sa.Numeric(18, 2), nullable=False, default=100_000
+    )
+    max_open_orders: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=20)
+    max_daily_orders: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=200
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(sa.UUID(as_uuid=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+        nullable=False,
+    )
+
+
+class ReconciliationRun(Base):
+    """Immutable summary of one ledger consistency check."""
+
+    __tablename__ = "reconciliation_runs"
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    status: Mapped[str] = mapped_column(sa.String(16), nullable=False)
+    account_count: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    order_count: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    position_count: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    discrepancy_count: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    cash_krw_total: Mapped[Decimal] = mapped_column(sa.Numeric(24, 0), nullable=False)
+    cash_usd_total: Mapped[Decimal] = mapped_column(sa.Numeric(24, 2), nullable=False)
+    details: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    initiated_by: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         server_default=sa.func.now(),

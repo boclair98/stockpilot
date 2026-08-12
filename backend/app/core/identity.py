@@ -124,3 +124,19 @@ async def require_identity(request: Request) -> UUID:
     if not identity:
         raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
     return identity.id
+
+
+async def require_operator(request: Request) -> Identity:
+    """Require a Google session whose email is explicitly allow-listed."""
+
+    identity = current_identity(request)
+    if not identity:
+        raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
+    allowed = {
+        item.strip().lower()
+        for item in settings.operator_emails.split(",")
+        if item.strip()
+    }
+    if not identity.email or identity.email.lower() not in allowed:
+        raise HTTPException(status_code=403, detail="기관 운영자 권한이 필요합니다.")
+    return identity

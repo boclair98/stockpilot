@@ -70,12 +70,19 @@
 | 운영 준비 상태 | liveness/readiness 분리, DB·Redis·시장 데이터 상태와 요청 지표 제공 |
 | 자동 품질 게이트 | GitHub Actions에서 백엔드 테스트·정적 분석과 프런트 린트·빌드 자동 검증 |
 | 보안 기본선 | API·웹 보안 헤더, 비루트 컨테이너, 환경변수 Secret, 요청 단위 추적 적용 |
+| 기관 사전 위험관리 | 시세 지연, 전체 거래중지, 주문금액·횟수·가격괴리 한도를 주문 전에 서버에서 차단 |
+| 기관 운영센터 | `/operations`에서 킬 스위치, 위험한도, 원장 대사와 감사 이벤트를 권한 기반으로 관리 |
+| 원장 정합성 검사 | 음수 예수금·포지션과 체결가 없는 체결 주문을 점검하고 불일치 결과를 영구 기록 |
+| 실거래 안전 경계 | `SIMULATION` 이외의 거래 모드는 실패 처리하며 승인된 실주문 어댑터는 포함하지 않음 |
 
 > [!NOTE]
 > 현재 제품 수준은 **증권사 모의투자·고객교육용 파일럿 후보**입니다. 실제 고객 돈을
 > 다루는 증권 원장이나 거래소 주문 시스템으로 바로 사용할 수는 없습니다. 도입 범위,
 > 완료된 통제와 실거래 전 필수 조건은 [증권사 도입 준비 기준](docs/BROKERAGE_READINESS.md)에
 > 과장 없이 정리했습니다.
+
+기관 연동에 필요한 계약·API·접속자료는 [금융권 연동 준비 목록](docs/INSTITUTIONAL_INTEGRATION.md)에
+정리되어 있습니다.
 
 ### 서비스 바로가기
 
@@ -87,6 +94,7 @@
 | 수익률 리그 | [열기](https://stockpilot.coders.kr/league) | 공개 리그, 비공개 시즌전, 친구와 1:1 배틀 |
 | 투자 라운지 | [열기](https://stockpilot.coders.kr/lounge) | 투자 습관과 오늘의 배움을 280자 이내로 공유 |
 | 이용 가이드 | [열기](https://stockpilot.coders.kr/guide) | 시작 방법, 데이터 기준과 자주 묻는 질문 |
+| 기관 운영센터 | [열기](https://stockpilot.coders.kr/operations) | 운영자 전용 주문 통제, 원장 대사와 감사 추적 |
 
 ---
 
@@ -689,6 +697,11 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | `PATCH` | `/api/growth/journals/{id}` | 거래 후 복기 저장 | 필요 |
 | `DELETE` | `/api/growth/journals/{id}` | 투자일지 삭제 | 필요 |
 | `GET` | `/api/health/traffic` | 요청 수·오류·평균 지연·공용 캐시 상태 | 없음 |
+| `GET` | `/api/operations/mode` | 실거래 차단 상태를 공개 확인 | 없음 |
+| `GET` | `/api/operations/overview` | 기관 운영 현황·위험통제·원장 상태 | 운영자 |
+| `PUT` | `/api/operations/control` | 킬 스위치와 주문 위험한도 변경 | 운영자 |
+| `POST` | `/api/operations/reconciliations` | 모의 원장 정합성 검사 실행 | 운영자 |
+| `GET` | `/api/operations/audit-events` | 최근 주문·통제 감사 이벤트 조회 | 운영자 |
 
 ### 트래픽 증가에 대비한 운영 구조
 
@@ -735,6 +748,7 @@ backend/
       engagement.py       관심종목·알림·리포트·미션·뉴스
       growth.py           오늘의 챌린지·투자일지·실력점수·성적표
       league.py           공개·비공개 수익률 리그
+      operations.py       운영자 전용 킬 스위치·원장 대사·감사 조회
     services/
       instrument_catalog.py
                           한국·미국 종목 마스터
@@ -743,6 +757,8 @@ backend/
       price_alert_notifier.py
                           목표가 감시
       firebase_push.py    FCM 푸시 전송
+      risk_engine.py      주문 전 시세·한도·가격괴리 위험검사
+      reconciliation.py   모의 원장 정합성 검사와 결과 보존
     core/
       traffic.py          Redis 캐시·요청 제한·관측 지표
   scripts/
@@ -842,6 +858,7 @@ docker compose up
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SESSION_SECRET`
 - `FIREBASE_SERVICE_ACCOUNT_B64`
+- `OPERATOR_EMAILS` — 기관 운영센터에 접근할 Google 이메일 목록
 
 운영 Google OAuth 리디렉션 URI:
 
