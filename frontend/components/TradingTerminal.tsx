@@ -19,7 +19,9 @@ import {
   MessageCircle,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
+  Target,
   Trophy,
   Wifi,
   X,
@@ -77,7 +79,24 @@ type Order = {
   orderType: string;
   quantity: number;
   fillPrice: number | null;
+  referencePrice?: number | null;
+  spreadBps?: number | null;
+  slippageBps?: number | null;
+  participationRate?: number | null;
   status: string;
+  createdAt: string;
+};
+type Protection = {
+  id: string;
+  symbol: string;
+  exchange: string;
+  quantity: number;
+  takeProfitPrice: number;
+  stopLossPrice: number;
+  status: string;
+  triggerReason: string | null;
+  exitOrderId: string | null;
+  triggeredAt: string | null;
   createdAt: string;
 };
 type Portfolio = {
@@ -85,6 +104,7 @@ type Portfolio = {
   cash: Record<Currency, number>;
   positions: Position[];
   orders: Order[];
+  protections: Protection[];
 };
 type MarketStatus = {
   configured: boolean;
@@ -175,6 +195,7 @@ export default function TradingTerminal() {
     cash: { KRW: 100_000_000, USD: 100_000 },
     positions: [],
     orders: [],
+    protections: [],
   });
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
@@ -198,6 +219,9 @@ export default function TradingTerminal() {
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [stressMove, setStressMove] = useState(-5);
+  const [protectionQuantity, setProtectionQuantity] = useState("1");
+  const [takeProfitPrice, setTakeProfitPrice] = useState("");
+  const [stopLossPrice, setStopLossPrice] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
   const toastTimer = useRef<number | null>(null);
 
@@ -403,9 +427,19 @@ export default function TradingTerminal() {
         order.exchange === quote?.exchange,
     )
     .reduce((sum, order) => sum + order.quantity, 0);
+  const activeProtections = portfolio.protections.filter(
+    (plan) =>
+      plan.status === "ACTIVE" &&
+      plan.symbol === activeSymbol &&
+      plan.exchange === quote?.exchange,
+  );
+  const protectedSellQuantity = activeProtections.reduce(
+    (sum, plan) => sum + plan.quantity,
+    0,
+  );
   const availableSellQuantity = Math.max(
     0,
-    (activePosition?.quantity ?? 0) - pendingSellQuantity,
+    (activePosition?.quantity ?? 0) - pendingSellQuantity - protectedSellQuantity,
   );
   const requestedQuantity = Number(quantity);
   const sellIssue =
@@ -514,6 +548,17 @@ export default function TradingTerminal() {
       largest && largestTotal > 0 ? (largest.marketValue / largestTotal) * 100 : 0;
     const winners = portfolio.positions.filter((position) => position.profit > 0).length;
     const losers = portfolio.positions.filter((position) => position.profit < 0).length;
+    const protectedValue = portfolio.protections
+      .filter((plan) => plan.status === "ACTIVE")
+      .reduce((sum, plan) => {
+        const position = portfolio.positions.find(
+          (item) => item.symbol === plan.symbol && item.exchange === plan.exchange,
+        );
+        if (!position) return sum;
+        return sum + Math.min(plan.quantity, position.quantity) * position.currentPrice;
+      }, 0);
+    const totalInvested = invested.KRW + invested.USD;
+    const protectionCoverage = totalInvested > 0 ? (protectedValue / totalInvested) * 100 : 0;
     const notices: string[] = [];
     const stressLoss = {
       KRW: invested.KRW * (stressMove / 100),
@@ -535,6 +580,9 @@ export default function TradingTerminal() {
       if (losers > winners && losers > 0) {
         notices.push("손실 중인 종목이 더 많아 손절·목표가 알림을 점검해 보세요.");
       }
+      if (protectionCoverage < 25) {
+        notices.push(`익절·손절 보호 범위가 ${protectionCoverage.toFixed(0)}%로 낮아요.`);
+      }
       if (!notices.length) {
         notices.push("현금, 보유 비중, 손익 균형이 무난한 상태예요.");
       }
@@ -546,10 +594,11 @@ export default function TradingTerminal() {
       losers,
       notices: notices.slice(0, 3),
       positionCount: portfolio.positions.length,
+      protectionCoverage,
       stressLoss,
       winners,
     };
-  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, positionValues, stressMove]);
+  }, [portfolio.authenticated, portfolio.cash, portfolio.positions, portfolio.protections, positionValues, stressMove]);
 
   const rememberStock = useCallback((item: SearchItem) => {
     setRecentStocks((current) => {
@@ -641,6 +690,66 @@ export default function TradingTerminal() {
     }
   }
 
+  async function createProtection(event: FormEvent) {
+    event.preventDefault();
+    if (!portfolio.authenticated || !quote || !activePosition) return;
+    const takeProfit = Number(takeProfitPrice);
+    const stopLoss = Number(stopLossPrice);
+    const protectedQuantity = Number(protectionQuantity);
+    if (!Number.isFinite(protectedQuantity) || protectedQuantity <= 0) {
+      notify("보호할 수량을 입력해 주세요.");
+      return;
+    }
+    if (takeProfit <= quote.price || stopLoss >= quote.price || stopLoss >= takeProfit) {
+      notify("익절은 현재가보다 높게, 손절은 현재가보다 낮게 입력해 주세요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/trading/protections", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: activeSymbol,
+          market: quote.market,
+          exchange: quote.exchange,
+          quantity: protectedQuantity,
+          takeProfitPrice: takeProfit,
+          stopLossPrice: stopLoss,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "보호 주문을 등록하지 못했어요.");
+      notify(`${selectedName} ${protectedQuantity}주에 익절·손절 보호를 설정했어요.`);
+      setTakeProfitPrice("");
+      setStopLossPrice("");
+      await refreshPortfolio();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelProtection(planId: string) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/trading/protections/${planId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "보호 설정을 취소하지 못했어요.");
+      notify("익절·손절 보호 설정을 취소했어요.");
+      await refreshPortfolio();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function setQuickQuantity(percent: number) {
     const maximum =
       side === "SELL" && portfolio.authenticated
@@ -698,7 +807,7 @@ export default function TradingTerminal() {
       if (!response.ok) throw new Error(data.detail || "주문을 접수하지 못했어요.");
       notify(
         data.status === "FILLED"
-          ? `${selectedName} 가상주문이 ${money(data.fillPrice, data.currency)}에 체결됐어요.`
+          ? `${selectedName} 가상주문이 ${money(data.fillPrice, data.currency)}에 체결됐어요${data.executionQuality?.slippageBps != null ? ` · 체결비용 ${Number(data.executionQuality.slippageBps).toFixed(1)}bp` : ""}.`
           : `${selectedName} 지정가 가상주문을 접수했어요.`,
       );
       await refreshPortfolio();
@@ -841,6 +950,10 @@ export default function TradingTerminal() {
             <span>
               <small>손익 종목</small>
               <b>{portfolioCheck.winners}/{portfolioCheck.losers}</b>
+            </span>
+            <span>
+              <small>보호 범위</small>
+              <b>{portfolioCheck.protectionCoverage.toFixed(0)}%</b>
             </span>
           </div>
           <div className="checkup-advice">
@@ -1147,6 +1260,68 @@ export default function TradingTerminal() {
             </button>
             <p className="disclaimer">국내 시세는 KIS KRX+NXT 통합(UN), 체결과 자산은 StockPilot 내부 가상 데이터입니다.</p>
           </form>
+          {portfolio.authenticated && (
+            <section className="position-protection" aria-labelledby="position-protection-title">
+              <div className="protection-title">
+                <span><ShieldCheck size={16} /></span>
+                <div>
+                  <h3 id="position-protection-title">익절·손절 동시 보호</h3>
+                  <p>둘 중 먼저 도달한 가격으로 가상 청산하고 나머지는 자동 취소해요.</p>
+                </div>
+              </div>
+              {activePosition ? (
+                <>
+                  <form onSubmit={createProtection}>
+                    <label>보호 수량
+                      <input
+                        type="number"
+                        min="1"
+                        max={Math.max(1, availableSellQuantity)}
+                        value={protectionQuantity}
+                        onChange={(event) => setProtectionQuantity(event.target.value)}
+                      />
+                    </label>
+                    <label>익절 가격
+                      <input
+                        type="number"
+                        min="0.01"
+                        step={quote?.currency === "KRW" ? "1" : "0.01"}
+                        placeholder={quote ? String(Math.round(quote.price * 1.1 * (quote.currency === "KRW" ? 1 : 100)) / (quote.currency === "KRW" ? 1 : 100)) : ""}
+                        value={takeProfitPrice}
+                        onChange={(event) => setTakeProfitPrice(event.target.value)}
+                      />
+                    </label>
+                    <label>손절 가격
+                      <input
+                        type="number"
+                        min="0.01"
+                        step={quote?.currency === "KRW" ? "1" : "0.01"}
+                        placeholder={quote ? String(Math.round(quote.price * 0.95 * (quote.currency === "KRW" ? 1 : 100)) / (quote.currency === "KRW" ? 1 : 100)) : ""}
+                        value={stopLossPrice}
+                        onChange={(event) => setStopLossPrice(event.target.value)}
+                      />
+                    </label>
+                    <button disabled={busy || availableSellQuantity <= 0}>
+                      <Target size={14} /> 보호 설정
+                    </button>
+                  </form>
+                  {activeProtections.length > 0 && (
+                    <div className="protection-list">
+                      {activeProtections.map((plan) => (
+                        <article key={plan.id}>
+                          <span><b>{plan.quantity}주 보호 중</b><small>익절 {money(plan.takeProfitPrice, quote?.currency ?? "KRW")} · 손절 {money(plan.stopLossPrice, quote?.currency ?? "KRW")}</small></span>
+                          <button type="button" disabled={busy} onClick={() => cancelProtection(plan.id)}>취소</button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                  <small className="protection-disclaimer">5초 간격으로 실제 KIS 시세를 확인하며, 체결 시 모의 호가 차이와 슬리피지를 반영해요.</small>
+                </>
+              ) : (
+                <p className="protection-empty">선택한 종목을 보유하면 익절·손절 가격을 함께 설정할 수 있어요.</p>
+              )}
+            </section>
+          )}
           {portfolio.orders.length > 0 && (
             <div className="orders">
               <h3>최근 가상주문</h3>
@@ -1165,6 +1340,9 @@ export default function TradingTerminal() {
                               ? "취소"
                               : "거절"}
                     </em>
+                    {order.status === "FILLED" && order.slippageBps != null && (
+                      <small className="execution-quality">체결비용 {order.slippageBps.toFixed(1)}bp</small>
+                    )}
                     {["OPEN", "TRIGGERED"].includes(order.status) && <button type="button" disabled={busy} onClick={() => cancelOrder(order.id)}>주문취소</button>}
                   </span>
                 </div>

@@ -648,7 +648,7 @@ iframe[title*="support" i] {
 
 .checkup-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 7px;
 }
 
@@ -1202,3 +1202,4 @@ iframe[title*="support" i] {
     min-height: 76px;
   }
 }
+

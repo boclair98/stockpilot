@@ -108,6 +108,10 @@ class TradeOrder(Base):
     limit_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     trigger_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
     fill_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
+    reference_price: Mapped[Decimal | None] = mapped_column(sa.Numeric(18, 4))
+    spread_bps: Mapped[Decimal | None] = mapped_column(sa.Numeric(10, 4))
+    slippage_bps: Mapped[Decimal | None] = mapped_column(sa.Numeric(10, 4))
+    participation_rate: Mapped[Decimal | None] = mapped_column(sa.Numeric(12, 8))
     fee: Mapped[Decimal] = mapped_column(
         sa.Numeric(18, 4), nullable=False, default=0, server_default="0"
     )
@@ -124,6 +128,46 @@ class TradeOrder(Base):
     __table_args__ = (
         sa.UniqueConstraint(
             "owner_id", "idempotency_key", name="uq_trade_orders_owner_idempotency"
+        ),
+    )
+
+
+class ProtectionPlan(Base):
+    """OCO-style simulated take-profit and stop-loss for an owned position."""
+
+    __tablename__ = "protection_plans"
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(sa.Numeric(18, 6), nullable=False)
+    take_profit_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    stop_loss_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    status: Mapped[str] = mapped_column(
+        sa.String(12), nullable=False, default="ACTIVE", server_default="ACTIVE"
+    )
+    trigger_reason: Mapped[str | None] = mapped_column(sa.String(16))
+    exit_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("trade_orders.id", ondelete="SET NULL"), nullable=True
+    )
+    triggered_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.CheckConstraint("quantity > 0", name="ck_protection_quantity_positive"),
+        sa.CheckConstraint(
+            "status IN ('ACTIVE', 'TRIGGERED', 'FILLED', 'FAILED', 'CANCELED')",
+            name="ck_protection_status",
+        ),
+        sa.CheckConstraint(
+            "take_profit_price > stop_loss_price",
+            name="ck_protection_price_order",
         ),
     )
 
@@ -479,3 +523,4 @@ class TradeJournal(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
+

@@ -28,8 +28,9 @@ from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
 from app.core.order_integrity import normalize_idempotency_key, request_fingerprint
 from app.core.traffic import traffic_store
-from app.models import Position, TradeOrder, TradingAccount
+from app.models import Position, ProtectionPlan, TradeOrder, TradingAccount
 from app.services.audit import record_audit
+from app.services.execution_quality import simulated_fill
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.risk_engine import assess_pretrade, load_control, quote_age_seconds
@@ -210,8 +211,19 @@ async def sell_capacity(
         .scalars()
         .all()
     )
+    protection_quantity = (
+        await session.execute(
+            sa.select(sa.func.coalesce(sa.func.sum(ProtectionPlan.quantity), 0)).where(
+                ProtectionPlan.owner_id == owner,
+                ProtectionPlan.symbol == symbol,
+                ProtectionPlan.exchange == exchange,
+                ProtectionPlan.status == "ACTIVE",
+            )
+        )
+    ).scalar_one()
     held = Decimal(position.quantity) if position else Decimal("0")
     reserved = sum((Decimal(item.quantity) for item in pending_orders), Decimal("0"))
+    reserved += Decimal(protection_quantity)
     return held, reserved
 
 
@@ -220,6 +232,7 @@ async def execute(
     order: TradeOrder,
     instrument: Instrument,
     price: Decimal,
+    quote: dict | None = None,
 ) -> None:
     wallet = await account(session, order.owner_id, lock=True)
     position = (
@@ -234,6 +247,24 @@ async def execute(
         )
     ).scalar_one_or_none()
     quantity = Decimal(order.quantity)
+    quality = simulated_fill(
+        reference_price=price,
+        side=order.side,
+        quantity=quantity,
+        currency=instrument.currency,
+        quote=quote or {"price": price},
+        limit_price=(
+            Decimal(order.limit_price)
+            if order.order_type in {"LIMIT", "STOP_LIMIT"}
+            and order.limit_price is not None
+            else None
+        ),
+    )
+    price = quality.price
+    order.reference_price = quality.reference_price
+    order.spread_bps = quality.spread_bps
+    order.slippage_bps = quality.slippage_bps
+    order.participation_rate = quality.participation_rate
     total = quantity * price
     fee, tax = simulation_charges(total, instrument.currency, order.side)
     cash_field = "cash_krw" if instrument.currency == "KRW" else "cash"
@@ -309,7 +340,7 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
                 details={"from": previous_status, "status": next_status},
             )
         if should_execute:
-            await execute(session, order, instrument, price)
+            await execute(session, order, instrument, price, quote)
             record_audit(
                 session,
                 actor_id=order.owner_id,
@@ -333,6 +364,15 @@ class OrderIn(BaseModel):
     triggerPrice: Decimal | None = Field(default=None, gt=0)
 
 
+class ProtectionIn(BaseModel):
+    symbol: str
+    market: str
+    exchange: str
+    quantity: Decimal = Field(gt=0, le=10000)
+    takeProfitPrice: Decimal = Field(gt=0)
+    stopLossPrice: Decimal = Field(gt=0)
+
+
 def order_receipt(
     row: TradeOrder, currency: str, *, replayed: bool = False
 ) -> dict:
@@ -343,6 +383,20 @@ def order_receipt(
         "currency": currency,
         "replayed": replayed,
         "riskCode": row.risk_code,
+        "executionQuality": {
+            "referencePrice": (
+                float(row.reference_price) if row.reference_price is not None else None
+            ),
+            "spreadBps": float(row.spread_bps) if row.spread_bps is not None else None,
+            "slippageBps": (
+                float(row.slippage_bps) if row.slippage_bps is not None else None
+            ),
+            "participationRate": (
+                float(row.participation_rate)
+                if row.participation_rate is not None
+                else None
+            ),
+        },
     }
     if row.reject_reason:
         receipt["detail"] = row.reject_reason
@@ -418,6 +472,7 @@ async def portfolio(
             "cash": {"KRW": 100_000_000, "USD": 100_000},
             "positions": [],
             "orders": [],
+            "protections": [],
         }
 
     await process_open_orders(session, owner)
@@ -433,6 +488,18 @@ async def portfolio(
                 sa.select(TradeOrder)
                 .where(TradeOrder.owner_id == owner)
                 .order_by(TradeOrder.created_at.desc())
+                .limit(30)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    protections = (
+        (
+            await session.execute(
+                sa.select(ProtectionPlan)
+                .where(ProtectionPlan.owner_id == owner)
+                .order_by(ProtectionPlan.created_at.desc())
                 .limit(30)
             )
         )
@@ -507,10 +574,46 @@ async def portfolio(
                     if order.realized_pnl is not None
                     else None
                 ),
+                "referencePrice": (
+                    float(order.reference_price)
+                    if order.reference_price is not None
+                    else None
+                ),
+                "spreadBps": (
+                    float(order.spread_bps) if order.spread_bps is not None else None
+                ),
+                "slippageBps": (
+                    float(order.slippage_bps)
+                    if order.slippage_bps is not None
+                    else None
+                ),
+                "participationRate": (
+                    float(order.participation_rate)
+                    if order.participation_rate is not None
+                    else None
+                ),
                 "status": order.status,
                 "createdAt": order.created_at.isoformat(),
             }
             for order in orders
+        ],
+        "protections": [
+            {
+                "id": str(plan.id),
+                "symbol": plan.symbol,
+                "exchange": plan.exchange,
+                "quantity": float(plan.quantity),
+                "takeProfitPrice": float(plan.take_profit_price),
+                "stopLossPrice": float(plan.stop_loss_price),
+                "status": plan.status,
+                "triggerReason": plan.trigger_reason,
+                "exitOrderId": str(plan.exit_order_id) if plan.exit_order_id else None,
+                "triggeredAt": (
+                    plan.triggered_at.isoformat() if plan.triggered_at else None
+                ),
+                "createdAt": plan.created_at.isoformat(),
+            }
+            for plan in protections
         ],
     }
 
@@ -687,7 +790,7 @@ async def order(
         trigger_price,
     )
     if should_execute:
-        await execute(session, row, instrument, price)
+        await execute(session, row, instrument, price, quote)
         if row.status == "REJECTED":
             detail = (
                 "가상 예수금이 부족해 주문을 체결할 수 없습니다."
@@ -721,6 +824,98 @@ async def order(
         )
 
     return order_receipt(row, instrument.currency)
+
+
+@router.post("/protections", status_code=201)
+async def create_protection(
+    payload: ProtectionIn,
+    request: Request,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    symbol = payload.symbol.upper()
+    instrument = await instrument_catalog.get(
+        symbol, payload.market.upper(), payload.exchange.upper()
+    )
+    if not instrument:
+        raise HTTPException(404, "종목을 찾을 수 없습니다.")
+    if payload.takeProfitPrice <= payload.stopLossPrice:
+        raise HTTPException(422, "익절 가격은 손절 가격보다 높아야 합니다.")
+    quote = await kis_market.fetch_quote(instrument)
+    if not quote:
+        raise HTTPException(503, "KIS 시세를 아직 수신하지 못했습니다.")
+    current = Decimal(str(quote["price"]))
+    if payload.takeProfitPrice <= current:
+        raise HTTPException(422, "익절 가격은 현재가보다 높게 입력하세요.")
+    if payload.stopLossPrice >= current:
+        raise HTTPException(422, "손절 가격은 현재가보다 낮게 입력하세요.")
+    held, reserved = await sell_capacity(
+        session, owner, symbol, instrument.exchange
+    )
+    _, error = sell_quantity_error(held, reserved, payload.quantity)
+    if error:
+        raise HTTPException(409, error)
+    plan = ProtectionPlan(
+        owner_id=owner,
+        symbol=symbol,
+        exchange=instrument.exchange,
+        quantity=payload.quantity,
+        take_profit_price=payload.takeProfitPrice,
+        stop_loss_price=payload.stopLossPrice,
+        status="ACTIVE",
+    )
+    session.add(plan)
+    await session.flush()
+    record_audit(
+        session,
+        actor_id=owner,
+        event_type="PROTECTION_CREATED",
+        entity_id=plan.id,
+        request_id=request.state.request_id,
+        details={
+            "symbol": symbol,
+            "exchange": instrument.exchange,
+            "quantity": str(payload.quantity),
+            "takeProfitPrice": str(payload.takeProfitPrice),
+            "stopLossPrice": str(payload.stopLossPrice),
+        },
+    )
+    return {
+        "id": str(plan.id),
+        "status": plan.status,
+        "symbol": symbol,
+        "quantity": float(plan.quantity),
+    }
+
+
+@router.delete("/protections/{plan_id}")
+async def cancel_protection(
+    plan_id: UUID,
+    request: Request,
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    plan = (
+        await session.execute(
+            sa.select(ProtectionPlan)
+            .where(ProtectionPlan.id == plan_id, ProtectionPlan.owner_id == owner)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if not plan:
+        raise HTTPException(404, "익절·손절 보호 설정을 찾을 수 없습니다.")
+    if plan.status != "ACTIVE":
+        raise HTTPException(409, "활성 상태인 보호 설정만 취소할 수 있습니다.")
+    plan.status = "CANCELED"
+    record_audit(
+        session,
+        actor_id=owner,
+        event_type="PROTECTION_CANCELED",
+        entity_id=plan.id,
+        request_id=request.state.request_id,
+        details={"status": plan.status},
+    )
+    return {"id": str(plan.id), "status": plan.status}
 
 
 @router.delete("/orders/{order_id}")
@@ -764,3 +959,4 @@ async def websocket_quotes(websocket: WebSocket) -> None:
         pass
     finally:
         quote_fanout.unsubscribe(queue)
+
