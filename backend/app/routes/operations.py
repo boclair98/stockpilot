@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.core.identity import Identity, require_operator
+from app.core.identity import Identity, current_identity, require_operator
 from app.models import (
     AuditEvent,
     Position,
@@ -32,6 +32,14 @@ from app.services.risk_engine import load_control
 
 router = APIRouter(prefix="/api/operations", tags=["institutional-operations"])
 CONTROL_ENTITY_ID = uuid5(NAMESPACE_URL, "stockpilot:trading-control:global")
+
+
+def operator_allowlist() -> set[str]:
+    return {
+        item.strip().lower()
+        for item in settings.operator_emails.split(",")
+        if item.strip()
+    }
 
 
 def control_payload(control) -> dict:
@@ -199,3 +207,18 @@ async def trading_mode() -> dict:
     if mode != "SIMULATION":
         raise HTTPException(503, "승인되지 않은 거래 모드")
     return {"mode": mode, "realOrderRouting": False, "customerAssetsHeld": False}
+
+
+@router.get("/access")
+async def operations_access(request: Request) -> dict:
+    """Explain access state without exposing the configured allow-list."""
+
+    identity = current_identity(request)
+    allowed = operator_allowlist()
+    email = identity.email.lower() if identity and identity.email else None
+    return {
+        "authenticated": identity is not None,
+        "email": identity.email if identity else None,
+        "operator": bool(email and email in allowed),
+        "configurationReady": bool(allowed),
+    }
