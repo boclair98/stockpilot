@@ -1,0 +1,373 @@
+/*
+ * Device-independent responsive system.
+ * Layout follows available space and input capability instead of device brands.
+ */
+html {
+  min-width: 320px;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px;
+  overflow-x: clip;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+.app,
+.league-app,
+.practice-app,
+.growth-app,
+.lounge-app,
+.service-page {
+  width: 100%;
+}
+
+/* Large desktop: use the extra room without stretching text beyond readability. */
+@media (min-width: 1440px) {
+  .app,
+  .league-app,
+  .growth-app,
+  .lounge-app {
+    max-width: 1320px;
+  }
+
+  .content {
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 22px;
+  }
+
+  .league-grid {
+    grid-template-columns: minmax(0, 1fr) 370px;
+    gap: 22px;
+  }
+
+  .market-grid,
+  .insight-grid {
+    gap: 22px;
+  }
+}
+
+/* Compact desktop and landscape tablet: keep actions visible as icons. */
+@media (min-width: 901px) and (max-width: 1120px) {
+  .top-actions > .league-link {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .top-actions > .league-link svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .topbar,
+  .league-topbar,
+  .practice-topbar,
+  .lounge-topbar {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .hero,
+  .nxt-hero,
+  .league-hero,
+  .practice-hero,
+  .lounge-hero {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+}
+
+/* Tablet and phone: navigation moves to a persistent touch-friendly bottom bar. */
+@media (max-width: 900px) {
+  .topbar .top-actions > .league-link,
+  .topbar .install-app-button,
+  .league-topbar nav,
+  .growth-topbar nav,
+  .practice-topbar nav,
+  .lounge-topbar nav {
+    display: none !important;
+  }
+
+  .topbar,
+  .league-topbar,
+  .practice-topbar,
+  .lounge-topbar {
+    min-height: 62px;
+  }
+
+  .content,
+  .league-grid,
+  .practice-grid,
+  .lounge-grid,
+  .growth-primary-grid,
+  .journal-grid,
+  .private-grid,
+  .market-index-grid {
+    min-width: 0;
+  }
+
+  .order-card,
+  .market-index-card,
+  .league-side {
+    position: static;
+  }
+
+  .hero h1,
+  .nxt-hero h1,
+  .league-hero h1,
+  .practice-hero h1,
+  .lounge-hero h1,
+  .growth-hero h1 {
+    font-size: clamp(30px, 6vw, 42px);
+    overflow-wrap: anywhere;
+  }
+
+  .league-stats,
+  .practice-presets,
+  .ohlc,
+  .weekly-card dl,
+  .financial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ranking-list,
+  .watchlist,
+  .portfolio-panel,
+  .order-card,
+  .journal-form,
+  .journal-list > article {
+    min-width: 0;
+  }
+
+  .top-actions > button,
+  .top-actions > a,
+  .league-topbar a,
+  .practice-topbar a,
+  .lounge-topbar a {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Phone layouts: one-column content, comfortable touch targets and no clipped forms. */
+@media (max-width: 600px) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  button,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  .topbar,
+  .league-topbar,
+  .practice-topbar,
+  .lounge-topbar,
+  .growth-topbar,
+  .service-topbar {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .brand,
+  .league-brand,
+  .practice-brand,
+  .lounge-brand,
+  .growth-brand {
+    font-size: 18px;
+  }
+
+  .hero,
+  .nxt-hero,
+  .league-hero,
+  .practice-hero,
+  .lounge-hero,
+  .service-page-hero {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .summary,
+  .content,
+  .league-stats,
+  .league-grid,
+  .league-rules,
+  .practice-presets,
+  .practice-grid,
+  .lounge-grid,
+  .growth-notice,
+  .growth-primary-grid,
+  .weekly-section,
+  .journal-section,
+  .duel-cta,
+  .service-document {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .league-stats,
+  .financial-grid,
+  .report-tools,
+  .trade-report,
+  .mission-grid,
+  .ohlc,
+  .weekly-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-list article {
+    gap: 7px;
+  }
+
+  .ranking-list strong,
+  .quote-price,
+  .current {
+    white-space: nowrap;
+  }
+
+  .order-card,
+  .balance-card,
+  .portfolio-panel,
+  .daily-challenge,
+  .skill-card,
+  .weekly-section,
+  .journal-section {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .side-tabs button,
+  .submit,
+  .join-card form button,
+  .google-join,
+  .trade-button,
+  .replay-actions button,
+  .room-form button {
+    min-height: 48px;
+  }
+
+  .toast {
+    width: calc(100% - 24px);
+    max-width: 460px;
+    text-align: center;
+  }
+}
+
+/* Very narrow phones: preserve content before decorative spacing. */
+@media (max-width: 380px) {
+  .topbar .brand,
+  .league-brand,
+  .practice-brand,
+  .lounge-brand,
+  .growth-brand {
+    font-size: 16px;
+  }
+
+  .top-actions {
+    gap: 0;
+  }
+
+  .top-actions > button,
+  .top-actions > a {
+    min-width: 40px;
+    width: 40px;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .nxt-hero,
+  .league-hero,
+  .practice-hero,
+  .lounge-hero,
+  .service-page-hero {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .mobile-service-nav {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .mobile-service-nav small {
+    font-size: 9px;
+  }
+
+  .ranking-list article {
+    grid-template-columns: 22px 30px minmax(0, 1fr) auto;
+  }
+
+  .league-avatar {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* Short landscape screens: the sheet stays usable above browser controls. */
+@media (max-height: 560px) and (max-width: 900px) {
+  .mobile-menu-sheet {
+    max-height: 92dvh;
+    padding-top: 14px;
+  }
+
+  .mobile-menu-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobile-menu-grid > a {
+    min-height: 86px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .mobile-menu-grid small,
+  .mobile-menu-note {
+    display: none;
+  }
+}
+
+/* Touch devices get reliable targets; mouse devices retain compact density. */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(.mobile-menu-backdrop),
+  a.login,
+  a.google-join,
+  a.trade-button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

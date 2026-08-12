@@ -19,6 +19,7 @@ import "./operations.css";
 import "./lounge.css";
 import "./lounge-overrides.css";
 import "./service-pages.css";
+import "./responsive.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
