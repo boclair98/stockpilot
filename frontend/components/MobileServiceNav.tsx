@@ -80,7 +80,7 @@ export default function MobileServiceNav() {
             aria-label="전체 메뉴 닫기"
             onClick={() => setOpen(false)}
           />
-          <section className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title">
+          <section id="mobile-menu-sheet" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title">
             <header>
               <div>
                 <span>STOCKPILOT</span>
@@ -127,7 +127,7 @@ export default function MobileServiceNav() {
           type="button"
           className={open || moreActive ? "active" : ""}
           aria-expanded={open}
-          aria-controls="mobile-menu-title"
+          aria-controls="mobile-menu-sheet"
           onClick={() => setOpen((value) => !value)}
         >
           <span><Menu size={21} strokeWidth={open || moreActive ? 2.5 : 2} /></span>
