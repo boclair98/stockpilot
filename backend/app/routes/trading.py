@@ -32,6 +32,7 @@ from app.models import Position, TradeOrder, TradingAccount
 from app.services.audit import record_audit
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.risk_engine import assess_pretrade, load_control, quote_age_seconds
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
 
@@ -272,6 +273,9 @@ async def execute(
 
 
 async def process_open_orders(session: AsyncSession, owner: UUID | None = None) -> None:
+    control = await load_control(session)
+    if control.halted or settings.trading_mode.upper() != "SIMULATION":
+        return
     query = sa.select(TradeOrder).where(TradeOrder.status.in_(("OPEN", "TRIGGERED")))
     if owner:
         query = query.where(TradeOrder.owner_id == owner)
@@ -280,6 +284,9 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
         instrument = await instrument_catalog.get(order.symbol, exchange=order.exchange)
         quote = kis_market.quote(order.symbol, exchange=order.exchange)
         if not instrument or not quote:
+            continue
+        age = quote_age_seconds(quote)
+        if age is None or age > settings.market_data_max_age_seconds:
             continue
         price = Decimal(str(quote["price"]))
         next_status, should_execute = order_state(
@@ -329,13 +336,17 @@ class OrderIn(BaseModel):
 def order_receipt(
     row: TradeOrder, currency: str, *, replayed: bool = False
 ) -> dict:
-    return {
+    receipt = {
         "id": str(row.id),
         "status": row.status,
         "fillPrice": float(row.fill_price) if row.fill_price else None,
         "currency": currency,
         "replayed": replayed,
+        "riskCode": row.risk_code,
     }
+    if row.reject_reason:
+        receipt["detail"] = row.reject_reason
+    return receipt
 
 
 @router.get("/quotes")
@@ -558,7 +569,7 @@ async def order(
             raise HTTPException(409, "같은 요청 키를 다른 주문에 다시 사용할 수 없습니다.")
         receipt = order_receipt(existing, instrument.currency, replayed=True)
         if existing.status == "REJECTED":
-            receipt["detail"] = "이 주문은 이미 거절 처리되었습니다."
+            receipt["detail"] = existing.reject_reason or "이 주문은 이미 거절 처리되었습니다."
             return JSONResponse(status_code=409, content=receipt)
         return JSONResponse(status_code=200, content=receipt)
     if side == "SELL":
@@ -573,6 +584,23 @@ async def order(
     if not quote:
         raise HTTPException(503, "KIS 시세를 아직 수신하지 못했습니다.")
     price = Decimal(str(quote["price"]))
+    limit_price = (
+        Decimal(payload.limitPrice) if payload.limitPrice is not None else None
+    )
+    trigger_price = (
+        Decimal(payload.triggerPrice) if payload.triggerPrice is not None else None
+    )
+    risk = await assess_pretrade(
+        session,
+        owner=owner,
+        side=side,
+        order_type=order_type,
+        quantity=payload.quantity,
+        currency=instrument.currency,
+        quote=quote,
+        limit_price=limit_price,
+        trigger_price=trigger_price,
+    )
     row = TradeOrder(
         owner_id=owner,
         idempotency_key=replay_key,
@@ -584,6 +612,9 @@ async def order(
         quantity=payload.quantity,
         limit_price=payload.limitPrice,
         trigger_price=payload.triggerPrice,
+        status="OPEN" if risk.allowed else "REJECTED",
+        risk_code=None if risk.allowed else risk.code,
+        reject_reason=None if risk.allowed else risk.message,
     )
     try:
         async with session.begin_nested():
@@ -614,6 +645,24 @@ async def order(
         )
 
     request_id = request.state.request_id
+    if not risk.allowed:
+        record_audit(
+            session,
+            actor_id=owner,
+            event_type="ORDER_RISK_REJECTED",
+            entity_id=row.id,
+            request_id=request_id,
+            details={
+                "code": risk.code,
+                "reason": risk.message,
+                "notional": str(risk.notional),
+                "currency": instrument.currency,
+            },
+        )
+        return JSONResponse(
+            status_code=409,
+            content=order_receipt(row, instrument.currency),
+        )
     record_audit(
         session,
         actor_id=owner,
@@ -634,8 +683,8 @@ async def order(
         row.status,
         side,
         price,
-        Decimal(payload.limitPrice) if payload.limitPrice is not None else None,
-        Decimal(payload.triggerPrice) if payload.triggerPrice is not None else None,
+        limit_price,
+        trigger_price,
     )
     if should_execute:
         await execute(session, row, instrument, price)
@@ -645,6 +694,10 @@ async def order(
                 if side == "BUY"
                 else "보유 수량이 부족해 주문을 체결할 수 없습니다."
             )
+            row.risk_code = (
+                "INSUFFICIENT_CASH" if side == "BUY" else "INSUFFICIENT_POSITION"
+            )
+            row.reject_reason = detail
             record_audit(
                 session,
                 actor_id=owner,

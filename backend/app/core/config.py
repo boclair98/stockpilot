@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     kis_app_secret: str | None = None
     simulation_fee_rate: Decimal = Decimal("0.00015")
     simulation_kr_sell_tax_rate: Decimal = Decimal("0.002")
+    trading_mode: str = "SIMULATION"
+    market_data_max_age_seconds: int = 15
+    risk_max_order_notional_krw: Decimal = Decimal("100000000")
+    risk_max_order_notional_usd: Decimal = Decimal("100000")
+    risk_max_open_orders: int = 20
+    risk_max_daily_orders: int = 200
+    risk_max_price_deviation_percent: Decimal = Decimal("30")
+
+    # Comma-separated Google emails allowed to use the institutional console.
+    # Keep this in deployment secrets; never hard-code an operator in Git.
+    operator_emails: str = ""
 
     # OpenDART is used for Korean public-company profiles, financials, and
     # disclosures. The key never leaves the API server.
