@@ -35,6 +35,13 @@ type AuditEvent = {
   createdAt: string;
 };
 
+type AccessState = {
+  authenticated: boolean;
+  email: string | null;
+  operator: boolean;
+  configurationReady: boolean;
+};
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: "include", ...init });
   const data = await response.json().catch(() => ({}));
@@ -51,6 +58,7 @@ export default function InstitutionalControlCenter() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<number | null>(null);
+  const [access, setAccess] = useState<AccessState | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Control | null>(null);
 
@@ -69,6 +77,11 @@ export default function InstitutionalControlCenter() {
       const caught = reason as Error & { status?: number };
       setError(caught.message);
       setStatus(caught.status || 500);
+      try {
+        setAccess(await api<AccessState>("/api/operations/access"));
+      } catch {
+        setAccess(null);
+      }
     }
   }, []);
 
@@ -108,13 +121,21 @@ export default function InstitutionalControlCenter() {
     }
   }
 
+  async function switchGoogleAccount() {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    location.href = "/api/auth/google/login?return_to=%2Foperations";
+  }
+
   if (!overview) {
     return (
       <main className="ops-shell ops-gate">
         <LockKeyhole size={38} />
         <h1>기관 운영센터</h1>
         <p>{error || "권한과 운영 상태를 확인하고 있습니다."}</p>
+        {access?.email && <p className="ops-account">현재 로그인: <strong>{access.email}</strong></p>}
+        {access && !access.configurationReady && <p className="ops-error">운영자 권한 설정이 배포 환경에 적용되지 않았습니다.</p>}
         {status === 401 && <a className="ops-primary" href="/api/auth/google/login?return_to=%2Foperations">Google로 로그인</a>}
+        {status === 403 && <button className="ops-primary" type="button" onClick={() => void switchGoogleAccount()}>다른 Google 계정으로 다시 로그인</button>}
         {status === 403 && <Link className="ops-secondary" href="/">서비스 홈으로</Link>}
       </main>
     );
