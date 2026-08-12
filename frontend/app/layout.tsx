@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import MobileServiceNav from "@/components/MobileServiceNav";
 import "./globals.css";
 import "./market.css";
 import "./market-index.css";
@@ -59,5 +60,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="ko"><body>{children}</body></html>;
+  return <html lang="ko"><body>{children}<MobileServiceNav /></body></html>;
 }
