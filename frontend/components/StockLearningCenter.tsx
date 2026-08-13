@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Gamepad2,
   GraduationCap,
   Landmark,
   Lightbulb,
@@ -37,8 +38,9 @@ import {
   quizQuestions,
   type LearningLesson,
 } from "@/lib/learning-content";
+import LearningArcade from "./LearningArcade";
 
-type Tab = "home" | "course" | "glossary" | "quiz" | "tools";
+type Tab = "home" | "arcade" | "course" | "glossary" | "quiz" | "tools";
 type Quote = {
   id: string;
   symbol: string;
@@ -68,6 +70,7 @@ const emptyProgress: SavedProgress = {
 const glossaryCategories = ["전체", "시장", "가격", "기업", "주문", "위험"] as const;
 const tabs: { id: Tab; label: string; icon: typeof BookOpen }[] = [
   { id: "home", label: "학습 홈", icon: GraduationCap },
+  { id: "arcade", label: "라이브 게임", icon: Gamepad2 },
   { id: "course", label: "12개 코스", icon: BookOpen },
   { id: "glossary", label: "용어사전", icon: Search },
   { id: "quiz", label: "실력 퀴즈", icon: CircleHelp },
@@ -284,7 +287,7 @@ export default function StockLearningCenter() {
           <span>어려운 용어를 외우는 대신, 실제 시세를 읽고 가상투자로 확인하면서 배워요.</span>
           <div className="learn-hero-actions">
             <button type="button" onClick={() => goToTab("course")}><BookOpen size={17} /> 첫 코스 시작</button>
-            <button type="button" className="secondary" onClick={() => goToTab("quiz")}><CircleHelp size={17} /> 먼저 실력 확인</button>
+            <button type="button" className="secondary" onClick={() => goToTab("arcade")}><Gamepad2 size={17} /> 라이브 게임</button>
           </div>
           <small><ShieldAlert size={14} /> 투자 권유가 아닌 교육용 콘텐츠이며 실제 수익을 보장하지 않습니다.</small>
         </div>
@@ -300,6 +303,17 @@ export default function StockLearningCenter() {
           <div className="learn-streak"><Trophy size={16} /><span><b>{quizScore * 10 + completedCount * 20}</b> 학습 포인트</span></div>
         </div>
       </section>
+
+      {quotes.length > 0 && (
+        <div className="learn-live-ribbon" aria-label="실시간 학습 시세">
+          <span className="ribbon-live"><i /> LIVE</span>
+          <div>
+            {[...quotes.slice(0, 8), ...quotes.slice(0, 8)].map((item, index) => (
+              <span key={`${item.id}-${index}`}><b>{item.name}</b><em>{formatMoney(item.price, item.currency)}</em><small className={item.changePercent >= 0 ? "up" : "down"}>{item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%</small></span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <nav className="learn-tabs" aria-label="학습센터 메뉴">
         {tabs.map(({ id, label, icon: Icon }) => (
@@ -324,6 +338,15 @@ export default function StockLearningCenter() {
                   <article key={String(step)}><span><Icon size={21} /></span><small>STEP {String(step)}</small><h3>{String(title)}</h3><p>{String(text)}</p></article>
                 ))}
               </div>
+            </section>
+
+            <section className="arcade-preview-card">
+              <div className="arcade-preview-visual" aria-hidden>
+                <span><Gamepad2 size={26} /></span>
+                <i /><i /><i /><i /><i />
+              </div>
+              <div><p>LIVE LEARNING GAME</p><h2>읽지만 말고, 움직이는 시장에서 판단해요</h2><span>실제 시세 판독, 움직이는 호가, 포트폴리오 비중과 시간제한 용어 게임을 플레이하세요.</span></div>
+              <button type="button" onClick={() => goToTab("arcade")}>게임 시작 <ArrowRight size={16} /></button>
             </section>
 
             <section className="learn-section live-anatomy">
@@ -363,6 +386,8 @@ export default function StockLearningCenter() {
             </section>
           </>
         )}
+
+        {activeTab === "arcade" && <LearningArcade quotes={quotes} />}
 
         {activeTab === "course" && (
           <section className="learn-section course-section">
@@ -466,4 +491,3 @@ export default function StockLearningCenter() {
     </main>
   );
 }
-
