@@ -6,6 +6,7 @@ import {
   BookOpen,
   BrainCircuit,
   Gauge,
+  GraduationCap,
   Home,
   Menu,
   MessageCircle,
@@ -18,12 +19,18 @@ import { useEffect, useState } from "react";
 
 const primaryItems = [
   { href: "/", label: "홈", icon: Home },
+  { href: "/learn", label: "학습", icon: GraduationCap },
   { href: "/league", label: "리그", icon: Trophy },
-  { href: "/growth", label: "성장", icon: Gauge },
   { href: "/practice", label: "연습", icon: BrainCircuit },
 ];
 
 const moreItems = [
+  {
+    href: "/growth",
+    label: "성장 허브",
+    description: "미션과 리포트로 습관을 키워요",
+    icon: Gauge,
+  },
   {
     href: "/lounge",
     label: "투자 라운지",
@@ -137,3 +144,4 @@ export default function MobileServiceNav() {
     </>
   );
 }
+

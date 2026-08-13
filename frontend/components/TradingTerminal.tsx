@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Clock3,
   Gauge,
+  GraduationCap,
   History,
   HelpCircle,
   LogIn,
@@ -824,6 +825,7 @@ export default function TradingTerminal() {
       <header className="topbar">
         <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
         <div className="top-actions">
+          <a className="league-link learn-link" href="/learn"><GraduationCap size={16} /> 주식 학습</a>
           <a className="league-link growth-link" href="/growth"><Gauge size={16} /> 성장 허브</a>
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
