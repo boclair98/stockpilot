@@ -20,6 +20,7 @@ import "./lounge.css";
 import "./lounge-overrides.css";
 import "./service-pages.css";
 import "./responsive.css";
+import "./learn.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
@@ -27,9 +28,9 @@ export const metadata: Metadata = {
     default: "StockPilot — KRX·NXT·미국주식 가상투자",
     template: "%s | StockPilot",
   },
-  description: "KIS 실제 시세를 바탕으로 국내 KRX·NXT와 미국 주식을 안전하게 연습하는 가상투자 서비스",
+  description: "주식 기초부터 KRX·NXT·미국주식 실제 시세 가상투자까지 배우고 연습하는 투자 학습 서비스",
   applicationName: "StockPilot",
-  keywords: ["모의투자", "가상투자", "주식 연습", "KRX", "NXT", "미국주식", "수익률 리그"],
+  keywords: ["주식 기초", "주식 공부", "모의투자", "가상투자", "주식 연습", "KRX", "NXT", "미국주식", "수익률 리그"],
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
@@ -63,3 +64,4 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return <html lang="ko"><body>{children}<MobileServiceNav /></body></html>;
 }
+
