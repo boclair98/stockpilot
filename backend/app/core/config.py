@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     kis_env: str = "paper"
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
+    kis_rest_calls_per_second: int = 1
     simulation_fee_rate: Decimal = Decimal("0.00015")
     simulation_kr_sell_tax_rate: Decimal = Decimal("0.002")
     trading_mode: str = "SIMULATION"
@@ -57,6 +58,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "https://stockpilot.coders.kr/api/auth/google/callback"
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
+    enable_api_docs: bool = False
 
     # Firebase Cloud Messaging sends browser notifications when a saved
     # StockPilot target price is reached. The service-account JSON is base64

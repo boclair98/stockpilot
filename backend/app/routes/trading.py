@@ -20,6 +20,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -144,11 +145,16 @@ async def account(
         query = query.with_for_update()
     row = (await session.execute(query)).scalar_one_or_none()
     if not row:
-        row = TradingAccount(
-            owner_id=owner, cash=Decimal("100000"), cash_krw=Decimal("100000000")
+        await session.execute(
+            pg_insert(TradingAccount)
+            .values(
+                owner_id=owner,
+                cash=Decimal("100000"),
+                cash_krw=Decimal("100000000"),
+            )
+            .on_conflict_do_nothing(index_elements=[TradingAccount.owner_id])
         )
-        session.add(row)
-        await session.flush()
+        row = (await session.execute(query)).scalar_one()
     return row
 
 

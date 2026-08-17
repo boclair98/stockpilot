@@ -206,4 +206,3 @@ export const learningChecklist = [
   "한 종목에 과도하게 집중하지 않았다",
   "시장가·지정가와 예상 체결비용을 이해했다",
 ] as const;
-

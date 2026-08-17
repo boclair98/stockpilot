@@ -11,6 +11,7 @@ import sqlalchemy as sa
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.traffic import traffic_store
 from app.models import Position, ProtectionPlan, TradeOrder
 from app.routes.trading import execute
 from app.services.audit import record_audit
@@ -43,12 +44,24 @@ class ProtectionMatcher:
 
     async def _run(self) -> None:
         while not self._stop.is_set():
+            lease: str | None = None
             try:
-                await self.poll_once()
+                # Keep the matcher singleton across API replicas. Without a
+                # distributed lease every pod could trigger the same OCO plan.
+                lease = await traffic_store.acquire_lock(
+                    "background:protection-matcher", ttl_seconds=120
+                )
+                if lease:
+                    await self.poll_once()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Protection matcher poll failed")
+            finally:
+                if lease:
+                    await traffic_store.release_lock(
+                        "background:protection-matcher", lease
+                    )
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=5)
             except TimeoutError:
@@ -58,7 +71,9 @@ class ProtectionMatcher:
         if settings.trading_mode.upper() != "SIMULATION":
             return 0
         filled = 0
-        async with AsyncSessionLocal.begin() as session:
+        # Snapshot active plans first. Quote/network work must not hold row
+        # locks; each plan is re-validated in a short transaction below.
+        async with AsyncSessionLocal() as session:
             control = await load_control(session)
             if control.halted:
                 return 0
@@ -68,29 +83,49 @@ class ProtectionMatcher:
                         sa.select(ProtectionPlan)
                         .where(ProtectionPlan.status == "ACTIVE")
                         .order_by(ProtectionPlan.created_at)
-                        .limit(100)
-                        .with_for_update(skip_locked=True)
+                        .limit(50)
                     )
                 )
                 .scalars()
                 .all()
             )
-            for plan in plans:
-                instrument = await instrument_catalog.get(
-                    plan.symbol, exchange=plan.exchange
-                )
-                if not instrument:
+
+        for candidate in plans:
+            instrument = await instrument_catalog.get(
+                candidate.symbol, exchange=candidate.exchange
+            )
+            if not instrument:
+                continue
+            quote = kis_market.quote(candidate.symbol, exchange=candidate.exchange)
+            if not quote:
+                await kis_market.watch(instrument)
+                quote = await kis_market.fetch_quote(instrument)
+            if not quote or quote.get("price") is None:
+                continue
+            age = quote_age_seconds(quote)
+            if age is None or age > settings.market_data_max_age_seconds:
+                continue
+            current = Decimal(str(quote["price"]))
+
+            async with AsyncSessionLocal.begin() as session:
+                # The global control row is read-only for the matcher. Taking
+                # a write lock here would serialize otherwise independent
+                # users while operations updates remain atomic themselves.
+                control = await load_control(session)
+                if control.halted:
                     continue
-                quote = kis_market.quote(plan.symbol, exchange=plan.exchange)
-                if not quote:
-                    await kis_market.watch(instrument)
-                    quote = await kis_market.fetch_quote(instrument)
-                if not quote or quote.get("price") is None:
+                plan = (
+                    await session.execute(
+                        sa.select(ProtectionPlan)
+                        .where(
+                            ProtectionPlan.id == candidate.id,
+                            ProtectionPlan.status == "ACTIVE",
+                        )
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if not plan:
                     continue
-                age = quote_age_seconds(quote)
-                if age is None or age > settings.market_data_max_age_seconds:
-                    continue
-                current = Decimal(str(quote["price"]))
                 reason = protection_trigger(
                     current,
                     Decimal(plan.take_profit_price),

@@ -56,6 +56,96 @@ class TrafficStore:
         self._redis = None
         self.available = False
 
+    async def acquire_lock(self, key: str, ttl_seconds: int = 60) -> str | None:
+        """Acquire a short-lived distributed lease.
+
+        Redis is the cross-instance coordinator in production. When Redis is
+        intentionally omitted in local development, the same API falls back
+        to a process-local lease so background workers still do not overlap.
+        The token is required to release or renew a lease owned by the caller.
+        """
+
+        lock_key = f"lease:{key}"
+        token = secrets.token_urlsafe(18)
+        ttl = max(1, int(ttl_seconds))
+        if settings.redis_url:
+            if not self._redis:
+                # A configured-but-unavailable Redis must fail closed. A
+                # process-local fallback here would let every API replica
+                # become a duplicate worker.
+                return None
+            try:
+                acquired = await self._redis.set(
+                    lock_key, token, nx=True, ex=ttl
+                )
+                return token if acquired else None
+            except Exception:
+                logger.warning("Redis lease acquire failed", exc_info=True)
+                return None
+        now = time.monotonic()
+        async with self._lock:
+            current = self._memory.get(lock_key)
+            if current and current[0] > now:
+                return None
+            self._memory[lock_key] = (now + ttl, token)
+        return token
+
+    async def renew_lock(
+        self, key: str, token: str, ttl_seconds: int = 60
+    ) -> bool:
+        """Extend a lease only when its ownership token still matches."""
+
+        lock_key = f"lease:{key}"
+        ttl = max(1, int(ttl_seconds))
+        if settings.redis_url:
+            if not self._redis:
+                return False
+            try:
+                result = await self._redis.eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                    "return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+                    1,
+                    lock_key,
+                    token,
+                    str(ttl),
+                )
+                return bool(result)
+            except Exception:
+                logger.warning("Redis lease renew failed", exc_info=True)
+                return False
+        async with self._lock:
+            current = self._memory.get(lock_key)
+            if not current or current[1] != token:
+                return False
+            self._memory[lock_key] = (time.monotonic() + ttl, token)
+            return True
+
+    async def release_lock(self, key: str, token: str) -> bool:
+        """Release a lease only when its ownership token still matches."""
+
+        lock_key = f"lease:{key}"
+        if settings.redis_url:
+            if not self._redis:
+                return False
+            try:
+                result = await self._redis.eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                    "return redis.call('del', KEYS[1]) else return 0 end",
+                    1,
+                    lock_key,
+                    token,
+                )
+                return bool(result)
+            except Exception:
+                logger.warning("Redis lease release failed", exc_info=True)
+                return False
+        async with self._lock:
+            current = self._memory.get(lock_key)
+            if not current or current[1] != token:
+                return False
+            self._memory.pop(lock_key, None)
+            return True
+
     async def get_json(self, key: str) -> Any | None:
         if self._redis:
             try:

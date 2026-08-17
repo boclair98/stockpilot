@@ -174,22 +174,54 @@ export default function StockLearningCenter() {
   }, [loaded, progress]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function loadQuotes() {
-      setQuoteLoading(true);
+    let active = true;
+    let controller: AbortController | null = null;
+
+    async function loadQuotes(initial = false) {
+      controller?.abort();
+      controller = new AbortController();
+      if (initial) setQuoteLoading(true);
       try {
-        const response = await fetch("/api/trading/quotes", { signal: controller.signal });
+        // Bootstrap warms the same shared snapshot used by the trading page,
+        // then quotes remains a small fallback for older deployments.
+        let response = await fetch("/api/trading/bootstrap", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (!response.ok) throw new Error("시세를 불러오지 못했어요.");
-        const data = (await response.json()) as Quote[];
-        setQuotes(data.filter((item) => item.price > 0).slice(0, 20));
+        const bootstrap = (await response.json()) as { quotes?: Quote[] };
+        let nextQuotes = Array.isArray(bootstrap.quotes) ? bootstrap.quotes : null;
+        if (!nextQuotes) {
+          response = await fetch("/api/trading/quotes", {
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          if (!response.ok) throw new Error("시세를 불러오지 못했어요.");
+          nextQuotes = (await response.json()) as Quote[];
+        }
+        if (active) setQuotes(nextQuotes.filter((item) => item.price > 0).slice(0, 20));
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) setQuotes([]);
+        if (
+          active &&
+          initial &&
+          !(error instanceof DOMException && error.name === "AbortError")
+        ) {
+          setQuotes([]);
+        }
       } finally {
-        if (!controller.signal.aborted) setQuoteLoading(false);
+        if (active && initial) setQuoteLoading(false);
       }
     }
-    void loadQuotes();
-    return () => controller.abort();
+
+    void loadQuotes(true);
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void loadQuotes();
+    }, 5000);
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -306,7 +338,7 @@ export default function StockLearningCenter() {
 
       {quotes.length > 0 && (
         <div className="learn-live-ribbon" aria-label="실시간 학습 시세">
-          <span className="ribbon-live"><i /> LIVE</span>
+          <span className="ribbon-live"><i /> LIVE <small>5초 갱신</small></span>
           <div>
             {[...quotes.slice(0, 8), ...quotes.slice(0, 8)].map((item, index) => (
               <span key={`${item.id}-${index}`}><b>{item.name}</b><em>{formatMoney(item.price, item.currency)}</em><small className={item.changePercent >= 0 ? "up" : "down"}>{item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%</small></span>

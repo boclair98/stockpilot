@@ -16,6 +16,8 @@ if [ -n "${DATABASE_URL:-}" ]; then
   fi
 fi
 
-uv run alembic upgrade head
+if [ "${RUN_MIGRATIONS_ON_BOOT:-true}" = "true" ]; then
+  uv run python scripts/migrate_with_lock.py
+fi
 
 exec uv run uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"

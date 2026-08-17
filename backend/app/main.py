@@ -1,16 +1,22 @@
 import asyncio
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
-from app.core.identity import SESSION_COOKIE, decode_session
+from app.core.identity import (
+    SESSION_COOKIE,
+    Identity,
+    decode_session,
+    require_operator,
+)
 from app.core.security import apply_security_headers
 from app.core.traffic import request_metrics, traffic_store
 from app.routes.auth import router as auth_router
@@ -58,8 +64,8 @@ app = FastAPI(
     title="StockPilot API",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.enable_api_docs else None,
+    openapi_url="/api/openapi.json" if settings.enable_api_docs else None,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 
@@ -74,6 +80,25 @@ def _traffic_identity(request: Request) -> str:
     return f"ip:{client}"
 
 
+def _same_site_origin(request: Request) -> bool:
+    """Reject cross-site state changes while allowing normal GET navigation."""
+
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    parsed = urlsplit(origin)
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    expected_hosts = {
+        host.split(":", 1)[0].lower()
+        for host in (forwarded_host, request.url.hostname or "")
+        if host
+    }
+    redirect_host = urlsplit(settings.google_redirect_uri).hostname
+    if redirect_host:
+        expected_hosts.add(redirect_host.lower())
+    return bool(parsed.hostname and parsed.hostname.lower() in expected_hosts)
+
+
 @app.middleware("http")
 async def traffic_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id", "")
@@ -84,6 +109,22 @@ async def traffic_middleware(request: Request, call_next):
     status = 500
     await request_metrics.begin()
     try:
+        if (
+            request.url.path.startswith("/api/")
+            and request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and not _same_site_origin(request)
+        ):
+            status = 403
+            response = JSONResponse(
+                status_code=403,
+                content={
+                    "detail": "허용되지 않은 요청 출처입니다.",
+                    "requestId": request_id,
+                },
+                headers={"X-Request-ID": request_id},
+            )
+            apply_security_headers(response.headers)
+            return response
         if request.url.path.startswith("/api/") and not request.url.path.startswith(
             "/api/health"
         ):
@@ -187,7 +228,7 @@ async def readiness() -> JSONResponse:
 
 
 @app.get("/api/health/traffic")
-async def traffic_health() -> JSONResponse:
+async def traffic_health(_: Identity = Depends(require_operator)) -> JSONResponse:
     """Aggregated process health for dashboards; contains no user data."""
 
     return JSONResponse(

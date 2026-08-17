@@ -10,6 +10,7 @@ from decimal import Decimal
 import sqlalchemy as sa
 
 from app.core.database import AsyncSessionLocal
+from app.core.traffic import traffic_store
 from app.models import PriceAlert, PushDevice
 from app.services.firebase_push import firebase_push
 from app.services.instrument_catalog import instrument_catalog
@@ -49,12 +50,25 @@ class PriceAlertNotifier:
 
     async def _run(self) -> None:
         while not self._stop.is_set():
+            lease: str | None = None
             try:
-                await self.poll_once()
+                # Only one API replica should evaluate and deliver a given
+                # alert batch. Redis provides the cross-process lease; the
+                # in-memory fallback still keeps local development safe.
+                lease = await traffic_store.acquire_lock(
+                    "background:price-alert-notifier", ttl_seconds=120
+                )
+                if lease:
+                    await self.poll_once()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Price alert background poll failed")
+            finally:
+                if lease:
+                    await traffic_store.release_lock(
+                        "background:price-alert-notifier", lease
+                    )
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=15)
             except TimeoutError:
@@ -62,7 +76,10 @@ class PriceAlertNotifier:
 
     async def poll_once(self) -> int:
         delivered = 0
-        async with AsyncSessionLocal.begin() as session:
+        # Read candidates without row locks. Network calls must not hold a
+        # database transaction open; the short transactions below re-check
+        # each alert before changing its state.
+        async with AsyncSessionLocal() as session:
             alerts = (
                 (
                     await session.execute(
@@ -77,23 +94,35 @@ class PriceAlertNotifier:
                             )
                         )
                         .order_by(PriceAlert.created_at)
-                        .limit(100)
-                        .with_for_update(skip_locked=True)
+                        .limit(50)
                     )
                 )
                 .scalars()
                 .all()
             )
-            for alert in alerts:
-                instrument = await instrument_catalog.get(
-                    alert.symbol, exchange=alert.exchange
-                )
-                if not instrument:
+
+        for candidate in alerts:
+            instrument = await instrument_catalog.get(
+                candidate.symbol, exchange=candidate.exchange
+            )
+            if not instrument:
+                continue
+            quote = await kis_market.fetch_quote(instrument)
+            if not quote or quote.get("price") is None:
+                continue
+            current = Decimal(str(quote["price"]))
+            delivery: tuple[str, str, Decimal, list[str]] | None = None
+
+            async with AsyncSessionLocal.begin() as session:
+                alert = (
+                    await session.execute(
+                        sa.select(PriceAlert)
+                        .where(PriceAlert.id == candidate.id)
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if not alert:
                     continue
-                quote = await kis_market.fetch_quote(instrument)
-                if not quote or quote.get("price") is None:
-                    continue
-                current = Decimal(str(quote["price"]))
                 target = Decimal(alert.target_price)
                 if alert.status == "ACTIVE" and reached(
                     alert.direction, current, target
@@ -102,7 +131,6 @@ class PriceAlertNotifier:
                     alert.triggered_at = datetime.now(UTC)
                 if alert.status != "TRIGGERED" or alert.notified_at is not None:
                     continue
-
                 devices = (
                     (
                         await session.execute(
@@ -115,24 +143,34 @@ class PriceAlertNotifier:
                     .scalars()
                     .all()
                 )
-                if not devices:
-                    continue
-                relation = "이상" if alert.direction == "ABOVE" else "이하"
-                result = await firebase_push.send(
-                    [device.token for device in devices],
-                    title=f"{instrument.name} 목표가 도달",
-                    body=(
-                        f"현재 {display_money(current, instrument.currency)} · "
-                        f"설정 가격 {relation} "
-                        f"{display_money(target, instrument.currency)}"
-                    ),
-                    data={
-                        "alertId": str(alert.id),
-                        "symbol": instrument.symbol,
-                        "exchange": instrument.exchange,
-                        "url": "https://stockpilot.coders.kr/#investor-tools",
-                    },
-                )
+                if devices:
+                    delivery = (
+                        str(alert.id),
+                        alert.direction,
+                        target,
+                        [device.token for device in devices],
+                    )
+
+            if not delivery:
+                continue
+            alert_id, direction, target, tokens = delivery
+            relation = "이상" if direction == "ABOVE" else "이하"
+            result = await firebase_push.send(
+                tokens,
+                title=f"{instrument.name} 목표가 도달",
+                body=(
+                    f"현재 {display_money(current, instrument.currency)} · "
+                    f"설정 가격 {relation} {display_money(target, instrument.currency)}"
+                ),
+                data={
+                    "alertId": alert_id,
+                    "symbol": instrument.symbol,
+                    "exchange": instrument.exchange,
+                    "url": "https://stockpilot.coders.kr/#investor-tools",
+                },
+            )
+
+            async with AsyncSessionLocal.begin() as session:
                 if result.invalid_tokens:
                     await session.execute(
                         sa.delete(PushDevice).where(
@@ -140,8 +178,16 @@ class PriceAlertNotifier:
                         )
                     )
                 if result.success_count:
-                    alert.notified_at = datetime.now(UTC)
-                    delivered += result.success_count
+                    alert = (
+                        await session.execute(
+                            sa.select(PriceAlert)
+                            .where(PriceAlert.id == alert_id)
+                            .with_for_update()
+                        )
+                    ).scalar_one_or_none()
+                    if alert and alert.status == "TRIGGERED" and alert.notified_at is None:
+                        alert.notified_at = datetime.now(UTC)
+                        delivered += result.success_count
         return delivered
 
 

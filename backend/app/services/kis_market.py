@@ -100,6 +100,8 @@ class KISMarket:
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._snapshot_task: asyncio.Task | None = None
+        self._collector_token: str | None = None
+        self._collector_renew_task: asyncio.Task | None = None
         self._http: httpx.AsyncClient | None = None
         self._socket = None
         self._send_lock = asyncio.Lock()
@@ -152,6 +154,13 @@ class KISMarket:
         if self._snapshot_task:
             self._snapshot_task.cancel()
             await asyncio.gather(self._snapshot_task, return_exceptions=True)
+        if self._collector_renew_task:
+            self._collector_renew_task.cancel()
+            await asyncio.gather(self._collector_renew_task, return_exceptions=True)
+            self._collector_renew_task = None
+        if self._collector_token:
+            await traffic_store.release_lock("market:collector", self._collector_token)
+            self._collector_token = None
         self._task = None
         self._snapshot_task = None
         if self._http:
@@ -169,7 +178,7 @@ class KISMarket:
     async def shared_snapshot(self, *, top_only: bool = False) -> list[dict]:
         """Return local ticks or restore the last healthy snapshot from Redis."""
         local = self.snapshot(top_only=top_only)
-        if local:
+        if local and self.connected:
             return local
         cached = await traffic_store.get_json("market:quotes:top")
         if not isinstance(cached, list):
@@ -190,7 +199,7 @@ class KISMarket:
     async def _persist_snapshots(self) -> None:
         while not self._stop.is_set():
             rows = self.snapshot(top_only=True)
-            if rows:
+            if rows and self._collector_token:
                 await traffic_store.set_json("market:quotes:top", rows, 300)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=2)
@@ -216,6 +225,7 @@ class KISMarket:
             "quoteCount": len(self._quotes),
             "catalogCount": instrument_catalog.count,
             "lastError": self.last_error or instrument_catalog.last_error,
+            "collectorLeader": self._collector_token is not None,
         }
 
     async def fetch_quote(self, instrument: Instrument) -> dict | None:
@@ -495,9 +505,37 @@ class KISMarket:
                 return {**self._index_cache[1], "stale": True}
             return empty
 
+    async def _renew_collector_lease(self) -> None:
+        while not self._stop.is_set() and self._collector_token:
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=30)
+            except TimeoutError:
+                pass
+            token = self._collector_token
+            if not token:
+                return
+            if not await traffic_store.renew_lock("market:collector", token, 120):
+                logger.warning("Lost distributed KIS collector lease")
+                self.connected = False
+                if self._socket:
+                    await self._socket.close()
+                return
+
     async def _run(self) -> None:
         retry = 2
         while not self._stop.is_set():
+            token = await traffic_store.acquire_lock("market:collector", 120)
+            if not token:
+                self.connected = False
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=5)
+                except TimeoutError:
+                    pass
+                continue
+            self._collector_token = token
+            self._collector_renew_task = asyncio.create_task(
+                self._renew_collector_lease(), name="kis-collector-lease"
+            )
             seed_task = None
             try:
                 seed_task = asyncio.create_task(self._seed_quotes())
@@ -518,6 +556,17 @@ class KISMarket:
                 if seed_task:
                     seed_task.cancel()
                     await asyncio.gather(seed_task, return_exceptions=True)
+                if self._collector_renew_task:
+                    self._collector_renew_task.cancel()
+                    await asyncio.gather(
+                        self._collector_renew_task, return_exceptions=True
+                    )
+                    self._collector_renew_task = None
+                if self._collector_token:
+                    await traffic_store.release_lock(
+                        "market:collector", self._collector_token
+                    )
+                    self._collector_token = None
 
     async def _token(self) -> str:
         now = datetime.now(UTC).timestamp()
@@ -559,13 +608,16 @@ class KISMarket:
         }
 
     async def _rate_limit_rest(self) -> None:
-        if settings.kis_env == "real":
-            return
         now = asyncio.get_running_loop().time()
-        wait = 1.05 - (now - self._last_rest_call)
+        interval = 1 / max(1, settings.kis_rest_calls_per_second)
+        wait = interval - (now - self._last_rest_call)
         if wait > 0:
             await asyncio.sleep(wait)
         self._last_rest_call = asyncio.get_running_loop().time()
+        while not await traffic_store.allow(
+            "kis:rest:global", max(1, settings.kis_rest_calls_per_second), 1
+        ):
+            await asyncio.sleep(0.1)
 
     async def _fetch_rest(self, instrument: Instrument) -> None:
         async with self._rest_lock:
