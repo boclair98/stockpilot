@@ -37,6 +37,7 @@ import MarketHeroCarousel from "./MarketHeroCarousel";
 import OnboardingGuide from "./OnboardingGuide";
 import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
+import SimulationControlCenter from "./SimulationControlCenter";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -902,6 +903,8 @@ export default function TradingTerminal() {
 
       <MarketIndexChart initialData={bootstrapKospi} />
 
+      <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
+
       <section className="insight-grid" aria-label="시장과 내 투자 체크업">
         <article className="pulse-card">
           <div className="insight-title">
@@ -1426,3 +1429,4 @@ export default function TradingTerminal() {
     </main>
   );
 }
+

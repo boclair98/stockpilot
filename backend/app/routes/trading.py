@@ -461,6 +461,164 @@ async def market_status(response: Response) -> dict:
     return kis_market.status()
 
 
+@router.get("/rules")
+async def simulation_rules(response: Response) -> dict:
+    """Expose the simulation contract so the UI never hides important assumptions."""
+
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=3600"
+    return {
+        "mode": settings.trading_mode.upper(),
+        "isSimulation": settings.trading_mode.upper() == "SIMULATION",
+        "initialCash": {"KRW": 100_000_000, "USD": 100_000},
+        "fees": {
+            "commissionRate": float(settings.simulation_fee_rate * 100),
+            "krSellTaxRate": float(settings.simulation_kr_sell_tax_rate * 100),
+            "slippage": "실제 호가 스프레드·수량·시장별 변동성을 반영한 결정적 시뮬레이션",
+        },
+        "orderTypes": [
+            {"key": "MARKET", "label": "시장가", "description": "현재 시세 기준으로 즉시 가상 체결"},
+            {"key": "LIMIT", "label": "지정가", "description": "희망 가격에 도달할 때만 체결"},
+            {"key": "STOP", "label": "손절·돌파", "description": "감시 가격을 넘으면 시장가로 전환"},
+            {"key": "STOP_LIMIT", "label": "조건부 지정가", "description": "감시 가격 도달 후 지정가 주문으로 전환"},
+        ],
+        "sessions": [
+            {"market": "KR", "label": "KRX 정규장", "time": "09:00–15:30"},
+            {"market": "KR", "label": "NXT 프리·애프터", "time": "08:00–08:50 · 15:40–20:00"},
+            {"market": "US", "label": "미국 정규장", "time": "한국시간 기준 서머타임 변동"},
+        ],
+        "dataPolicy": {
+            "maxQuoteAgeSeconds": settings.market_data_max_age_seconds,
+            "staleOrderPolicy": "오래된 시세에서는 조건부 주문을 체결하지 않음",
+            "source": "한국투자증권 KIS Open API",
+        },
+        "disclaimer": "실제 증권계좌와 연결되지 않는 교육용 가상투자 서비스입니다.",
+    }
+
+
+@router.get("/statement")
+async def account_statement(
+    response: Response,
+    owner: UUID | None = Depends(optional_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Return an explainable account statement without exposing private holdings publicly."""
+
+    response.headers["Cache-Control"] = "private, no-store"
+    rules = await simulation_rules(Response())
+    if not owner:
+        return {
+            "authenticated": False,
+            "asOf": datetime.now(UTC).isoformat(),
+            "rules": rules,
+            "cash": {"KRW": 100_000_000, "USD": 100_000},
+            "equity": {"KRW": 100_000_000, "USD": 100_000},
+            "positions": [],
+            "orders": [],
+            "summary": {"marketValue": {"KRW": 0, "USD": 0}, "realizedPnl": {"KRW": 0, "USD": 0}, "costs": {"KRW": 0, "USD": 0}},
+        }
+
+    await process_open_orders(session, owner)
+    wallet = await account(session, owner)
+    positions = (
+        await session.execute(
+            sa.select(Position)
+            .where(Position.owner_id == owner, Position.quantity > 0)
+            .order_by(Position.symbol)
+            .limit(100)
+        )
+    ).scalars().all()
+    orders = (
+        await session.execute(
+            sa.select(TradeOrder)
+            .where(TradeOrder.owner_id == owner)
+            .order_by(TradeOrder.created_at.desc())
+            .limit(100)
+        )
+    ).scalars().all()
+    market_value = {"KRW": Decimal("0"), "USD": Decimal("0")}
+    unrealized = {"KRW": Decimal("0"), "USD": Decimal("0")}
+    position_rows: list[dict] = []
+    for position in positions:
+        instrument = await instrument_catalog.get(position.symbol, exchange=position.exchange)
+        if not instrument:
+            continue
+        await kis_market.watch(instrument)
+        quote = kis_market.quote(position.symbol, instrument.market, position.exchange)
+        current = Decimal(str(quote["price"])) if quote and quote.get("price") is not None else Decimal(position.average_price)
+        quantity = Decimal(position.quantity)
+        average = Decimal(position.average_price)
+        value = quantity * current
+        profit = (current - average) * quantity
+        market_value[instrument.currency] += value
+        unrealized[instrument.currency] += profit
+        position_rows.append({
+            "symbol": position.symbol,
+            "name": instrument.name,
+            "market": instrument.market,
+            "exchange": position.exchange,
+            "currency": instrument.currency,
+            "quantity": float(quantity),
+            "averagePrice": float(average),
+            "currentPrice": float(current),
+            "marketValue": float(value),
+            "unrealizedPnl": float(profit),
+            "returnRate": float((profit / (average * quantity) * 100) if average and quantity else 0),
+        })
+
+    realized = {"KRW": Decimal("0"), "USD": Decimal("0")}
+    costs = {"KRW": Decimal("0"), "USD": Decimal("0")}
+    order_rows: list[dict] = []
+    for order in orders:
+        instrument = await instrument_catalog.get(order.symbol, exchange=order.exchange)
+        currency = instrument.currency if instrument else "KRW"
+        if order.realized_pnl is not None:
+            realized[currency] += Decimal(order.realized_pnl)
+        costs[currency] += Decimal(order.fee or 0) + Decimal(order.tax or 0)
+        order_rows.append({
+            "id": str(order.id),
+            "symbol": order.symbol,
+            "exchange": order.exchange,
+            "side": order.side,
+            "orderType": order.order_type,
+            "quantity": float(order.quantity),
+            "status": order.status,
+            "fillPrice": float(order.fill_price) if order.fill_price is not None else None,
+            "fee": float(order.fee or 0),
+            "tax": float(order.tax or 0),
+            "rejectReason": order.reject_reason,
+            "createdAt": order.created_at.isoformat() if order.created_at else None,
+        })
+
+    cash = {"KRW": Decimal(wallet.cash_krw), "USD": Decimal(wallet.cash)}
+    open_orders = sum(1 for order in orders if order.status in {"OPEN", "TRIGGERED"})
+    control = await load_control(session)
+    return {
+        "authenticated": True,
+        "asOf": datetime.now(UTC).isoformat(),
+        "rules": rules,
+        "cash": {key: float(value) for key, value in cash.items()},
+        "equity": {key: float(cash[key] + market_value[key]) for key in cash},
+        "positions": position_rows,
+        "orders": order_rows,
+        "summary": {
+            "marketValue": {key: float(value) for key, value in market_value.items()},
+            "unrealizedPnl": {key: float(value) for key, value in unrealized.items()},
+            "realizedPnl": {key: float(value) for key, value in realized.items()},
+            "costs": {key: float(value) for key, value in costs.items()},
+            "filledOrders": sum(1 for order in orders if order.status == "FILLED"),
+            "openOrders": open_orders,
+            "rejectedOrders": sum(1 for order in orders if order.status == "REJECTED"),
+        },
+        "riskLimits": {
+            "maxOpenOrders": control.max_open_orders,
+            "maxDailyOrders": control.max_daily_orders,
+            "maxOrderNotionalKRW": float(control.max_order_notional_krw),
+            "maxOrderNotionalUSD": float(control.max_order_notional_usd),
+            "tradingHalted": bool(control.halted),
+        },
+    }
+
+
 @router.get("/kospi")
 async def kospi(response: Response) -> dict:
     response.headers["Cache-Control"] = "public, max-age=60, s-maxage=300, stale-while-revalidate=3600"
@@ -965,4 +1123,5 @@ async def websocket_quotes(websocket: WebSocket) -> None:
         pass
     finally:
         quote_fanout.unsubscribe(queue)
+
 
