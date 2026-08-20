@@ -17,6 +17,7 @@ from app.core.identity import optional_identity, require_identity
 from app.models import (
     DailyChallengeAttempt,
     PortfolioDailySnapshot,
+    Position,
     TradeJournal,
     TradeOrder,
     User,
@@ -24,6 +25,11 @@ from app.models import (
 from app.routes.engagement import _equity, combined_return_rate
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.portfolio_analytics import (
+    ExecutionPoint,
+    SnapshotPoint,
+    build_portfolio_analytics,
+)
 
 router = APIRouter(prefix="/api/growth", tags=["growth"])
 
@@ -352,6 +358,66 @@ async def overview(
     return await _overview(session, owner, datetime.now(SEOUL).date())
 
 
+@router.get("/analytics")
+async def analytics(
+    owner: UUID | None = Depends(optional_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Return explainable risk and execution metrics without revealing holdings."""
+
+    if not owner:
+        return {"authenticated": False, "analytics": None}
+
+    snapshot_rows = list(
+        (
+            await session.execute(
+                sa.select(PortfolioDailySnapshot)
+                .where(PortfolioDailySnapshot.owner_id == owner)
+                .order_by(PortfolioDailySnapshot.snapshot_date.desc())
+                .limit(90)
+            )
+        ).scalars()
+    )
+    snapshot_rows.reverse()
+    order_rows = list(
+        (
+            await session.execute(
+                sa.select(TradeOrder)
+                .where(
+                    TradeOrder.owner_id == owner,
+                    TradeOrder.status.in_(("FILLED", "REJECTED", "CANCELED")),
+                )
+                .order_by(TradeOrder.created_at.desc())
+                .limit(500)
+            )
+        ).scalars()
+    )
+    position_count = await session.scalar(
+        sa.select(sa.func.count(Position.id)).where(
+            Position.owner_id == owner,
+            Position.quantity > 0,
+        )
+    )
+    result = build_portfolio_analytics(
+        [
+            SnapshotPoint(row.snapshot_date, row.return_rate)
+            for row in snapshot_rows
+        ],
+        [
+            ExecutionPoint(
+                side=row.side,
+                status=row.status,
+                realized_pnl=row.realized_pnl,
+                slippage_bps=row.slippage_bps,
+                spread_bps=row.spread_bps,
+            )
+            for row in order_rows
+        ],
+        open_position_count=int(position_count or 0),
+    )
+    return {"authenticated": True, "analytics": result}
+
+
 @router.post("/challenge", status_code=201)
 async def answer_challenge(
     payload: ChallengeAnswerIn,
@@ -456,3 +522,4 @@ async def delete_journal(
         raise HTTPException(404, "투자일지를 찾을 수 없습니다.")
     await session.delete(row)
     return {"removed": True}
+

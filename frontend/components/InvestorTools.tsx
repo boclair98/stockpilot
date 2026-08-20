@@ -477,7 +477,7 @@ export default function InvestorTools({
           <h2>나의 투자 도구</h2>
           <p>관심종목부터 성과 리포트와 미션까지 한곳에서 관리해요</p>
         </div>
-        <span className="tool-live"><BellRing size={13} /> 15초마다 갱신</span>
+        <span className="tool-live"><BellRing size={13} /> 시세 15초 · 뉴스 5분</span>
       </div>
 
       <div className="tool-tabs">
@@ -667,3 +667,4 @@ export default function InvestorTools({
     </section>
   );
 }
+

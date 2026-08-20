@@ -214,6 +214,7 @@ Google 로그인
 | 성장 | 비공개 투자일지 | 거래 이유, 목표수익률, 손절기준, 예상기간, 확신 정도 기록 |
 | 성장 | 거래 후 복기 | 계획 성공·실패·본전·진행 중 결과와 배운 점 기록 |
 | 성장 | StockPilot 실력점수 | 성과·위험관리·투자원칙·경험을 함께 반영한 100점 평가 |
+| 성장 | Portfolio Intelligence | 보유 종목을 공개하지 않고 최대낙폭·변동성·샤프 비율·승률·체결률·슬리피지를 설명 가능한 지표로 제공 |
 | 성장 | 주간 투자 성적표 | 수익률·거래·일지·연속 참여·등급을 보유 종목 없이 공유 |
 | 경쟁 | 공개 수익률 리그 | 보유 종목은 숨기고 닉네임·수익률·순위만 경쟁 |
 | 경쟁 | 비공개 시즌 리그 | 초대코드로 친구와 7·14·30·60일 시즌 진행 |
@@ -727,6 +728,7 @@ KIS Open API는 **종목, 시세, 지수, 뉴스 조회에만** 사용합니다.
 | `POST` | `/api/league/rooms` | 시즌 리그 생성 | 필요 |
 | `POST` | `/api/league/rooms/join` | 초대코드 참여 | 필요 |
 | `GET` | `/api/growth/overview` | 오늘의 챌린지·실력점수·주간 성적표·일지 | 선택 |
+| `GET` | `/api/growth/analytics` | 개인 포트폴리오 리스크·성과·체결 품질 분석(보유내역 비공개) | 선택 |
 | `POST` | `/api/growth/challenge` | 오늘의 상승·횡보·하락 선택 저장 | 필요 |
 | `POST` | `/api/growth/journals` | 거래 전 투자일지 생성 | 필요 |
 | `PATCH` | `/api/growth/journals/{id}` | 거래 후 복기 저장 | 필요 |
@@ -782,6 +784,7 @@ backend/
       company.py          OpenDART 기업정보
       engagement.py       관심종목·알림·리포트·미션·뉴스
       growth.py           오늘의 챌린지·투자일지·실력점수·성적표
+                          Portfolio Intelligence 지표 계산 API
       league.py           공개·비공개 수익률 리그
       operations.py       운영자 전용 킬 스위치·원장 대사·감사 조회
     services/
@@ -794,6 +797,8 @@ backend/
       firebase_push.py    FCM 푸시 전송
       risk_engine.py      주문 전 시세·한도·가격괴리 위험검사
       reconciliation.py   모의 원장 정합성 검사와 결과 보존
+      portfolio_analytics.py
+                          순수 함수 기반 최대낙폭·변동성·샤프·승률·체결 품질 계산
     core/
       traffic.py          Redis 캐시·요청 제한·관측 지표
   scripts/
@@ -817,6 +822,8 @@ frontend/
     LeagueBoard.tsx       공개 수익률 리그
     LeagueRooms.tsx       초대형 시즌 리그
     GrowthHub.tsx         챌린지·일지·점수·공유 성적표
+    PortfolioAnalytics.tsx
+                          개인정보를 노출하지 않는 리스크·성과 분석 카드
   public/
     firebase-messaging-sw.js
                           백그라운드 푸시 서비스 워커
@@ -938,3 +945,4 @@ API Key, App Secret, OAuth Secret, Firebase 서비스 계정 JSON은 Git에 커�
 문제나 개선 제안은 [GitHub Issues](https://github.com/boclair98/stockpilot/issues)에 남겨 주세요.
 
 </div>
+

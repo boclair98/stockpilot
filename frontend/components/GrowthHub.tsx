@@ -22,6 +22,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { signInHref } from "@/lib/identity";
+import PortfolioAnalytics from "@/components/PortfolioAnalytics";
 
 type Choice = "BUY" | "HOLD" | "SELL";
 type Challenge = {
@@ -289,6 +290,8 @@ export default function GrowthHub() {
 
       {notice && <div className="growth-notice">{notice}</div>}
 
+      <PortfolioAnalytics />
+
       <section className="growth-primary-grid">
         <article className="daily-challenge">
           <div className="growth-section-head">
@@ -484,3 +487,4 @@ export default function GrowthHub() {
     </main>
   );
 }
+
