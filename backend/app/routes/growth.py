@@ -8,7 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from app.models import (
 )
 from app.routes.engagement import _equity, combined_return_rate
 from app.services.instrument_catalog import Instrument, instrument_catalog
+from app.services.benchmark import build_benchmark_report
 from app.services.kis_market import kis_market
 from app.services.portfolio_analytics import (
     ExecutionPoint,
@@ -416,6 +417,94 @@ async def analytics(
         open_position_count=int(position_count or 0),
     )
     return {"authenticated": True, "analytics": result}
+
+
+@router.get("/benchmark")
+async def benchmark(
+    response: Response,
+    owner: UUID | None = Depends(optional_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Compare the simulation with KOSPI without exposing portfolio holdings.
+
+    KOSPI data is already cached by the KIS collector for five minutes.  The
+    response is safe to cache briefly at the edge as it contains only public
+    market data unless a logged-in user requests the private comparison.
+    """
+
+    response.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=60"
+    market = await kis_market.kospi_history()
+    report = build_benchmark_report(market.get("points") or [])
+    report["source"] = market.get("source") or "KIS Open API"
+    report["stale"] = bool(market.get("stale"))
+    if not owner:
+        return {
+            "authenticated": False,
+            "benchmark": report,
+            "comparison": None,
+        }
+
+    rows = list(
+        (
+            await session.execute(
+                sa.select(PortfolioDailySnapshot)
+                .where(PortfolioDailySnapshot.owner_id == owner)
+                .order_by(PortfolioDailySnapshot.snapshot_date.desc())
+                .limit(30)
+            )
+        ).scalars()
+    )
+    rows.reverse()
+    portfolio_series = [
+        {
+            "date": row.snapshot_date.isoformat(),
+            "returnRate": round(float(row.return_rate), 4),
+        }
+        for row in rows
+    ]
+    if len(rows) < 2 or len(report["series"]) < 2:
+        return {
+            "authenticated": True,
+            "benchmark": report,
+            "comparison": {
+                "status": "STARTING",
+                "periodDays": len(rows),
+                "portfolioReturn": float(rows[-1].return_rate) if rows else None,
+                "benchmarkReturn": None,
+                "relativeReturn": None,
+                "portfolioSeries": portfolio_series,
+            },
+        }
+
+    period_length = min(len(rows), len(report["series"]), 20)
+    portfolio_window = rows[-period_length:]
+    benchmark_window = report["series"][-period_length:]
+    portfolio_return = float(
+        portfolio_window[-1].return_rate - portfolio_window[0].return_rate
+    )
+    first_value = float(benchmark_window[0]["value"])
+    last_value = float(benchmark_window[-1]["value"])
+    benchmark_return = (last_value / first_value - 1) * 100 if first_value else None
+    relative_return = (
+        portfolio_return - benchmark_return
+        if benchmark_return is not None
+        else None
+    )
+    status = "MATCH"
+    if relative_return is not None:
+        status = "AHEAD" if relative_return >= 0.1 else "BEHIND" if relative_return <= -0.1 else "MATCH"
+    return {
+        "authenticated": True,
+        "benchmark": report,
+        "comparison": {
+            "status": status,
+            "periodDays": max(period_length - 1, 1),
+            "portfolioReturn": round(portfolio_return, 4),
+            "benchmarkReturn": round(benchmark_return, 4) if benchmark_return is not None else None,
+            "relativeReturn": round(relative_return, 4) if relative_return is not None else None,
+            "portfolioSeries": portfolio_series,
+        },
+    }
 
 
 @router.post("/challenge", status_code=201)

@@ -1,0 +1,92 @@
+.kospi-benchmark-card {
+  margin: 0 18px 28px;
+  padding: 24px 26px 20px;
+  border: 1px solid #e8eef7;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #f8fbff 0%, #fff 60%);
+  box-shadow: 0 16px 38px #27384b0b;
+}
+
+.kospi-benchmark-heading,
+.kospi-benchmark-body,
+.kospi-benchmark-metrics,
+.kospi-compare-label,
+.kospi-compare-values {
+  display: flex;
+}
+
+.kospi-benchmark-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kospi-benchmark-heading > svg { color: #3182f6; }
+.kospi-benchmark-kicker,
+.kospi-compare-label > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #3182f6;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .05em;
+}
+
+.kospi-benchmark-heading h2 { margin: 10px 0 6px; font-size: 18px; letter-spacing: -.6px; }
+.kospi-benchmark-heading p { margin: 0; color: #687787; font-size: 11px; line-height: 1.6; }
+.kospi-benchmark-body { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(0, 1.5fr); gap: 20px; margin-top: 20px; }
+.kospi-benchmark-metrics { flex-wrap: wrap; align-content: start; gap: 14px; }
+.kospi-benchmark-price { display: grid; gap: 3px; min-width: 140px; }
+.kospi-benchmark-price span,
+.kospi-window-metrics small,
+.kospi-regime small,
+.kospi-compare-values small { color: #8793a0; font-size: 10px; }
+.kospi-benchmark-price strong { color: #192333; font-size: 28px; letter-spacing: -.9px; }
+.kospi-benchmark-price em { font-size: 11px; font-style: normal; font-weight: 800; }
+.kospi-regime { display: inline-flex; align-items: center; gap: 8px; min-width: 110px; padding: 10px 12px; border-radius: 14px; background: #edf5ff; color: #3182f6; }
+.kospi-regime.bear { background: #fff0f2; color: #e5484d; }
+.kospi-regime.volatile { background: #fff8e9; color: #c27803; }
+.kospi-regime.range { background: #f3f4f6; color: #64748b; }
+.kospi-regime span { display: grid; gap: 2px; }
+.kospi-regime b { color: currentColor; font-size: 12px; }
+.kospi-window-metrics { display: flex; gap: 14px; width: 100%; padding-top: 6px; }
+.kospi-window-metrics span { display: grid; gap: 3px; }
+.kospi-window-metrics b { color: #263548; font-size: 12px; }
+.kospi-benchmark-chart { min-width: 0; }
+.kospi-benchmark-chart svg { width: 100%; height: 130px; overflow: visible; }
+.kospi-benchmark-line { fill: none; stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.kospi-benchmark-line.positive { stroke: #ef4444; }
+.kospi-benchmark-line.negative { stroke: #3182f6; }
+.kospi-benchmark-axis { display: flex; justify-content: space-between; color: #9aa3ad; font-size: 9px; }
+.kospi-benchmark-empty,
+.kospi-benchmark-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 150px; color: #8290a0; font-size: 11px; }
+.kospi-benchmark-compare { grid-column: 1 / -1; padding: 15px 16px; border: 1px solid #edf0f3; border-radius: 16px; background: #fff; }
+.kospi-compare-label { align-items: center; justify-content: space-between; gap: 8px; }
+.kospi-compare-label > span { color: #344054; letter-spacing: 0; }
+.kospi-compare-label > small { color: #9aa3ad; font-size: 10px; }
+.kospi-compare-values { align-items: end; gap: 28px; margin-top: 12px; }
+.kospi-compare-values span { display: grid; gap: 4px; }
+.kospi-compare-values b { color: #27384b; font-size: 16px; }
+.kospi-compare-values > strong { display: grid; gap: 3px; margin-left: auto; color: #2f6feb; font-size: 20px; text-align: right; }
+.kospi-compare-values > strong.down { color: #e5484d; }
+.kospi-compare-values > strong small { color: #8793a0; font-size: 10px; font-weight: 600; }
+.kospi-login-hint { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: #687787; font-size: 11px; }
+.kospi-benchmark-footnote { display: block; margin-top: 14px; color: #a0a8b2; font-size: 9px; }
+.kospi-benchmark-card .up { color: #e5484d; }
+.kospi-benchmark-card .down { color: #3182f6; }
+
+@media (max-width: 760px) {
+  .kospi-benchmark-body { grid-template-columns: 1fr; }
+  .kospi-benchmark-chart { grid-row: 2; }
+}
+
+@media (max-width: 520px) {
+  .kospi-benchmark-card { margin: 0 10px 20px; padding: 20px 18px 16px; border-radius: 20px; }
+  .kospi-benchmark-heading h2 { font-size: 16px; }
+  .kospi-benchmark-heading p { font-size: 10px; }
+  .kospi-benchmark-price strong { font-size: 25px; }
+  .kospi-compare-values { gap: 16px; }
+  .kospi-compare-values > strong { font-size: 17px; }
+}
+

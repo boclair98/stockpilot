@@ -38,6 +38,7 @@ import OnboardingGuide from "./OnboardingGuide";
 import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
 import SimulationControlCenter from "./SimulationControlCenter";
+import KospiBenchmarkCard from "./KospiBenchmarkCard";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -902,6 +903,8 @@ export default function TradingTerminal() {
       </section>
 
       <MarketIndexChart initialData={bootstrapKospi} />
+
+      <KospiBenchmarkCard />
 
       <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
 
