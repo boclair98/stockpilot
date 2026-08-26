@@ -39,6 +39,7 @@ import StockLogo from "./StockLogo";
 import StockTrendPanel from "./StockTrendPanel";
 import SimulationControlCenter from "./SimulationControlCenter";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
+import MarketReplayStudio from "./MarketReplayStudio";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -1089,6 +1090,16 @@ export default function TradingTerminal() {
 
           <DeferredMount minHeight={360}>
             <StockTrendPanel
+              symbol={activeSymbol}
+              name={selectedName}
+              market={quote?.market ?? "KR"}
+              exchange={quote?.exchange ?? "KRX"}
+              currency={quote?.currency ?? "KRW"}
+            />
+          </DeferredMount>
+
+          <DeferredMount minHeight={160}>
+            <MarketReplayStudio
               symbol={activeSymbol}
               name={selectedName}
               market={quote?.market ?? "KR"}
