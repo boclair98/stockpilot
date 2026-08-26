@@ -16,7 +16,7 @@ from app.models import Position, ProtectionPlan, TradeOrder
 from app.routes.trading import execute
 from app.services.audit import record_audit
 from app.services.execution_quality import protection_trigger
-from app.services.instrument_catalog import instrument_catalog
+from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.risk_engine import load_control, quote_age_seconds
 
@@ -90,16 +90,23 @@ class ProtectionMatcher:
                 .all()
             )
 
+        # A single popular ticker may have protection plans for many users.
+        # Fetch one quote per symbol/exchange per poll and reuse it for every
+        # plan, keeping the KIS rate limiter available for user requests.
+        quote_cache: dict[tuple[str, str], tuple[Instrument | None, dict | None]] = {}
         for candidate in plans:
-            instrument = await instrument_catalog.get(
-                candidate.symbol, exchange=candidate.exchange
-            )
+            quote_key = (candidate.symbol.upper(), candidate.exchange.upper())
+            if quote_key not in quote_cache:
+                instrument = await instrument_catalog.get(
+                    candidate.symbol, exchange=candidate.exchange
+                )
+                quote = (
+                    await kis_market.fetch_quote(instrument) if instrument else None
+                )
+                quote_cache[quote_key] = (instrument, quote)
+            instrument, quote = quote_cache[quote_key]
             if not instrument:
                 continue
-            quote = kis_market.quote(candidate.symbol, exchange=candidate.exchange)
-            if not quote:
-                await kis_market.watch(instrument)
-                quote = await kis_market.fetch_quote(instrument)
             if not quote or quote.get("price") is None:
                 continue
             age = quote_age_seconds(quote)
@@ -206,4 +213,5 @@ class ProtectionMatcher:
 
 
 protection_matcher = ProtectionMatcher()
+
 

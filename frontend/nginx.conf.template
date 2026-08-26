@@ -26,6 +26,9 @@ proxy_busy_buffers_size    64k;
 server {
   listen 80;
   server_name _;
+  # The API accepts compact JSON commands only; enforce the same ceiling at
+  # the edge so oversized bodies never consume an application connection.
+  client_max_body_size 64k;
 
   # Browser baseline for the exported SPA. The API applies an even stricter
   # policy itself so these controls survive alternate ingress paths too.

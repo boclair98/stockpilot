@@ -120,6 +120,16 @@ KOSPI 지수는 단순 차트가 아니라 사용자의 투자 판단을 설명�
 
 KIS 수집기를 단일 수집기로 운영하고 Redis lease·공유 캐시·WebSocket fan-out을 사용합니다. 여러 브라우저가 같은 종목을 요청해도 외부 API 호출과 JSON 직렬화를 반복하지 않도록 구성했습니다.
 
+### 5. 사용자 증가를 대비한 운영 하드닝
+
+- **공용 데이터 캐시:** 뉴스·일봉·기업정보는 서비스 캐시와 CDN `s-maxage`를 함께 사용해 방문자 수만큼 KIS·DART 호출이 늘어나지 않습니다.
+- **정확 조회 인덱스:** 종목 코드·시장·거래소 복합 키를 메모리 인덱스로 유지하고, 주문·알림·보호주문 상태 조회에는 PostgreSQL 복합 인덱스(`0012_scale_hot_paths`)를 적용합니다.
+- **중복 워커 방지:** Redis lease로 알림·보호주문·시세 수집 리더를 한 인스턴스로 제한하고, 같은 종목의 워커 시세 조회도 poll 단위로 합칩니다.
+- **장애 격리:** Redis가 잠시 끊겨도 로컬 fallback으로 읽기·로그인을 유지하되, 운영 워커 lease는 fail-closed로 중복 실행을 막습니다. readiness probe가 DB·Redis·시세 상태를 분리해 표시합니다.
+- **요청 보호:** 사용자/IP별 읽기·쓰기 rate limit과 API/nginx 본문 크기 제한을 적용하고, 모든 응답에 request ID·보안 헤더를 남겨 추적과 abuse 대응을 가능하게 합니다.
+
+이 보호장치는 “무제한 트래픽”을 보장한다는 뜻이 아니라, 실제 사용자가 늘 때 외부 API·DB·워커가 먼저 무너지는 것을 막는 운영 기준선입니다. 배포 전에는 `docs/OPERATIONS_RUNBOOK.md`의 migration·백업·부하 점검 절차를 따라야 합니다.
+
 ## 도메인 구조
 
 ```text
@@ -250,6 +260,7 @@ cp backend/.env.example backend/.env
 ```env
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
+MAX_REQUEST_BODY_BYTES=64000
 KIS_APP_KEY=...
 KIS_APP_SECRET=...
 KIS_ENV=paper

@@ -129,6 +129,18 @@ class TradeOrder(Base):
         sa.UniqueConstraint(
             "owner_id", "idempotency_key", name="uq_trade_orders_owner_idempotency"
         ),
+        # Hot paths used by risk checks, order history, and dashboard loads.
+        # The migration creates these explicitly for already-running databases.
+        sa.Index("ix_trade_orders_owner_status", "owner_id", "status"),
+        sa.Index("ix_trade_orders_owner_created_at", "owner_id", "created_at"),
+        sa.Index(
+            "ix_trade_orders_owner_symbol_exchange_side_status",
+            "owner_id",
+            "symbol",
+            "exchange",
+            "side",
+            "status",
+        ),
     )
 
 
@@ -168,6 +180,16 @@ class ProtectionPlan(Base):
         sa.CheckConstraint(
             "take_profit_price > stop_loss_price",
             name="ck_protection_price_order",
+        ),
+        sa.Index(
+            "ix_protection_plans_owner_status_symbol_exchange",
+            "owner_id",
+            "status",
+            "symbol",
+            "exchange",
+        ),
+        sa.Index(
+            "ix_protection_plans_status_created_at", "status", "created_at"
         ),
     )
 
@@ -353,6 +375,15 @@ class PriceAlert(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
+    __table_args__ = (
+        sa.Index("ix_price_alerts_status_created_at", "status", "created_at"),
+        sa.Index(
+            "ix_price_alerts_owner_status_created_at",
+            "owner_id",
+            "status",
+            "created_at",
+        ),
+    )
 
 
 class PushDevice(Base):
@@ -523,4 +554,5 @@ class TradeJournal(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )
+
 

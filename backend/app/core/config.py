@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     leaderboard_cache_seconds: int = 15
     rate_limit_read_per_minute: int = 240
     rate_limit_write_per_minute: int = 30
+    # All current API payloads are small JSON commands. Rejecting unexpectedly
+    # large bodies before FastAPI parses them protects memory under abuse and
+    # keeps a busy replica available for real users.
+    max_request_body_bytes: int = 64_000
 
     # Optional publishable key from logo.dev. This key is intentionally safe
     # to include in image URLs returned to the browser.
@@ -69,3 +73,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

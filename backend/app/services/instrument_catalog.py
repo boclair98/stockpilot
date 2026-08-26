@@ -124,10 +124,27 @@ TOP_INSTRUMENTS = (
 
 class InstrumentCatalog:
     def __init__(self) -> None:
-        self._items: dict[str, Instrument] = {item.id: item for item in TOP_INSTRUMENTS}
+        self._items: dict[str, Instrument] = {}
+        # Symbol lookups are on the hot path for quotes, orders, alerts, and
+        # every dashboard request. Keep the full catalog for search, but use a
+        # normalized composite index for exact lookups instead of scanning all
+        # tens of thousands of KRX/NXT/US rows.
+        self._by_key: dict[tuple[str, str, str], Instrument] = {}
+        for item in TOP_INSTRUMENTS:
+            self._add(item)
         self._loaded = False
         self._lock = asyncio.Lock()
         self.last_error: str | None = None
+
+    def _add(self, item: Instrument) -> None:
+        """Insert an instrument while preserving curated top-row metadata."""
+
+        if item.id in self._items:
+            return
+        self._items[item.id] = item
+        self._by_key.setdefault(
+            (item.symbol.upper(), item.market.upper(), item.exchange.upper()), item
+        )
 
     @property
     def count(self) -> int:
@@ -160,7 +177,7 @@ class InstrumentCatalog:
                         else self._parse_us(raw, exchange)
                     )
                     for item in parsed:
-                        self._items.setdefault(item.id, item)
+                        self._add(item)
                 self._loaded = len(self._items) > len(TOP_INSTRUMENTS)
                 if not self._loaded:
                     self.last_error = "KIS 종목 마스터를 불러오지 못했습니다."
@@ -258,6 +275,10 @@ class InstrumentCatalog:
     ) -> Instrument | None:
         await self.ensure_loaded()
         symbol = symbol.upper()
+        market = market.upper() if market else None
+        exchange = exchange.upper() if exchange else None
+        if market and exchange:
+            return self._by_key.get((symbol, market, exchange))
         for item in self._items.values():
             if (
                 item.symbol == symbol
@@ -271,6 +292,10 @@ class InstrumentCatalog:
         self, symbol: str, market: str | None = None, exchange: str | None = None
     ) -> Instrument | None:
         symbol = symbol.upper()
+        market = market.upper() if market else None
+        exchange = exchange.upper() if exchange else None
+        if market and exchange:
+            return self._by_key.get((symbol, market, exchange))
         return next(
             (
                 item
@@ -284,3 +309,4 @@ class InstrumentCatalog:
 
 
 instrument_catalog = InstrumentCatalog()
+

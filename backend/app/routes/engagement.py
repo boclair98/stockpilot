@@ -7,7 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -433,6 +433,7 @@ async def dashboard(
 
 @router.get("/news")
 async def news(
+    response: Response,
     symbol: str = Query(min_length=1, max_length=12),
     market: str = Query(pattern="^(KR|US)$"),
     exchange: str = Query(min_length=3, max_length=8),
@@ -442,17 +443,25 @@ async def news(
     )
     if not instrument:
         raise HTTPException(404, "종목을 찾을 수 없습니다.")
+    items = await kis_market.news_titles(instrument)
+    # News is public and refreshed every five minutes by KIS. Let the edge
+    # serve a short-lived response while stale requests revalidate in the
+    # background instead of making every visitor wait on the same upstream.
+    response.headers["Cache-Control"] = (
+        "public, max-age=30, s-maxage=300, stale-while-revalidate=600"
+    )
     return {
         "symbol": instrument.symbol,
         "name": instrument.name,
         "source": "한국투자증권 KIS Open API",
         "refreshedAt": datetime.now(UTC).isoformat(),
-        "items": await kis_market.news_titles(instrument),
+        "items": items,
     }
 
 
 @router.get("/history")
 async def history(
+    response: Response,
     symbol: str = Query(min_length=1, max_length=12),
     market: str = Query(pattern="^(KR|US)$"),
     exchange: str = Query(min_length=3, max_length=8),
@@ -462,6 +471,12 @@ async def history(
     )
     if not instrument:
         raise HTTPException(404, "종목을 찾을 수 없습니다.")
+    items = await kis_market.daily_history(instrument)
+    # Daily candles are intentionally cached for one hour by the market
+    # service. Match that policy at the CDN boundary for high fan-out pages.
+    response.headers["Cache-Control"] = (
+        "public, max-age=300, s-maxage=3600, stale-while-revalidate=3600"
+    )
     return {
         "symbol": instrument.symbol,
         "name": instrument.name,
@@ -469,7 +484,7 @@ async def history(
         "currency": instrument.currency,
         "exchange": instrument.exchange,
         "source": "한국투자증권 KIS Open API",
-        "items": await kis_market.daily_history(instrument),
+        "items": items,
     }
 
 
@@ -638,3 +653,4 @@ async def remove_push_device(
         )
     )
     return {"removed": bool(result.rowcount)}
+

@@ -109,6 +109,27 @@ async def traffic_middleware(request: Request, call_next):
     status = 500
     await request_metrics.begin()
     try:
+        content_length = request.headers.get("content-length")
+        if request.url.path.startswith("/api/") and content_length:
+            try:
+                oversized = int(content_length) > settings.max_request_body_bytes
+            except ValueError:
+                oversized = False
+            if oversized:
+                status = 413
+                response = JSONResponse(
+                    status_code=413,
+                    content={
+                        "detail": "요청 본문이 너무 큽니다.",
+                        "requestId": request_id,
+                    },
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Request-ID": request_id,
+                    },
+                )
+                apply_security_headers(response.headers)
+                return response
         if (
             request.url.path.startswith("/api/")
             and request.method in {"POST", "PUT", "PATCH", "DELETE"}
@@ -235,4 +256,5 @@ async def traffic_health(_: Identity = Depends(require_operator)) -> JSONRespons
         content={"status": "ok", **(await request_metrics.snapshot())},
         headers={"Cache-Control": "no-store"},
     )
+
 

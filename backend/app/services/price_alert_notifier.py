@@ -13,7 +13,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.traffic import traffic_store
 from app.models import PriceAlert, PushDevice
 from app.services.firebase_push import firebase_push
-from app.services.instrument_catalog import instrument_catalog
+from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 
 logger = logging.getLogger(__name__)
@@ -101,13 +101,21 @@ class PriceAlertNotifier:
                 .all()
             )
 
+        # Many users can subscribe to the same popular ticker. Reuse one
+        # quote per symbol/exchange within a poll so notification fan-out does
+        # not multiply KIS calls by the number of alerts.
+        quote_cache: dict[tuple[str, str], tuple[Instrument | None, dict | None]] = {}
         for candidate in alerts:
-            instrument = await instrument_catalog.get(
-                candidate.symbol, exchange=candidate.exchange
-            )
+            quote_key = (candidate.symbol.upper(), candidate.exchange.upper())
+            if quote_key not in quote_cache:
+                instrument = await instrument_catalog.get(
+                    candidate.symbol, exchange=candidate.exchange
+                )
+                quote = await kis_market.fetch_quote(instrument) if instrument else None
+                quote_cache[quote_key] = (instrument, quote)
+            instrument, quote = quote_cache[quote_key]
             if not instrument:
                 continue
-            quote = await kis_market.fetch_quote(instrument)
             if not quote or quote.get("price") is None:
                 continue
             current = Decimal(str(quote["price"]))
@@ -192,3 +200,4 @@ class PriceAlertNotifier:
 
 
 price_alert_notifier = PriceAlertNotifier()
+
