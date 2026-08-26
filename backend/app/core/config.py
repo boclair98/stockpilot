@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     kis_app_key: str | None = None
     kis_app_secret: str | None = None
     kis_rest_calls_per_second: int = 1
+    # Upper bound for a user-facing market-data request, including time spent
+    # waiting behind the shared KIS REST limiter. Slow upstreams must not pin
+    # an API worker indefinitely during a traffic spike.
+    market_data_request_timeout_seconds: float = 8.0
     simulation_fee_rate: Decimal = Decimal("0.00015")
     simulation_kr_sell_tax_rate: Decimal = Decimal("0.002")
     trading_mode: str = "SIMULATION"

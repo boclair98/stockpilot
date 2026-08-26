@@ -8,10 +8,10 @@ request.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from statistics import pstdev
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,7 @@ def classify_regime(points: list[BenchmarkPoint]) -> tuple[str, float | None]:
     window = points[-min(20, len(points)) :]
     daily_returns = [
         (right.close / left.close - 1) * 100
-        for left, right in zip(window, window[1:])
+        for left, right in zip(window, window[1:], strict=False)
         if left.close > 0
     ]
     volatility = pstdev(daily_returns) if len(daily_returns) >= 2 else 0.0

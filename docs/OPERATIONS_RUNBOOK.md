@@ -32,6 +32,9 @@
 - `MAX_REQUEST_BODY_BYTES`(기본 64KB)는 현재 JSON 명령 계약에 맞춘 보호 한도입니다.
   파일 업로드 같은 기능을 추가할 때는 전역 한도를 무작정 키우지 말고 별도
   업로드 경로와 저장소 정책을 설계합니다.
+- `MARKET_DATA_REQUEST_TIMEOUT_SECONDS`(기본 8초)는 KIS REST 지연이 API worker를
+  붙잡지 않도록 하는 상한입니다. 503 비율이 높아지면 값을 무작정 늘리기보다
+  KIS 응답·rate limit·WebSocket 연결 상태를 먼저 점검합니다.
 
 ## 데이터 보호 및 복구
 

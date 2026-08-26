@@ -1,4 +1,8 @@
-from app.services.benchmark import build_benchmark_report, classify_regime, normalize_points
+from app.services.benchmark import (
+    build_benchmark_report,
+    classify_regime,
+    normalize_points,
+)
 
 
 def _rows(closes: list[float]) -> list[dict]:

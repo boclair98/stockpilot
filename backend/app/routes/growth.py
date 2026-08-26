@@ -23,8 +23,8 @@ from app.models import (
     User,
 )
 from app.routes.engagement import _equity, combined_return_rate
-from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.benchmark import build_benchmark_report
+from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.portfolio_analytics import (
     ExecutionPoint,

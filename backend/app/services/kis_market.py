@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -21,6 +22,7 @@ from app.services.instrument_catalog import (
 logger = logging.getLogger(__name__)
 TOP_IDS = {item.id for item in TOP_INSTRUMENTS}
 MAX_DYNAMIC_SUBSCRIPTIONS = 20
+REST_LOCK_TIMEOUT_SECONDS = 3.0
 DOMESTIC_REST_MARKET = "UN"
 DOMESTIC_STREAM_TR_ID = "H0UNCNT0"
 
@@ -196,6 +198,21 @@ class KISMarket:
             )
         return self._http
 
+    @asynccontextmanager
+    async def _rest_slot(self):
+        """Acquire the shared REST slot without queueing a request forever."""
+
+        try:
+            await asyncio.wait_for(
+                self._rest_lock.acquire(), timeout=REST_LOCK_TIMEOUT_SECONDS
+            )
+        except TimeoutError as exc:
+            raise TimeoutError("KIS REST slot is busy") from exc
+        try:
+            yield
+        finally:
+            self._rest_lock.release()
+
     async def _persist_snapshots(self) -> None:
         while not self._stop.is_set():
             rows = self.snapshot(top_only=True)
@@ -245,7 +262,20 @@ class KISMarket:
             fresh = self._quotes.get(instrument.id)
             return fresh.copy() if fresh else None
 
-        shared = await traffic_store.get_or_set(cache_key, 5, refresh)
+        try:
+            shared = await asyncio.wait_for(
+                traffic_store.get_or_set(
+                    cache_key, 5, refresh
+                ),
+                timeout=max(1.0, settings.market_data_request_timeout_seconds),
+            )
+        except TimeoutError:
+            # A saturated or unavailable KIS upstream should become a fast
+            # 503 at the route boundary, not a request that consumes a worker
+            # until the proxy times out. Existing cached ticks remain visible
+            # through shared_snapshot and the next request can retry.
+            logger.info("KIS quote request timed out for %s", instrument.id)
+            return None
         if shared:
             self._quotes[instrument.id] = shared
             return shared.copy()
@@ -279,7 +309,7 @@ class KISMarket:
             return []
 
         try:
-            async with self._rest_lock:
+            async with self._rest_slot():
                 await self._rate_limit_rest()
                 token = await self._token()
                 # Reuse the long-lived KIS client so a burst of public news
@@ -382,7 +412,7 @@ class KISMarket:
         end = now.date() - timedelta(days=1)
         start = end - timedelta(days=150)
         try:
-            async with self._rest_lock:
+            async with self._rest_slot():
                 await self._rate_limit_rest()
                 token = await self._token()
                 client = self._client()
@@ -473,7 +503,7 @@ class KISMarket:
 
         start = now.date() - timedelta(days=60)
         try:
-            async with self._rest_lock:
+            async with self._rest_slot():
                 await self._rate_limit_rest()
                 token = await self._token()
                 client = self._client()
@@ -622,7 +652,7 @@ class KISMarket:
             await asyncio.sleep(0.1)
 
     async def _fetch_rest(self, instrument: Instrument) -> None:
-        async with self._rest_lock:
+        async with self._rest_slot():
             await self._rate_limit_rest()
             token = await self._token()
             client = self._client()

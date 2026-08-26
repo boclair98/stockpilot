@@ -59,7 +59,9 @@ def build_portfolio_analytics(
 
     ordered = sorted(snapshots, key=lambda point: point.day)
     values = [float(point.return_rate) for point in ordered]
-    changes = [right - left for left, right in zip(values, values[1:])]
+    changes = [
+        right - left for left, right in zip(values, values[1:], strict=False)
+    ]
     _, max_drawdown = _drawdown_series(values) if values else (0.0, 0.0)
 
     average_change = fmean(changes) if changes else None

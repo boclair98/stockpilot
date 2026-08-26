@@ -1,7 +1,6 @@
 import pytest
-from fastapi import Response
-
 from app.routes.trading import simulation_rules
+from fastapi import Response
 
 
 @pytest.mark.asyncio
