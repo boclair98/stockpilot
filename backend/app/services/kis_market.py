@@ -274,6 +274,7 @@ class KISMarket:
             # 503 at the route boundary, not a request that consumes a worker
             # until the proxy times out. Existing cached ticks remain visible
             # through shared_snapshot and the next request can retry.
+            self.last_error = "KIS 시세 응답 지연"
             logger.info("KIS quote request timed out for %s", instrument.id)
             return None
         if shared:

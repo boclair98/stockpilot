@@ -35,6 +35,9 @@
 - `MARKET_DATA_REQUEST_TIMEOUT_SECONDS`(기본 8초)는 KIS REST 지연이 API worker를
   붙잡지 않도록 하는 상한입니다. 503 비율이 높아지면 값을 무작정 늘리기보다
   KIS 응답·rate limit·WebSocket 연결 상태를 먼저 점검합니다.
+- `/api/trading/quote`가 503을 반환하면 `Retry-After: 5`를 따릅니다. 클라이언트가
+  즉시 무한 재시도하지 않도록 지수 백오프를 적용하고, 오래된 시세를 주문가로
+  사용하지 않습니다.
 
 ## 데이터 보호 및 복구
 

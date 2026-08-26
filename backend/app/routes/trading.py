@@ -451,6 +451,8 @@ async def quote(
         raise HTTPException(404, "종목을 찾을 수 없습니다.")
     current = await kis_market.fetch_quote(instrument)
     if not current:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Retry-After"] = "5"
         raise HTTPException(503, "KIS 시세를 아직 불러오지 못했습니다.")
     return current
 

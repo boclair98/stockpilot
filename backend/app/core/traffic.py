@@ -220,8 +220,12 @@ class TrafficStore:
                             logger.warning(
                                 "Redis single-flight release failed", exc_info=True
                             )
-                for _ in range(40):
-                    await asyncio.sleep(0.075)
+                # A KIS/DART refresh can legitimately take a few seconds.
+                # Keep waiters on the shared result long enough to avoid a
+                # cross-replica stampede, while the caller's own timeout still
+                # bounds the total request lifetime.
+                for _ in range(85):
+                    await asyncio.sleep(0.1)
                     cached = await self.get_json(key)
                     if cached is not None:
                         return cached
@@ -304,3 +308,4 @@ class RequestMetrics:
 
 traffic_store = TrafficStore()
 request_metrics = RequestMetrics()
+
