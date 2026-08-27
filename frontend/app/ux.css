@@ -1,0 +1,84 @@
+/* Small interaction details that make the terminal feel intentional on every input device. */
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 10px;
+  left: 50%;
+  padding: 10px 14px;
+  border-radius: 11px;
+  color: #fff;
+  background: #191f28;
+  box-shadow: 0 12px 28px rgba(25, 31, 40, .22);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translate(-50%, -160%);
+  transition: transform .18s ease;
+}
+
+.skip-link:focus {
+  transform: translate(-50%, 0);
+}
+
+.nxt-hero:focus {
+  outline: none;
+}
+
+.top-search {
+  cursor: pointer;
+}
+
+.search-card .section-head kbd {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border: 1px solid #dfe4e9;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: #64707d;
+  background: #f8fafb;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.search-input {
+  border: 1px solid transparent;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+.search-input:focus-within {
+  border-color: #8db8fb;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(55, 124, 246, .1);
+}
+
+.search-results > button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid rgba(55, 124, 246, .18);
+  outline-offset: -2px;
+  background: #f4f8ff;
+}
+
+@media (max-width: 520px) {
+  .skip-link {
+    top: 7px;
+    font-size: 11px;
+  }
+
+  .search-card .section-head p {
+    line-height: 1.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link,
+  .search-input {
+    transition: none;
+  }
+}
+

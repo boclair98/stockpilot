@@ -228,6 +228,7 @@ export default function TradingTerminal() {
   const [stopLossPrice, setStopLossPrice] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
   const toastTimer = useRef<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -356,6 +357,29 @@ export default function TradingTerminal() {
     }
     setGuideOpen(false);
   }, []);
+
+  const focusSearch = useCallback(() => {
+    const target = document.getElementById("search-card");
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 180);
+  }, []);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (
+        activeElement?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName ?? "")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      focusSearch();
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [focusSearch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -825,6 +849,7 @@ export default function TradingTerminal() {
 
   return (
     <main className="app">
+      <a className="skip-link" href="#market-content">본문으로 건너뛰기</a>
       <header className="topbar">
         <a className="brand" href="#"><span><Sparkles size={18} /></span>StockPilot</a>
         <div className="top-actions">
@@ -835,7 +860,16 @@ export default function TradingTerminal() {
           <a className="league-link lounge-link" href="/lounge"><MessageCircle size={16} /> 투자 라운지</a>
           <InstallAppButton />
           <button type="button" className="help-button" aria-label="처음 이용 안내" title="처음 이용 안내" onClick={() => setGuideOpen(true)}><HelpCircle size={19} /></button>
-          <button aria-label="검색"><Search size={19} /></button>
+          <button
+            type="button"
+            className="top-search"
+            aria-label="종목 검색"
+            aria-keyshortcuts="/"
+            title="종목 검색 (/)"
+            onClick={focusSearch}
+          >
+            <Search size={19} />
+          </button>
           <button
             className="alert-button"
             aria-label={unreadAlerts ? `읽지 않은 알림 ${unreadAlerts}개` : "알림"}
@@ -862,7 +896,7 @@ export default function TradingTerminal() {
         </div>
       </header>
 
-      <section className="hero nxt-hero">
+      <section className="hero nxt-hero" id="market-content" tabIndex={-1}>
         <MarketHeroCarousel live={live} statusText={marketConnectionText} />
         <div className="hero-sessions" aria-label="NXT 거래 세션">
           {marketSessions.map((item) => (
@@ -1030,32 +1064,46 @@ export default function TradingTerminal() {
             </div>
           ))}
 
-          <div className="search-card">
+          <div className="search-card" id="search-card">
             <div className="section-head">
-              <div><h2>모든 종목 검색</h2><p>종목명이나 종목코드·티커를 입력하세요</p></div>
+              <div><h2>모든 종목 검색</h2><p>종목명이나 종목코드·티커를 입력하세요 · <kbd>/</kbd> 단축키</p></div>
             </div>
             <div className="search-controls">
-              <div className="search-input"><Search size={18} /><input value={searchQuery} onChange={(event) => {
-                const value = event.target.value;
-                setSearchQuery(value);
-                if (value.trim()) {
-                  setSearching(true);
-                } else {
-                  setSearchResults([]);
-                  setSearching(false);
-                }
-              }} placeholder="예: 삼성전자, 카카오, AAPL, PLTR" /></div>
+              <div className="search-input"><Search size={18} /><input
+                ref={searchInputRef}
+                aria-label="종목명·종목코드·티커 검색"
+                aria-controls="search-results"
+                value={searchQuery}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setSearching(false);
+                  }
+                }}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSearchQuery(value);
+                  if (value.trim()) {
+                    setSearching(true);
+                  } else {
+                    setSearchResults([]);
+                    setSearching(false);
+                  }
+                }}
+                placeholder="예: 삼성전자, 카카오, AAPL, PLTR"
+              /></div>
               <div className="search-market">
-                {(["ALL", "KR", "US"] as const).map((item) => <button key={item} className={searchMarket === item ? "active" : ""} onClick={() => {
+                {(["ALL", "KR", "US"] as const).map((item) => <button type="button" key={item} className={searchMarket === item ? "active" : ""} aria-pressed={searchMarket === item} onClick={() => {
                   setSearchMarket(item);
                   if (searchQuery.trim()) setSearching(true);
                 }}>{item === "ALL" ? "전체" : item === "KR" ? "한국" : "미국"}</button>)}
               </div>
             </div>
             {searchQuery && (
-              <div className="search-results">
-                {searching ? <p className="search-state"><RefreshCw className="spin" size={16} /> 종목을 찾고 있어요</p> : searchResults.length ? searchResults.map((item) => (
-                  <button key={item.id} onClick={() => chooseSearchResult(item)}>
+              <div className="search-results" id="search-results" aria-busy={searching}>
+                {searching ? <p className="search-state" role="status" aria-live="polite"><RefreshCw className="spin" size={16} /> 종목을 찾고 있어요</p> : searchResults.length ? searchResults.map((item) => (
+                  <button type="button" key={item.id} onClick={() => chooseSearchResult(item)}>
                     <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} logoUrl={item.logoUrl} />
                     <span><b>{item.name}</b><small>{item.englishName || item.symbol}</small></span>
                     <span><b>{item.symbol}</b><small>{item.market === "KR" ? "한국" : "미국"} · {item.exchange}</small></span>
