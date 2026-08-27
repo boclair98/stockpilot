@@ -40,6 +40,7 @@ import StockTrendPanel from "./StockTrendPanel";
 import SimulationControlCenter from "./SimulationControlCenter";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketReplayStudio from "./MarketReplayStudio";
+import MarketBriefing from "./MarketBriefing";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -940,6 +941,21 @@ export default function TradingTerminal() {
       <MarketIndexChart initialData={bootstrapKospi} />
 
       <KospiBenchmarkCard />
+
+      <MarketBriefing
+        live={live}
+        average={marketPulse.average}
+        risingCount={marketPulse.risingCount}
+        total={marketPulse.total}
+        riser={marketPulse.riser}
+        faller={marketPulse.faller}
+        authenticated={portfolio.authenticated}
+        positionCount={portfolioCheck.positionCount}
+        concentration={portfolioCheck.concentration}
+        protectionCoverage={portfolioCheck.protectionCoverage}
+        winners={portfolioCheck.winners}
+        losers={portfolioCheck.losers}
+      />
 
       <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
 
