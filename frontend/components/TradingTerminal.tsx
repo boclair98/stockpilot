@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { FormEvent, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -28,19 +29,32 @@ import {
   X,
 } from "lucide-react";
 
-import CompanyInsight from "./CompanyInsight";
 import DeferredMount from "./DeferredMount";
-import InvestorTools from "./InvestorTools";
 import InstallAppButton from "./InstallAppButton";
 import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
 import MarketHeroCarousel from "./MarketHeroCarousel";
-import OnboardingGuide from "./OnboardingGuide";
 import StockLogo from "./StockLogo";
-import StockTrendPanel from "./StockTrendPanel";
-import SimulationControlCenter from "./SimulationControlCenter";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
-import MarketReplayStudio from "./MarketReplayStudio";
 import MarketBriefing from "./MarketBriefing";
+
+const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
+  loading: () => <div className="chunk-placeholder" style={{ minHeight: 320 }} aria-hidden="true" />,
+});
+const InvestorTools = dynamic(() => import("./InvestorTools"), {
+  loading: () => <div className="chunk-placeholder" style={{ minHeight: 420 }} aria-hidden="true" />,
+});
+const OnboardingGuide = dynamic(() => import("./OnboardingGuide"), {
+  loading: () => null,
+});
+const StockTrendPanel = dynamic(() => import("./StockTrendPanel"), {
+  loading: () => <div className="chunk-placeholder" style={{ minHeight: 360 }} aria-hidden="true" />,
+});
+const SimulationControlCenter = dynamic(() => import("./SimulationControlCenter"), {
+  loading: () => <div className="chunk-placeholder compact" style={{ minHeight: 92 }} aria-hidden="true" />,
+});
+const MarketReplayStudio = dynamic(() => import("./MarketReplayStudio"), {
+  loading: () => <div className="chunk-placeholder compact" style={{ minHeight: 160 }} aria-hidden="true" />,
+});
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -303,8 +317,10 @@ export default function TradingTerminal() {
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "quotes") {
-          setQuotes(message.data);
-          setStatus(message.status);
+          startTransition(() => {
+            setQuotes(message.data);
+            setStatus(message.status);
+          });
           saveSnapshot(message.data);
         }
       };
@@ -425,7 +441,7 @@ export default function TradingTerminal() {
           { signal: controller.signal, cache: "no-store" },
         );
         const data = response.ok ? await response.json() : { items: [] };
-        setSearchResults(data.items);
+        startTransition(() => setSearchResults(data.items));
       } catch {
         if (!controller.signal.aborted) setSearchResults([]);
       } finally {
@@ -938,10 +954,6 @@ export default function TradingTerminal() {
         </article>
       </section>
 
-      <MarketIndexChart initialData={bootstrapKospi} />
-
-      <KospiBenchmarkCard />
-
       <MarketBriefing
         live={live}
         average={marketPulse.average}
@@ -957,7 +969,13 @@ export default function TradingTerminal() {
         losers={portfolioCheck.losers}
       />
 
-      <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
+      <MarketIndexChart initialData={bootstrapKospi} />
+
+      <KospiBenchmarkCard />
+
+      <DeferredMount minHeight={92} rootMargin="600px 0px">
+        <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
+      </DeferredMount>
 
       <section className="insight-grid" aria-label="시장과 내 투자 체크업">
         <article className="pulse-card">
@@ -1152,7 +1170,7 @@ export default function TradingTerminal() {
             )}
           </div>
 
-          <DeferredMount minHeight={360}>
+          <DeferredMount minHeight={360} rootMargin="420px 0px">
             <StockTrendPanel
               symbol={activeSymbol}
               name={selectedName}
@@ -1162,7 +1180,7 @@ export default function TradingTerminal() {
             />
           </DeferredMount>
 
-          <DeferredMount minHeight={160}>
+          <DeferredMount minHeight={160} rootMargin="320px 0px">
             <MarketReplayStudio
               symbol={activeSymbol}
               name={selectedName}
@@ -1172,36 +1190,38 @@ export default function TradingTerminal() {
             />
           </DeferredMount>
 
-          <DeferredMount minHeight={320}>
+          <DeferredMount minHeight={320} rootMargin="320px 0px">
             <CompanyInsight
               symbol={activeSymbol}
               market={quote?.market ?? "KR"}
             />
           </DeferredMount>
 
-          <InvestorTools
-            authenticated={portfolio.authenticated}
-            selected={quote ? {
-              symbol: quote.symbol,
-              name: quote.name,
-              market: quote.market,
-              currency: quote.currency,
-              exchange: quote.exchange,
-              price: quote.price,
-            } : null}
-            onSelect={(item) => chooseSearchResult({
-              id: `${item.market}:${item.exchange}:${item.symbol}`,
-              symbol: item.symbol,
-              name: item.name,
-              englishName: "",
-              market: item.market,
-              currency: item.currency,
-              exchange: item.exchange,
-            })}
-            onNotice={notify}
-            onAlertSummary={({ unread }) => setUnreadAlerts(unread)}
-            focusAlertsKey={alertFocusKey}
-          />
+          <DeferredMount minHeight={420} rootMargin="320px 0px">
+            <InvestorTools
+              authenticated={portfolio.authenticated}
+              selected={quote ? {
+                symbol: quote.symbol,
+                name: quote.name,
+                market: quote.market,
+                currency: quote.currency,
+                exchange: quote.exchange,
+                price: quote.price,
+              } : null}
+              onSelect={(item) => chooseSearchResult({
+                id: `${item.market}:${item.exchange}:${item.symbol}`,
+                symbol: item.symbol,
+                name: item.name,
+                englishName: "",
+                market: item.market,
+                currency: item.currency,
+                exchange: item.exchange,
+              })}
+              onNotice={notify}
+              onAlertSummary={({ unread }) => setUnreadAlerts(unread)}
+              focusAlertsKey={alertFocusKey}
+            />
+          </DeferredMount>
 
           <div className="portfolio-panel">
             <div className="section-head">
@@ -1443,7 +1463,7 @@ export default function TradingTerminal() {
           <a href="https://www.logo.dev" target="_blank" rel="noreferrer">Logos provided by Logo.dev</a>
         </span>
       </footer>
-      <OnboardingGuide open={guideOpen} onClose={closeGuide} />
+      {guideOpen ? <OnboardingGuide open onClose={closeGuide} /> : null}
       {confirmingOrder && quote && (
         <div
           className="order-confirm-backdrop"

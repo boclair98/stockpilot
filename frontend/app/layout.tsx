@@ -26,6 +26,7 @@ import "./kospi-benchmark.css";
 import "./replay.css";
 import "./ux.css";
 import "./briefing.css";
+import "./performance.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),

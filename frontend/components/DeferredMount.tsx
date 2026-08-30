@@ -5,9 +5,11 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 export default function DeferredMount({
   children,
   minHeight = 280,
+  rootMargin = "480px 0px",
 }: {
   children: ReactNode;
   minHeight?: number;
+  rootMargin?: string;
 }) {
   const anchor = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -25,11 +27,11 @@ export default function DeferredMount({
           observer.disconnect();
         }
       },
-      { rootMargin: "700px 0px" },
+      { rootMargin },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [rootMargin]);
 
   return (
     <div ref={anchor} className="deferred-mount" style={{ minHeight: visible ? undefined : minHeight }}>
@@ -37,3 +39,4 @@ export default function DeferredMount({
     </div>
   );
 }
+
