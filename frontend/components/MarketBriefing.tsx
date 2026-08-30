@@ -1,7 +1,12 @@
 import {
   Activity,
   ArrowRight,
+  BarChart3,
+  Check,
   CircleHelp,
+  MousePointerClick,
+  NotebookPen,
+  Search,
   ShieldCheck,
   Sparkles,
   Target,
@@ -24,6 +29,8 @@ type Props = {
   protectionCoverage: number;
   winners: number;
   losers: number;
+  selectedName: string;
+  quoteReady: boolean;
 };
 
 function signedPercent(value: number) {
@@ -47,6 +54,8 @@ export default function MarketBriefing({
   protectionCoverage,
   winners,
   losers,
+  selectedName,
+  quoteReady,
 }: Props) {
   const marketTone: Tone = !total ? "neutral" : average >= 0 ? "positive" : "negative";
   const marketTitle = !total
@@ -117,19 +126,66 @@ export default function MarketBriefing({
           icon: ShieldCheck,
         };
   const NextIcon = nextAction.icon;
+  const journeyStep = !total ? 0 : !quoteReady ? 1 : positionCount === 0 ? 2 : 3;
+  const journey = [
+    {
+      title: "시장 읽기",
+      description: total ? `${total}개 주요 종목 확인` : "실시간 시세 연결 중",
+      href: "#market-content",
+      icon: BarChart3,
+    },
+    {
+      title: "종목 선택",
+      description: quoteReady ? `${selectedName} 선택됨` : "한국·미국 종목 검색",
+      href: "#search-card",
+      icon: Search,
+    },
+    {
+      title: "안전 주문",
+      description: authenticated ? "가상원장으로 체결 연습" : "로그인 후 가상자금 지급",
+      href: "#order-ticket",
+      icon: MousePointerClick,
+    },
+    {
+      title: "기록·복기",
+      description: positionCount ? `${positionCount}개 보유 종목 분석` : "주문 근거와 결과 기록",
+      href: "/growth",
+      icon: NotebookPen,
+    },
+  ];
 
   return (
     <section className="briefing-card" aria-labelledby="briefing-title">
       <div className="briefing-head">
         <div>
-          <span className="briefing-kicker"><Sparkles size={13} /> DAILY MARKET CHECK</span>
-          <h2 id="briefing-title">오늘의 투자 브리핑</h2>
-          <p>시세와 내 가상계좌를 10초 만에 확인하고 다음 행동을 정해 보세요.</p>
+          <span className="briefing-kicker"><Sparkles size={13} /> READ · DECIDE · PRACTICE · REVIEW</span>
+          <h2 id="briefing-title">오늘의 투자 루프</h2>
+          <p>시장을 읽고 안전하게 연습한 뒤, 결과를 기록하는 한 사이클을 완성해 보세요.</p>
         </div>
         <span className={`briefing-live ${live ? "on" : "off"}`}>
           <i /> {live ? "LIVE" : "시세 대기"}
         </span>
       </div>
+
+      <nav className="briefing-journey" aria-label="가상투자 핵심 여정">
+        {journey.map((item, index) => {
+          const JourneyIcon = item.icon;
+          const isDone = index < journeyStep;
+          const isActive = index === journeyStep;
+          return (
+            <a
+              className={`${isDone ? "done" : ""}${isActive ? " active" : ""}`}
+              href={item.href}
+              key={item.title}
+              aria-current={isActive ? "step" : undefined}
+            >
+              <i>{isDone ? <Check size={15} /> : <JourneyIcon size={16} />}</i>
+              <span><b>{item.title}</b><small>{item.description}</small></span>
+              <em>0{index + 1}</em>
+            </a>
+          );
+        })}
+      </nav>
 
       <div className="briefing-grid">
         <article className={`briefing-item ${marketTone}`}>
@@ -175,4 +231,3 @@ export default function MarketBriefing({
     </section>
   );
 }
-

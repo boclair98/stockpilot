@@ -1046,6 +1046,8 @@ export default function TradingTerminal() {
         protectionCoverage={portfolioCheck.protectionCoverage}
         winners={portfolioCheck.winners}
         losers={portfolioCheck.losers}
+        selectedName={selectedName}
+        quoteReady={Boolean(quote?.price)}
       />
 
       <MarketIndexChart initialData={bootstrapKospi} />
@@ -1056,7 +1058,12 @@ export default function TradingTerminal() {
         <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
       </DeferredMount>
 
-      <section className="insight-grid" aria-label="시장과 내 투자 체크업">
+      <details className="advanced-checkup">
+        <summary>
+          <span><Gauge size={17} /><b>고급 투자 체크업</b><small>시장 강도·포트폴리오 집중도·급락 스트레스 테스트</small></span>
+          <ChevronRight size={18} />
+        </summary>
+        <section className="insight-grid" aria-label="시장과 내 투자 체크업">
         <article className="pulse-card">
           <div className="insight-title">
             <span><BarChart3 size={16} /> 오늘의 시장 요약</span>
@@ -1143,7 +1150,8 @@ export default function TradingTerminal() {
             <p>모든 보유 종목이 같은 폭으로 움직인 단순 가정이며, 실제 손실 예측이나 투자 조언이 아닙니다.</p>
           </div>
         </article>
-      </section>
+        </section>
+      </details>
 
       <section className="content">
         <div className="market-column">
@@ -1350,7 +1358,7 @@ export default function TradingTerminal() {
           </div>
         </div>
 
-        <aside className="order-card">
+        <aside className="order-card" id="order-ticket">
           <div className="order-stock">
             <StockLogo symbol={activeSymbol} name={selectedName} color={colorFor(activeSymbol)} logoUrl={quote?.logoUrl} large />
             <div><h2>{selectedName}</h2><p>{activeSymbol} · {quote?.market === "KR" ? "KRX+NXT 통합" : quote?.exchange ?? "KIS"}</p></div>
