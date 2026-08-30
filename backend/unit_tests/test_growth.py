@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.routes.growth import _skill_scores, _streak
+from app.routes.growth import _investment_license, _skill_scores, _streak
 
 
 def test_streak_counts_back_from_today() -> None:
@@ -37,3 +37,48 @@ def test_skill_score_rewards_planning_and_review() -> None:
     assert result["overall"] > 50
     assert result["discipline"] > 30
     assert result["maxDrawdown"] == 0
+
+
+def test_investment_license_uses_verified_behavior_for_progress() -> None:
+    result = _investment_license(
+        challenge_count=3,
+        filled_order_count=6,
+        journal_count=3,
+        planned_journal_count=2,
+        reviewed_journal_count=3,
+        protection_count=1,
+        distinct_instrument_count=3,
+        snapshot_count=5,
+        streak=3,
+        risk_score=82,
+    )
+
+    assert result["completedMissions"] == 9
+    assert result["totalMissions"] == 12
+    assert result["tier"] == "원칙 운용사"
+    assert result["currentStage"] == "PORTFOLIO_MASTER"
+    assert result["nextMission"]["key"] == "seven-snapshots"
+
+
+def test_investment_license_keeps_risk_mission_locked_until_five_orders() -> None:
+    result = _investment_license(
+        challenge_count=1,
+        filled_order_count=2,
+        journal_count=1,
+        planned_journal_count=1,
+        reviewed_journal_count=3,
+        protection_count=1,
+        distinct_instrument_count=3,
+        snapshot_count=7,
+        streak=3,
+        risk_score=100,
+    )
+
+    risk_mission = next(
+        mission
+        for stage in result["stages"]
+        for mission in stage["missions"]
+        if mission["key"] == "risk-score"
+    )
+    assert risk_mission["completed"] is False
+    assert risk_mission["current"] == 0

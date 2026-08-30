@@ -18,6 +18,7 @@ from app.models import (
     DailyChallengeAttempt,
     PortfolioDailySnapshot,
     Position,
+    ProtectionPlan,
     TradeJournal,
     TradeOrder,
     User,
@@ -194,6 +195,242 @@ def _skill_scores(
     }
 
 
+def _license_mission(
+    key: str,
+    title: str,
+    description: str,
+    current: int,
+    target: int,
+    unit: str,
+    href: str,
+    *,
+    completed: bool | None = None,
+) -> dict:
+    safe_current = max(0, current)
+    return {
+        "key": key,
+        "title": title,
+        "description": description,
+        "current": safe_current,
+        "target": target,
+        "unit": unit,
+        "href": href,
+        "completed": safe_current >= target if completed is None else completed,
+    }
+
+
+def _investment_license(
+    *,
+    challenge_count: int,
+    filled_order_count: int,
+    journal_count: int,
+    planned_journal_count: int,
+    reviewed_journal_count: int,
+    protection_count: int,
+    distinct_instrument_count: int,
+    snapshot_count: int,
+    streak: int,
+    risk_score: int,
+) -> dict:
+    """Derive an educational credential from server-verified behavior."""
+
+    stages = [
+        {
+            "key": "EXPLORER",
+            "level": 1,
+            "title": "시장 탐색 면허",
+            "summary": "시세를 읽고 첫 계획과 첫 가상주문을 남겨요.",
+            "missions": [
+                _license_mission(
+                    "first-challenge",
+                    "익명 차트 판단",
+                    "가격 흐름을 보고 상승·횡보·하락을 한 번 판단해요.",
+                    challenge_count,
+                    1,
+                    "회",
+                    "#license-challenge",
+                ),
+                _license_mission(
+                    "first-order",
+                    "첫 가상주문 체결",
+                    "실제 시세를 이용하되 내 돈은 사용하지 않아요.",
+                    filled_order_count,
+                    1,
+                    "회",
+                    "/#order-ticket",
+                ),
+                _license_mission(
+                    "first-journal",
+                    "첫 투자 근거 기록",
+                    "매매 이유를 글로 남겨 충동 주문을 줄여요.",
+                    journal_count,
+                    1,
+                    "회",
+                    "#license-journal",
+                ),
+            ],
+        },
+        {
+            "key": "RISK_PILOT",
+            "level": 2,
+            "title": "리스크 조종사",
+            "summary": "수익 목표보다 먼저 손실 한도를 설계해요.",
+            "missions": [
+                _license_mission(
+                    "planned-journal",
+                    "목표·손절 동시 설정",
+                    "목표수익률과 손절기준이 모두 있는 계획을 작성해요.",
+                    planned_journal_count,
+                    1,
+                    "개",
+                    "#license-journal",
+                ),
+                _license_mission(
+                    "protection-plan",
+                    "보호주문 사용",
+                    "보유 종목에 익절·손절 보호 범위를 설정해요.",
+                    protection_count,
+                    1,
+                    "개",
+                    "/#holdings",
+                ),
+                _license_mission(
+                    "three-instruments",
+                    "세 종목 경험",
+                    "서로 다른 종목을 거래하며 집중 위험을 체험해요.",
+                    distinct_instrument_count,
+                    3,
+                    "종목",
+                    "/#search-card",
+                ),
+            ],
+        },
+        {
+            "key": "DISCIPLINED",
+            "level": 3,
+            "title": "원칙 운용사",
+            "summary": "예측보다 복기와 반복 가능한 원칙을 평가해요.",
+            "missions": [
+                _license_mission(
+                    "three-reviews",
+                    "거래 후 복기",
+                    "계획과 실제 행동이 달랐던 이유를 세 번 돌아봐요.",
+                    reviewed_journal_count,
+                    3,
+                    "회",
+                    "#license-journal",
+                ),
+                _license_mission(
+                    "three-day-streak",
+                    "3일 학습 루틴",
+                    "짧더라도 사흘 연속 시장 판단을 기록해요.",
+                    streak,
+                    3,
+                    "일",
+                    "#license-challenge",
+                ),
+                _license_mission(
+                    "risk-score",
+                    "위험점수 70점",
+                    "체결 5회 이후 최대낙폭을 포함한 위험 습관을 평가해요.",
+                    risk_score if filled_order_count >= 5 else 0,
+                    70,
+                    "점",
+                    "#license-analytics",
+                    completed=filled_order_count >= 5 and risk_score >= 70,
+                ),
+            ],
+        },
+        {
+            "key": "PORTFOLIO_MASTER",
+            "level": 4,
+            "title": "포트폴리오 운용 면허",
+            "summary": "한 번의 수익보다 여러 날의 분산된 운용을 증명해요.",
+            "missions": [
+                _license_mission(
+                    "seven-snapshots",
+                    "7거래일 성과 기록",
+                    "단기 결과가 아닌 기간 성과와 최대낙폭을 확인해요.",
+                    snapshot_count,
+                    7,
+                    "일",
+                    "#license-analytics",
+                ),
+                _license_mission(
+                    "five-instruments",
+                    "다섯 종목 분산 경험",
+                    "한 종목에만 의존하지 않는 운용 경험을 쌓아요.",
+                    distinct_instrument_count,
+                    5,
+                    "종목",
+                    "/#search-card",
+                ),
+                _license_mission(
+                    "ten-orders",
+                    "10회 체결 데이터",
+                    "우연이 아닌 반복 가능한 거래 데이터를 만들어요.",
+                    filled_order_count,
+                    10,
+                    "회",
+                    "/#order-ticket",
+                ),
+            ],
+        },
+    ]
+
+    first_incomplete = next(
+        (
+            index
+            for index, stage in enumerate(stages)
+            if not all(mission["completed"] for mission in stage["missions"])
+        ),
+        None,
+    )
+    current_index = (
+        first_incomplete if first_incomplete is not None else len(stages) - 1
+    )
+    for index, stage in enumerate(stages):
+        completed = all(mission["completed"] for mission in stage["missions"])
+        stage["completed"] = completed
+        stage["status"] = (
+            "COMPLETED"
+            if completed
+            else "ACTIVE"
+            if index == current_index
+            else "LOCKED"
+        )
+
+    missions = [mission for stage in stages for mission in stage["missions"]]
+    completed_count = sum(1 for mission in missions if mission["completed"])
+    current_stage = stages[current_index]
+    next_mission = next(
+        (mission for mission in current_stage["missions"] if not mission["completed"]),
+        None,
+    )
+    completed_stages = sum(1 for stage in stages if stage["completed"])
+    tier = (
+        "StockPilot 마스터"
+        if completed_stages == len(stages)
+        else "원칙 운용사"
+        if completed_stages >= 3
+        else "리스크 조종사"
+        if completed_stages >= 2
+        else "시장 탐색사"
+        if completed_stages >= 1
+        else "비행 전 준비생"
+    )
+    return {
+        "tier": tier,
+        "progress": round(completed_count / len(missions) * 100),
+        "completedMissions": completed_count,
+        "totalMissions": len(missions),
+        "currentStage": current_stage["key"],
+        "nextMission": next_mission,
+        "stages": stages,
+        "disclaimer": "StockPilot 내부 학습 성취도이며 금융 자격이나 투자 성과를 보증하지 않습니다.",
+    }
+
+
 async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dict:
     challenge, instrument = await _challenge(day)
     attempt = None
@@ -220,6 +457,18 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
             "journals": [],
             "recentOrders": [],
             "badges": [],
+            "license": _investment_license(
+                challenge_count=0,
+                filled_order_count=0,
+                journal_count=0,
+                planned_journal_count=0,
+                reviewed_journal_count=0,
+                protection_count=0,
+                distinct_instrument_count=0,
+                snapshot_count=0,
+                streak=0,
+                risk_score=0,
+            ),
         }
 
     attempt = await session.scalar(
@@ -283,6 +532,40 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
     )
     weekly_journals = sum(
         1 for row in journal_rows if row.created_at and row.created_at >= week_ago
+    )
+    protection_count = int(
+        await session.scalar(
+            sa.select(sa.func.count(ProtectionPlan.id)).where(
+                ProtectionPlan.owner_id == owner,
+                ProtectionPlan.status.in_(
+                    ("ACTIVE", "TRIGGERED", "FILLED", "CANCELED")
+                ),
+            )
+        )
+        or 0
+    )
+    planned_journal_count = sum(
+        1
+        for row in journal_rows
+        if row.target_return is not None and row.stop_loss is not None
+    )
+    reviewed_journal_count = sum(
+        1 for row in journal_rows if row.reviewed_at is not None
+    )
+    distinct_instrument_count = len(
+        {(order.symbol, order.exchange) for order in orders}
+    )
+    license_data = _investment_license(
+        challenge_count=len(attempt_days),
+        filled_order_count=len(orders),
+        journal_count=len(journal_rows),
+        planned_journal_count=planned_journal_count,
+        reviewed_journal_count=reviewed_journal_count,
+        protection_count=protection_count,
+        distinct_instrument_count=distinct_instrument_count,
+        snapshot_count=len(snapshots),
+        streak=streak,
+        risk_score=scores["risk"],
     )
 
     async def journal_payload(row: TradeJournal) -> dict:
@@ -348,6 +631,7 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
         "journals": [await journal_payload(row) for row in journal_rows],
         "recentOrders": recent_orders,
         "badges": badges,
+        "license": license_data,
     }
 
 
@@ -611,4 +895,3 @@ async def delete_journal(
         raise HTTPException(404, "투자일지를 찾을 수 없습니다.")
     await session.delete(row)
     return {"removed": True}
-

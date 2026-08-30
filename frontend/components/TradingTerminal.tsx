@@ -268,10 +268,7 @@ export default function TradingTerminal() {
   }, []);
 
   useEffect(() => {
-    if (!portfolio.authenticated) {
-      setMe(null);
-      return;
-    }
+    if (!portfolio.authenticated) return;
     const controller = new AbortController();
     void fetch("/api/me", {
       credentials: "include",
@@ -504,7 +501,7 @@ export default function TradingTerminal() {
     if (ageSeconds < 10) return { label: "방금 갱신", state: "fresh" };
     if (ageSeconds < 60) return { label: `${ageSeconds}초 전 갱신`, state: "fresh" };
     return { label: `${Math.floor(ageSeconds / 60)}분 전 갱신`, state: "stale" };
-  }, [clock, quote?.asOf]);
+  }, [clock, quote]);
   const activePosition = portfolio.positions.find(
     (position) =>
       position.symbol === activeSymbol && position.exchange === quote?.exchange,
@@ -1336,7 +1333,7 @@ export default function TradingTerminal() {
             />
           </DeferredMount>
 
-          <div className="portfolio-panel">
+          <div className="portfolio-panel" id="holdings">
             <div className="section-head">
               <div><h2>보유 주식</h2><p>{portfolio.authenticated ? "사용자별 가상계좌에 저장돼요" : "로그인하면 투자 기록이 저장돼요"}</p></div>
             </div>

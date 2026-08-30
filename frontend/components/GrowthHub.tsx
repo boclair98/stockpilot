@@ -22,6 +22,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { signInHref } from "@/lib/identity";
+import InvestmentLicense, { type InvestmentLicenseData } from "@/components/InvestmentLicense";
 import PortfolioAnalytics from "@/components/PortfolioAnalytics";
 
 type Choice = "BUY" | "HOLD" | "SELL";
@@ -91,6 +92,7 @@ type GrowthData = {
   journals: Journal[];
   recentOrders: Array<{ symbol: string; name: string; exchange: string }>;
   badges: Array<{ key: string; label: string }>;
+  license: InvestmentLicenseData;
 };
 
 const CHOICE_LABEL: Record<Choice, string> = {
@@ -155,10 +157,10 @@ export default function GrowthHub() {
     if (!response.ok) throw new Error("성장 허브를 불러오지 못했습니다.");
     const next: GrowthData = await response.json();
     setData(next);
-    if (!journalStock && next.recentOrders[0]) {
-      setJournalStock(`${next.recentOrders[0].symbol}|${next.recentOrders[0].exchange}`);
+    if (next.recentOrders[0]) {
+      setJournalStock((current) => current || `${next.recentOrders[0].symbol}|${next.recentOrders[0].exchange}`);
     }
-  }, [journalStock]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load().catch((error) => setNotice(error.message)), 0);
@@ -290,10 +292,16 @@ export default function GrowthHub() {
 
       {notice && <div className="growth-notice">{notice}</div>}
 
-      <PortfolioAnalytics />
+      {data?.license && (
+        <InvestmentLicense authenticated={data.authenticated} data={data.license} />
+      )}
+
+      <div id="license-analytics">
+        <PortfolioAnalytics />
+      </div>
 
       <section className="growth-primary-grid">
-        <article className="daily-challenge">
+        <article className="daily-challenge" id="license-challenge">
           <div className="growth-section-head">
             <span><BrainCircuit size={18} /></span>
             <div><p>TODAY&apos;S 5 MIN</p><h2>오늘의 익명 차트</h2></div>
@@ -408,7 +416,7 @@ export default function GrowthHub() {
         )}
       </section>
 
-      <section className="journal-section">
+      <section className="journal-section" id="license-journal">
         <div className="growth-section-head">
           <span><BookOpenCheck size={18} /></span>
           <div><p>PRIVATE JOURNAL</p><h2>투자일지와 자동 복기</h2></div>
@@ -487,4 +495,3 @@ export default function GrowthHub() {
     </main>
   );
 }
-
