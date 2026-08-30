@@ -34,3 +34,16 @@ async def test_curated_top_instrument_is_not_replaced_by_master_duplicate() -> N
 
     assert catalog.get_cached("005930", market="KR", exchange="KRX") is curated
 
+
+@pytest.mark.asyncio
+async def test_search_uses_normalized_index_and_keeps_exact_match_first() -> None:
+    catalog = InstrumentCatalog()
+    catalog._loaded = True
+    exact = Instrument("ACME", "에이씨미", "US", "USD", "NAS", "DNASACME")
+    prefix = Instrument("ACME2", "Acme Holdings", "US", "USD", "NAS", "DNASACME2")
+    catalog._add(prefix)
+    catalog._add(exact)
+
+    results = await catalog.search("acme", market="US", limit=2)
+
+    assert [item["symbol"] for item in results] == ["ACME", "ACME2"]

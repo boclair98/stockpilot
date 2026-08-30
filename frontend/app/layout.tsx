@@ -27,6 +27,7 @@ import "./replay.css";
 import "./ux.css";
 import "./briefing.css";
 import "./performance.css";
+import "./watchlist.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
@@ -70,4 +71,3 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return <html lang="ko"><body>{children}<MobileServiceNav /></body></html>;
 }
-

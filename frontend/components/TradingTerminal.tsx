@@ -23,9 +23,9 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Star,
   Target,
   Trophy,
-  Wifi,
   X,
 } from "lucide-react";
 
@@ -36,6 +36,7 @@ import MarketHeroCarousel from "./MarketHeroCarousel";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketBriefing from "./MarketBriefing";
+import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
 
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => <div className="chunk-placeholder" style={{ minHeight: 320 }} aria-hidden="true" />,
@@ -236,6 +237,7 @@ export default function TradingTerminal() {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [alertFocusKey, setAlertFocusKey] = useState(0);
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
+  const [favoriteStocks, setFavoriteStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [stressMove, setStressMove] = useState(-5);
   const [protectionQuantity, setProtectionQuantity] = useState("1");
@@ -244,6 +246,9 @@ export default function TradingTerminal() {
   const [guideOpen, setGuideOpen] = useState(false);
   const toastTimer = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const quoteRequestCache = useRef(
+    new Map<string, { expiresAt: number; request: Promise<Quote> }>(),
+  );
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -259,14 +264,25 @@ export default function TradingTerminal() {
     if (response.ok) {
       const data = await response.json();
       setPortfolio(data);
-      if (data.authenticated) {
-        const meResponse = await fetch("/api/me", { credentials: "include", cache: "no-store" });
-        setMe(meResponse.ok ? await meResponse.json() : null);
-      } else {
-        setMe(null);
-      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!portfolio.authenticated) {
+      setMe(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch("/api/me", {
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((profile) => setMe(profile))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [portfolio.authenticated]);
 
   useEffect(() => {
     const initialPortfolioTimer = window.setTimeout(refreshPortfolio, 150);
@@ -405,8 +421,13 @@ export default function TradingTerminal() {
           localStorage.getItem("stockpilot_recent_stocks") || "[]",
         );
         if (Array.isArray(saved)) setRecentStocks(saved.slice(0, 6));
+        const favorites = JSON.parse(
+          localStorage.getItem("stockpilot_favorite_stocks_v1") || "[]",
+        );
+        if (Array.isArray(favorites)) setFavoriteStocks(favorites.slice(0, 12));
       } catch {
         localStorage.removeItem("stockpilot_recent_stocks");
+        localStorage.removeItem("stockpilot_favorite_stocks_v1");
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -456,9 +477,34 @@ export default function TradingTerminal() {
 
   const krTop = useMemo(() => quotes.filter((item) => item.isTop && item.market === "KR").slice(0, 10), [quotes]);
   const usTop = useMemo(() => quotes.filter((item) => item.isTop && item.market === "US").slice(0, 10), [quotes]);
-  const quote = quotes.find((item) => item.id === selected) ?? quotes[0];
+  const quoteById = useMemo(() => new Map(quotes.map((item) => [item.id, item])), [quotes]);
+  const quote = quoteById.get(selected) ?? quotes[0];
   const activeSymbol = quote?.symbol ?? "005930";
   const selectedName = quote?.name ?? activeSymbol;
+  const favoriteIds = useMemo(
+    () => new Set(favoriteStocks.map((item) => item.id)),
+    [favoriteStocks],
+  );
+  const favoriteItems = useMemo<WatchlistItem[]>(
+    () => favoriteStocks.map((item) => {
+      const liveQuote = quoteById.get(item.id);
+      return {
+        ...item,
+        price: liveQuote?.price,
+        changePercent: liveQuote?.changePercent,
+        logoUrl: liveQuote?.logoUrl ?? item.logoUrl,
+      };
+    }),
+    [favoriteStocks, quoteById],
+  );
+  const quoteFreshness = useMemo(() => {
+    if (!clock || !quote?.asOf) return { label: "시세 연결 중", state: "waiting" };
+    const ageSeconds = Math.max(0, Math.floor((clock.getTime() - new Date(quote.asOf).getTime()) / 1000));
+    if (!Number.isFinite(ageSeconds)) return { label: "시세 확인 중", state: "waiting" };
+    if (ageSeconds < 10) return { label: "방금 갱신", state: "fresh" };
+    if (ageSeconds < 60) return { label: `${ageSeconds}초 전 갱신`, state: "fresh" };
+    return { label: `${Math.floor(ageSeconds / 60)}분 전 갱신`, state: "stale" };
+  }, [clock, quote?.asOf]);
   const activePosition = portfolio.positions.find(
     (position) =>
       position.symbol === activeSymbol && position.exchange === quote?.exchange,
@@ -663,6 +709,42 @@ export default function TradingTerminal() {
     });
   }, []);
 
+  const loadQuote = useCallback((item: SearchItem) => {
+    const key = `${item.market}:${item.exchange}:${item.symbol}`;
+    const cached = quoteRequestCache.current.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.request;
+    quoteRequestCache.current.delete(key);
+    const request = fetch(
+      `/api/trading/quote?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}&exchange=${item.exchange}`,
+      { cache: "no-store" },
+    )
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "시세를 불러오지 못했어요.");
+        return data as Quote;
+      })
+      .catch((error) => {
+        quoteRequestCache.current.delete(key);
+        throw error;
+      });
+    quoteRequestCache.current.set(key, { expiresAt: Date.now() + 5_000, request });
+    return request;
+  }, []);
+
+  const toggleFavorite = useCallback((item: SearchItem) => {
+    const exists = favoriteStocks.some((entry) => entry.id === item.id);
+    const next = exists
+      ? favoriteStocks.filter((entry) => entry.id !== item.id)
+      : [item, ...favoriteStocks].slice(0, 12);
+    setFavoriteStocks(next);
+    try {
+      localStorage.setItem("stockpilot_favorite_stocks_v1", JSON.stringify(next));
+    } catch {
+      // The watchlist still works for this session when storage is unavailable.
+    }
+    notify(exists ? `${item.name}을 관심종목에서 제거했어요.` : `${item.name}을 관심종목에 추가했어요.`);
+  }, [favoriteStocks, notify]);
+
   function selectTopQuote(item: Quote) {
     setSelected(item.id);
     setLimitPrice(String(item.price));
@@ -682,14 +764,11 @@ export default function TradingTerminal() {
   async function chooseSearchResult(item: SearchItem) {
     setSearching(true);
     try {
-      const response = await fetch(
-        `/api/trading/quote?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}&exchange=${item.exchange}`,
-        { cache: "no-store" },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || "시세를 불러오지 못했어요.");
-      setQuotes((current) => [...current.filter((entry) => entry.id !== data.id), data]);
-      setSelected(data.id);
+      const data = await loadQuote(item);
+      startTransition(() => {
+        setQuotes((current) => [...current.filter((entry) => entry.id !== data.id), data]);
+        setSelected(data.id);
+      });
       setLimitPrice(String(data.price));
       setTriggerPrice(String(data.price));
       rememberStock({
@@ -1068,9 +1147,27 @@ export default function TradingTerminal() {
 
       <section className="content">
         <div className="market-column">
+          <MarketWatchlist
+            items={favoriteItems}
+            selectedId={selected}
+            colorFor={colorFor}
+            onSelect={(item) => {
+              const liveQuote = quoteById.get(item.id);
+              if (liveQuote) {
+                selectTopQuote(liveQuote);
+                return;
+              }
+              void chooseSearchResult({ ...item, englishName: "" });
+            }}
+            onRemove={(item) => toggleFavorite({ ...item, englishName: "" })}
+          />
+
           <div className="section-head">
             <div><h2>실시간 주요 종목 TOP 10</h2><p>국내는 KRX+NXT 통합 시세를 1초마다 화면에 반영해요</p></div>
-            <span className="source"><Wifi size={13} /> {quote?.source || "KIS 연결 중"}</span>
+            <span className={`source market-freshness ${quoteFreshness.state}`}>
+              <i aria-hidden="true" />
+              <span>{quote?.source || "KIS 연결 중"}<small>{quoteFreshness.label}</small></span>
+            </span>
           </div>
           {([["한국", krTop], ["미국", usTop]] as const).map(([label, items]) => (
             <div className="market-block" key={label}>
@@ -1137,7 +1234,13 @@ export default function TradingTerminal() {
             {searchQuery && (
               <div className="search-results" id="search-results" aria-busy={searching}>
                 {searching ? <p className="search-state" role="status" aria-live="polite"><RefreshCw className="spin" size={16} /> 종목을 찾고 있어요</p> : searchResults.length ? searchResults.map((item) => (
-                  <button type="button" key={item.id} onClick={() => chooseSearchResult(item)}>
+                  <button
+                    type="button"
+                    key={item.id}
+                    onPointerEnter={() => void loadQuote(item).catch(() => undefined)}
+                    onFocus={() => void loadQuote(item).catch(() => undefined)}
+                    onClick={() => chooseSearchResult(item)}
+                  >
                     <StockLogo symbol={item.symbol} name={item.name} color={colorFor(item.symbol)} logoUrl={item.logoUrl} />
                     <span><b>{item.name}</b><small>{item.englishName || item.symbol}</small></span>
                     <span><b>{item.symbol}</b><small>{item.market === "KR" ? "한국" : "미국"} · {item.exchange}</small></span>
@@ -1154,6 +1257,8 @@ export default function TradingTerminal() {
                     <button
                       type="button"
                       key={`${item.market}:${item.exchange}:${item.symbol}`}
+                      onPointerEnter={() => void loadQuote(item).catch(() => undefined)}
+                      onFocus={() => void loadQuote(item).catch(() => undefined)}
                       onClick={() => void chooseSearchResult(item)}
                     >
                       <StockLogo
@@ -1255,6 +1360,26 @@ export default function TradingTerminal() {
                 {quote ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%` : ""}
               </small>
             </span>
+            <button
+              className={`favorite-selected${quote && favoriteIds.has(quote.id) ? " active" : ""}`}
+              type="button"
+              disabled={!quote}
+              aria-pressed={quote ? favoriteIds.has(quote.id) : false}
+              aria-label={quote && favoriteIds.has(quote.id) ? `${selectedName} 관심종목 제거` : `${selectedName} 관심종목 추가`}
+              title={quote && favoriteIds.has(quote.id) ? "관심종목에서 제거" : "관심종목에 추가"}
+              onClick={() => quote && toggleFavorite({
+                id: quote.id,
+                symbol: quote.symbol,
+                name: quote.name,
+                englishName: "",
+                market: quote.market,
+                currency: quote.currency,
+                exchange: quote.exchange,
+                logoUrl: quote.logoUrl,
+              })}
+            >
+              <Star size={17} fill={quote && favoriteIds.has(quote.id) ? "currentColor" : "none"} />
+            </button>
           </div>
           <div className="side-tabs">
             <button className={side === "BUY" ? "buy active" : ""} onClick={() => setSide("BUY")}><ArrowDownLeft size={16} /> 매수</button>
@@ -1527,4 +1652,3 @@ export default function TradingTerminal() {
     </main>
   );
 }
-

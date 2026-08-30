@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
 import logging
 import zipfile
 from dataclasses import dataclass
@@ -130,6 +131,7 @@ class InstrumentCatalog:
         # normalized composite index for exact lookups instead of scanning all
         # tens of thousands of KRX/NXT/US rows.
         self._by_key: dict[tuple[str, str, str], Instrument] = {}
+        self._search_rows: dict[str, tuple[Instrument, str, str, str]] = {}
         for item in TOP_INSTRUMENTS:
             self._add(item)
         self._loaded = False
@@ -144,6 +146,12 @@ class InstrumentCatalog:
         self._items[item.id] = item
         self._by_key.setdefault(
             (item.symbol.upper(), item.market.upper(), item.exchange.upper()), item
+        )
+        self._search_rows[item.id] = (
+            item,
+            item.symbol.casefold(),
+            item.name.casefold(),
+            item.english_name.casefold(),
         )
 
     @property
@@ -248,12 +256,9 @@ class InstrumentCatalog:
         if not needle:
             return []
         matches: list[tuple[int, Instrument]] = []
-        for item in self._items.values():
+        for item, symbol, name, english in self._search_rows.values():
             if market != "ALL" and item.market != market:
                 continue
-            symbol = item.symbol.casefold()
-            name = item.name.casefold()
-            english = item.english_name.casefold()
             if needle == symbol:
                 score = 0
             elif symbol.startswith(needle):
@@ -265,10 +270,12 @@ class InstrumentCatalog:
             else:
                 continue
             matches.append((score, item))
-        matches.sort(
+        best_matches = heapq.nsmallest(
+            limit,
+            matches,
             key=lambda row: (row[0], not row[1].is_top, len(row[1].symbol), row[1].name)
         )
-        return [item.public() for _, item in matches[:limit]]
+        return [item.public() for _, item in best_matches]
 
     async def get(
         self, symbol: str, market: str | None = None, exchange: str | None = None
@@ -309,4 +316,3 @@ class InstrumentCatalog:
 
 
 instrument_catalog = InstrumentCatalog()
-
