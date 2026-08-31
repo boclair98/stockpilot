@@ -431,6 +431,117 @@ def _investment_license(
     }
 
 
+def _financial_safety_report(
+    *,
+    filled_order_count: int,
+    weekly_order_count: int,
+    planned_journal_count: int,
+    reviewed_journal_count: int,
+    protection_count: int,
+    distinct_instrument_count: int,
+    streak: int,
+    risk_score: int,
+) -> dict:
+    """Score protective habits without treating return or activity as success."""
+
+    planning = min(25, planned_journal_count * 10)
+    protection = min(15, protection_count * 15)
+    if filled_order_count >= 5:
+        protection += round(max(0, min(100, risk_score)) / 10)
+    diversification = min(20, distinct_instrument_count * 4)
+    review = min(15, reviewed_journal_count * 5) + min(5, streak)
+    if filled_order_count == 0:
+        moderation = 0
+    elif weekly_order_count <= 10:
+        moderation = 10
+    elif weekly_order_count <= 20:
+        moderation = 7
+    elif weekly_order_count <= 35:
+        moderation = 4
+    else:
+        moderation = 1
+
+    indicators = [
+        {
+            "key": "planning",
+            "label": "계획 매매",
+            "score": planning,
+            "maxScore": 25,
+            "description": "목표수익률과 손절기준을 함께 기록한 계획을 평가해요.",
+            "action": "목표·손절 계획 쓰기",
+            "href": "#license-journal",
+        },
+        {
+            "key": "protection",
+            "label": "손실 방어",
+            "score": protection,
+            "maxScore": 25,
+            "description": "보호주문 사용과 최대낙폭 관리 습관을 확인해요.",
+            "action": "보호주문 설정하기",
+            "href": "/#holdings",
+        },
+        {
+            "key": "diversification",
+            "label": "분산 경험",
+            "score": diversification,
+            "maxScore": 20,
+            "description": "한 종목에만 의존하지 않는 가상 운용 경험을 평가해요.",
+            "action": "다른 종목 탐색하기",
+            "href": "/#search-card",
+        },
+        {
+            "key": "review",
+            "label": "복기 습관",
+            "score": review,
+            "maxScore": 20,
+            "description": "거래 후 복기와 연속 학습 기록을 함께 확인해요.",
+            "action": "거래 복기하기",
+            "href": "#license-journal",
+        },
+        {
+            "key": "moderation",
+            "label": "거래 절제",
+            "score": moderation,
+            "maxScore": 10,
+            "description": "최근 7일 체결 횟수로 과도한 반복 거래 위험을 살펴요.",
+            "action": "주간 리포트 보기",
+            "href": "#safety-weekly-card",
+        },
+    ]
+    score = sum(item["score"] for item in indicators)
+    grade = "준비"
+    status = "PREPARE"
+    if score >= 80:
+        grade, status = "우수", "EXCELLENT"
+    elif score >= 60:
+        grade, status = "안정", "STABLE"
+    elif score >= 40:
+        grade, status = "주의", "CAUTION"
+
+    next_indicator = min(
+        indicators,
+        key=lambda item: item["score"] / item["maxScore"],
+    )
+    return {
+        "score": score,
+        "grade": grade,
+        "status": status,
+        "indicators": indicators,
+        "nextAction": {
+            "title": next_indicator["action"],
+            "description": next_indicator["description"],
+            "href": next_indicator["href"],
+        },
+        "guardrails": [
+            "실제 은행 계좌번호·계좌 비밀번호를 수집하지 않아요.",
+            "모든 주문은 가상원장 안에서만 처리돼요.",
+            "투자일지와 보유 종목은 다른 사용자에게 공개하지 않아요.",
+            "평가 기준과 점수 산식을 숨기지 않고 설명해요.",
+        ],
+        "disclaimer": "학습 행동을 설명하는 내부 지표이며 신용점수·투자적합성 평가·금융상품 추천이 아닙니다.",
+    }
+
+
 async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dict:
     challenge, instrument = await _challenge(day)
     attempt = None
@@ -466,6 +577,16 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
                 protection_count=0,
                 distinct_instrument_count=0,
                 snapshot_count=0,
+                streak=0,
+                risk_score=0,
+            ),
+            "financialSafety": _financial_safety_report(
+                filled_order_count=0,
+                weekly_order_count=0,
+                planned_journal_count=0,
+                reviewed_journal_count=0,
+                protection_count=0,
+                distinct_instrument_count=0,
                 streak=0,
                 risk_score=0,
             ),
@@ -567,6 +688,16 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
         streak=streak,
         risk_score=scores["risk"],
     )
+    financial_safety = _financial_safety_report(
+        filled_order_count=len(orders),
+        weekly_order_count=weekly_orders,
+        planned_journal_count=planned_journal_count,
+        reviewed_journal_count=reviewed_journal_count,
+        protection_count=protection_count,
+        distinct_instrument_count=distinct_instrument_count,
+        streak=streak,
+        risk_score=scores["risk"],
+    )
 
     async def journal_payload(row: TradeJournal) -> dict:
         item = await instrument_catalog.get(row.symbol, exchange=row.exchange)
@@ -632,6 +763,7 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
         "recentOrders": recent_orders,
         "badges": badges,
         "license": license_data,
+        "financialSafety": financial_safety,
     }
 
 

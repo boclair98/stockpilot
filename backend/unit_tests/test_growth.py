@@ -2,7 +2,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.routes.growth import _investment_license, _skill_scores, _streak
+from app.routes.growth import (
+    _financial_safety_report,
+    _investment_license,
+    _skill_scores,
+    _streak,
+)
 
 
 def test_streak_counts_back_from_today() -> None:
@@ -82,3 +87,48 @@ def test_investment_license_keeps_risk_mission_locked_until_five_orders() -> Non
     )
     assert risk_mission["completed"] is False
     assert risk_mission["current"] == 0
+
+
+def test_financial_safety_rewards_protective_habits() -> None:
+    result = _financial_safety_report(
+        filled_order_count=8,
+        weekly_order_count=7,
+        planned_journal_count=3,
+        reviewed_journal_count=3,
+        protection_count=1,
+        distinct_instrument_count=5,
+        streak=5,
+        risk_score=86,
+    )
+
+    assert result["score"] == 99
+    assert result["grade"] == "우수"
+    assert result["status"] == "EXCELLENT"
+    assert len(result["indicators"]) == 5
+
+
+def test_financial_safety_does_not_reward_inactivity_or_overtrading() -> None:
+    inactive = _financial_safety_report(
+        filled_order_count=0,
+        weekly_order_count=0,
+        planned_journal_count=0,
+        reviewed_journal_count=0,
+        protection_count=0,
+        distinct_instrument_count=0,
+        streak=0,
+        risk_score=100,
+    )
+    overtrading = _financial_safety_report(
+        filled_order_count=50,
+        weekly_order_count=50,
+        planned_journal_count=0,
+        reviewed_journal_count=0,
+        protection_count=0,
+        distinct_instrument_count=1,
+        streak=0,
+        risk_score=30,
+    )
+
+    assert inactive["score"] == 0
+    assert overtrading["score"] == 8
+    assert overtrading["indicators"][-1]["score"] == 1

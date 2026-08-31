@@ -22,6 +22,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { signInHref } from "@/lib/identity";
+import FinancialSafetyReport, { type FinancialSafetyData } from "@/components/FinancialSafetyReport";
 import InvestmentLicense, { type InvestmentLicenseData } from "@/components/InvestmentLicense";
 import PortfolioAnalytics from "@/components/PortfolioAnalytics";
 
@@ -93,6 +94,7 @@ type GrowthData = {
   recentOrders: Array<{ symbol: string; name: string; exchange: string }>;
   badges: Array<{ key: string; label: string }>;
   license: InvestmentLicenseData;
+  financialSafety: FinancialSafetyData;
 };
 
 const CHOICE_LABEL: Record<Choice, string> = {
@@ -296,6 +298,10 @@ export default function GrowthHub() {
         <InvestmentLicense authenticated={data.authenticated} data={data.license} />
       )}
 
+      {data?.financialSafety && (
+        <FinancialSafetyReport authenticated={data.authenticated} data={data.financialSafety} />
+      )}
+
       <div id="license-analytics">
         <PortfolioAnalytics />
       </div>
@@ -383,7 +389,7 @@ export default function GrowthHub() {
         </article>
       </section>
 
-      <section className="weekly-section">
+      <section className="weekly-section" id="safety-weekly-card">
         <div className="growth-section-head">
           <span><Medal size={18} /></span>
           <div><p>WEEKLY REPORT</p><h2>공유 가능한 주간 성적표</h2></div>

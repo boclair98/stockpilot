@@ -266,7 +266,60 @@
 .license-missions article > a { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: #386fce; }
 .license-disclaimer { display: flex; align-items: center; gap: 5px; margin: 11px 2px 0; color: #768ba5; font-size: 7px; }
 
-#license-analytics, #license-challenge, #license-journal, #holdings { scroll-margin-top: 84px; }
+.financial-safety {
+  max-width: 1132px;
+  margin: 0 auto 14px;
+  padding: 24px;
+  border: 1px solid #e2e7ed;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 14px 42px rgba(23, 43, 77, .07);
+}
+.safety-heading { display: flex; align-items: center; gap: 12px; }
+.safety-heading-icon { width: 46px; height: 46px; display: grid; flex: none; place-items: center; border-radius: 15px; background: #fff5c2; color: #624f00; }
+.safety-heading > div { flex: 1; }
+.safety-heading p { margin: 0 0 3px; color: #806b08; font-size: 8px; font-weight: 900; letter-spacing: 1.3px; }
+.safety-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.5px; }
+.safety-heading small { display: block; margin-top: 4px; color: #7f8995; font-size: 10px; }
+.safety-private { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border-radius: 999px; background: #f2f5f8; color: #526171; font-size: 8px; font-weight: 850; }
+
+.safety-summary { display: grid; grid-template-columns: 150px minmax(320px, 1fr) minmax(235px, .75fr); gap: 14px; margin-top: 20px; }
+.safety-score { min-height: 182px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 20px; background: #101b2d; color: #fff; }
+.safety-score > span { color: #aab7c9; font-size: 8px; font-weight: 800; }
+.safety-score strong { margin: 7px 0 3px; font-size: 43px; line-height: 1; letter-spacing: -2px; }
+.safety-score strong small { margin-left: 2px; color: #aab7c9; font-size: 10px; letter-spacing: 0; }
+.safety-score > b { padding: 5px 9px; border-radius: 999px; background: #ffe45d; color: #3b3200; font-size: 8px; }
+.safety-caution .safety-score > b, .safety-prepare .safety-score > b { background: #ffddc5; color: #823b12; }
+
+.safety-indicators { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.safety-indicators article { min-width: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; border: 1px solid #edf0f3; border-radius: 14px; background: #fafbfc; }
+.safety-indicators article:last-child { grid-column: 1 / -1; }
+.safety-indicators article > span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; background: #fff5c2; color: #6d5900; }
+.safety-indicators article > div { min-width: 0; display: grid; gap: 6px; }
+.safety-indicators article b { font-size: 9px; }
+.safety-indicators i { height: 5px; display: block; overflow: hidden; border-radius: 99px; background: #e7ebef; }
+.safety-indicators i em { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, #f5d328, #d8ab00); }
+.safety-indicators strong { color: #28384d; font-size: 12px; }
+.safety-indicators strong small { color: #9aa4af; font-size: 7px; }
+
+.safety-next { display: grid; align-content: center; gap: 6px; padding: 17px; border-radius: 18px; background: #f4f7fb; }
+.safety-next > span { color: #66768b; font-size: 8px; font-weight: 900; }
+.safety-next b { font-size: 13px; }
+.safety-next p { margin: 0; color: #748190; font-size: 9px; line-height: 1.5; }
+.safety-next a { display: inline-flex; align-items: center; justify-content: center; gap: 5px; margin-top: 5px; padding: 9px 11px; border-radius: 10px; background: #14243c; color: #fff; font-size: 8px; font-weight: 850; text-decoration: none; }
+
+.safety-guardrails { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.safety-guardrails > div { display: flex; align-items: center; gap: 9px; padding: 11px 12px; border: 1px solid #edf0f3; border-radius: 13px; color: #8b7200; }
+.safety-guardrails span { display: grid; gap: 3px; }
+.safety-guardrails b { color: #303c4b; font-size: 9px; }
+.safety-guardrails small { color: #89939e; font-size: 7px; }
+.safety-policy { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #f8f9fb; color: #536171; font-size: 8px; }
+.safety-policy summary { cursor: pointer; font-weight: 850; }
+.safety-policy summary:focus-visible { outline: 2px solid #315e9e; outline-offset: 3px; }
+.safety-policy ul { display: grid; gap: 5px; margin: 9px 0 1px; padding-left: 17px; color: #6f7c8a; }
+.safety-disclaimer { margin: 9px 2px 0; color: #929ca7; font-size: 7px; line-height: 1.5; }
+
+#license-analytics, #license-challenge, #license-journal, #holdings, #safety-weekly-card { scroll-margin-top: 84px; }
 
 .growth-primary-grid, .weekly-section, .journal-section, .duel-cta {
   max-width: 1132px;
@@ -467,6 +520,9 @@
 
 @media (max-width: 840px) {
   .investment-license { margin-right: 14px; margin-left: 14px; }
+  .financial-safety { margin-right: 14px; margin-left: 14px; }
+  .safety-summary { grid-template-columns: 130px 1fr; }
+  .safety-next { grid-column: 1 / -1; }
   .license-overview { grid-template-columns: 106px 1fr; }
   .license-next { grid-column: 1 / -1; }
   .license-roadmap { grid-template-columns: 1fr; }
@@ -481,6 +537,17 @@
 
 @media (max-width: 600px) {
   .investment-license { padding: 17px; border-radius: 20px; }
+  .financial-safety { padding: 17px; border-radius: 20px; }
+  .safety-heading { align-items: flex-start; }
+  .safety-heading h2 { font-size: 18px; }
+  .safety-heading small { max-width: 220px; line-height: 1.45; }
+  .safety-private { display: none; }
+  .safety-summary { grid-template-columns: 1fr; }
+  .safety-score { min-height: 135px; }
+  .safety-indicators { grid-template-columns: 1fr; }
+  .safety-indicators article:last-child { grid-column: auto; }
+  .safety-next { grid-column: auto; }
+  .safety-guardrails { grid-template-columns: 1fr; }
   .license-heading { align-items: flex-start; }
   .license-heading h2 { font-size: 18px; }
   .license-heading small { max-width: 220px; line-height: 1.45; }
