@@ -18,7 +18,6 @@ gzip_min_length 1024;
 gzip_vary on;
 gzip_types application/json application/javascript application/manifest+json
            application/xml image/svg+xml text/css text/plain text/xml;
-keepalive_timeout 65;
 
 # These have to live at http-context (not inside `server`), because
 # nginx parses the request line + initial headers before it knows which
