@@ -104,7 +104,8 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | 시장 | KOSPI 상대성과 | 로그인 후 내 모의투자 수익률과 KOSPI를 같은 기간으로 비교 |
 | 시장 | 오늘의 투자 브리핑 | 시장 흐름·내 가상 포트폴리오 컨디션·추천 다음 행동을 한 카드에서 요약 |
 | 분석 | 가격 차트 | 1주·1개월·3개월 일별 차트와 기간 수익률·고가·저가 표시 |
-| 분석 | 뉴스·기업정보 | KIS 뉴스, OpenDART 기업개요·재무·공시 원문 연결 |
+| 분석 | 뉴스·기업정보 | KIS 뉴스, OpenDART 한국 기업정보·공시, SEC EDGAR 미국 제출 이력 연결 |
+| 보호 | 내 데이터 다운로드 | 프로필에서 내 가상거래·학습 기록을 JSON으로 내려받고 푸시 토큰은 제외 |
 | 거래 | 4가지 가상주문 | 시장가, 지정가, 손절, 조건부 지정가 주문 지원 |
 | 거래 | 현실형 가상체결 | 스프레드·주문 참여율·슬리피지를 반영해 체결가 계산 |
 | 거래 | 안전한 매도 검증 | 미보유 종목, 보유 수량 초과, 대기 주문 중복 매도 차단 |
@@ -133,7 +134,7 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | Cache·Traffic | Redis, TTL 캐시, 분산 락, 요청 제한, single-flight |
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API(WebSocket·REST) |
-| Company Data | 금융감독원 OpenDART API |
+| Company Data | 금융감독원 OpenDART API, SEC EDGAR Submissions API |
 | Push | Firebase Cloud Messaging(Web Push) |
 | Deployment | Docker, Docker Compose, coders.kr 멀티서비스 배포 |
 | Quality | Pytest, Ruff, ESLint, TypeScript, Next.js production build |
@@ -261,7 +262,9 @@ app
 | `GET` | `/api/trading/statement` | 개인 계좌 명세·거래 규칙 | 선택 |
 | `GET` | `/api/features/history` | 종목 일별 차트 | 없음 |
 | `GET` | `/api/features/news` | 종목 뉴스 | 없음 |
-| `GET` | `/api/company/{symbol}` | 기업정보·재무·공시 | 없음 |
+| `GET` | `/api/company/{symbol}` | 한국 기업정보·재무·공시 | 없음 |
+| `GET` | `/api/company/us/{symbol}` | SEC EDGAR 미국 제출 이력 | `SEC_USER_AGENT` |
+| `GET` | `/api/me/export` | 내 개인정보·가상거래 기록 JSON 다운로드 | 필요 |
 | `GET` | `/api/league/rankings` | 공개 수익률 리그 | 선택 |
 | `GET` | `/api/growth/analytics` | 리스크·성과·체결품질 분석 | 필요 |
 | `WS` | `/api/trading/ws` | 실시간 시세 스트림 | 없음 |
@@ -312,6 +315,8 @@ stockpilot
 - Git
 - KIS Open API 키·시크릿(시세 연동 시)
 - Google OAuth Client(로그인 연동 시)
+- OpenDART API Key(한국 기업정보·공시 연동 시)
+- SEC User-Agent(미국 공시 연동 시, 이메일 포함 식별 문자열)
 
 ### 로컬 실행
 

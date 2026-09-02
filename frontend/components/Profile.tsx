@@ -102,6 +102,23 @@ export function Profile() {
           ))}
         </ul>
       </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          Privacy controls
+        </h2>
+        <div className="rounded-md border bg-muted/20 px-4 py-4">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            StockPilot에 저장된 내 프로필·가상거래·학습 기록을 JSON으로 내려받을 수 있어요. 푸시 기기 토큰은 보안을 위해 파일에 포함하지 않습니다.
+          </p>
+          <a
+            href="/api/me/export"
+            className="mt-3 inline-flex items-center rounded-md border bg-background px-3 py-2 text-[13px] font-medium hover:bg-muted"
+          >
+            내 데이터 다운로드
+          </a>
+        </div>
+      </section>
     </div>
   );
 }

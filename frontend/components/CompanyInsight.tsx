@@ -75,7 +75,8 @@ function dateText(value: string | null | undefined) {
   return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
 }
 
-function disclosureKind(title: string) {
+function disclosureKind(title: string, market: "KR" | "US") {
+  if (market === "US") return "SEC 제출";
   if (/사업보고서|반기보고서|분기보고서/.test(title)) return "정기공시";
   if (/임원|주요주주|소유상황|지분/.test(title)) return "지분공시";
   if (/결정|계약|취득|처분|합병/.test(title)) return "경영공시";
@@ -103,7 +104,8 @@ export default function CompanyInsight({
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (market !== "KR" || !/^\d{6}$/.test(symbol)) {
+    const validSymbol = market === "KR" ? /^\d{6}$/.test(symbol) : /^[A-Za-z][A-Za-z0-9.\-]{0,11}$/.test(symbol);
+    if (!validSymbol) {
       return;
     }
     const controller = new AbortController();
@@ -112,7 +114,8 @@ export default function CompanyInsight({
       setData(null);
       setLoading(true);
       setFailed(false);
-      fetch(`/api/company/${symbol}`, {
+      const endpoint = market === "US" ? `/api/company/us/${encodeURIComponent(symbol)}` : `/api/company/${symbol}`;
+      fetch(endpoint, {
         cache: "no-store",
         signal: controller.signal,
       })
@@ -131,17 +134,15 @@ export default function CompanyInsight({
     return () => controller.abort();
   }, [market, refreshKey, symbol]);
 
-  if (market !== "KR") return null;
-
   return (
     <section className="company-insight">
       <div className="section-head">
         <div>
           <span className="section-kicker">COMPANY INSIGHT</span>
-          <h2>기업정보와 공시</h2>
-          <p>복잡한 공식 정보를 투자 전에 읽기 쉽게 정리했어요</p>
+          <h2>{market === "US" ? "미국 기업공시" : "기업정보와 공시"}</h2>
+          <p>{market === "US" ? "SEC 공식 제출 이력을 투자 전에 읽기 쉽게 정리했어요" : "복잡한 공식 정보를 투자 전에 읽기 쉽게 정리했어요"}</p>
         </div>
-        <span className="dart-source"><BadgeCheck size={14} /> OpenDART 공식 데이터</span>
+        <span className="dart-source"><BadgeCheck size={14} /> {market === "US" ? "SEC EDGAR 공식 데이터" : "OpenDART 공식 데이터"}</span>
       </div>
 
       {loading ? (
@@ -157,7 +158,7 @@ export default function CompanyInsight({
       ) : !data?.available ? (
         <div className="company-state">
           <span className="company-state-icon"><Building2 size={22} /></span>
-          <span><b>DART 기업정보가 아직 없어요</b><small>상장 구분이나 공시 등록 상태에 따라 제공되지 않을 수 있어요.</small></span>
+          <span><b>{market === "US" ? "SEC 기업공시가 아직 없어요" : "DART 기업정보가 아직 없어요"}</b><small>{market === "US" ? "티커가 SEC 제출기업으로 확인되지 않거나 설정이 필요할 수 있어요." : "상장 구분이나 공시 등록 상태에 따라 제공되지 않을 수 있어요."}</small></span>
         </div>
       ) : (
         <>
@@ -175,7 +176,7 @@ export default function CompanyInsight({
             <span className="company-verified"><BadgeCheck size={14} /> 공식 확인</span>
           </div>
 
-          <div className="company-facts">
+          {market === "KR" && <div className="company-facts">
             <article><span><UserRound size={15} /></span><div><small>대표자</small><b>{data.profile?.ceo || "—"}</b></div></article>
             <article><span><CalendarDays size={15} /></span><div><small>설립일</small><b>{dateText(data.profile?.establishedAt)}</b></div></article>
             <article><span><WalletCards size={15} /></span><div><small>결산월</small><b>{data.profile?.fiscalMonth ? `${Number(data.profile.fiscalMonth)}월` : "—"}</b></div></article>
@@ -184,13 +185,13 @@ export default function CompanyInsight({
                 <Globe2 size={14} /> 공식 홈페이지 <ExternalLink size={12} />
               </a>
             )}
-          </div>
+          </div>}
 
           {data.profile?.address && (
             <p className="company-address"><MapPin size={13} /> {data.profile.address}</p>
           )}
 
-          {data.financials && data.financials.metrics.length > 0 && (
+          {market === "KR" && data.financials && data.financials.metrics.length > 0 && (
             <div className="financial-block">
               <div className="financial-title">
                 <div>
@@ -217,7 +218,7 @@ export default function CompanyInsight({
                 <span className="insight-section-icon disclosure"><Landmark size={16} /></span>
                 <span><b>최근 공시</b><small>중요한 공식 발표를 시간순으로 확인해요</small></span>
               </div>
-              <span className="data-period">최근 1년 · 최대 5건</span>
+              <span className="data-period">{market === "US" ? "최근 제출 · 최대 8건" : "최근 1년 · 최대 5건"}</span>
             </div>
             {data.disclosures?.length ? (
               <div className="disclosure-list">
@@ -227,9 +228,9 @@ export default function CompanyInsight({
                     <a href={item.url} target="_blank" rel="noreferrer" key={item.receiptNo}>
                       <span className="disclosure-date"><b>{date.day}</b><small>{date.year}</small></span>
                       <span className="disclosure-copy">
-                        <em>{disclosureKind(item.title)}</em>
+                        <em>{disclosureKind(item.title, market)}</em>
                         <b>{item.title}</b>
-                        <small>{item.submitter} · DART 원문</small>
+                        <small>{item.submitter} · {market === "US" ? "SEC EDGAR 원문" : "DART 원문"}</small>
                       </span>
                       <span className="disclosure-open">열기 <ArrowUpRight size={14} /></span>
                     </a>
@@ -240,7 +241,7 @@ export default function CompanyInsight({
               <p className="no-disclosure">최근 1년간 조회된 공시가 없어요.</p>
             )}
           </div>
-          <p className="dart-note"><BadgeCheck size={12} /> 금융감독원 공시 보고서 기준 · 투자 권유 자료가 아닙니다.</p>
+          <p className="dart-note"><BadgeCheck size={12} /> {market === "US" ? "SEC EDGAR 제출 이력 기준" : "금융감독원 공시 보고서 기준"} · 투자 권유 자료가 아닙니다.</p>
         </>
       )}
     </section>

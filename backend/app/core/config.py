@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # disclosures. The key never leaves the API server.
     dart_api_key: str | None = None
 
+    # SEC EDGAR does not require an API key, but automated clients must send
+    # an identifiable User-Agent with a reachable contact address.
+    sec_user_agent: str | None = None
+
     # StockPilot runs in coders.kr standalone mode and owns its Google login.
     # Secrets are injected by the platform and never exposed to the browser.
     google_client_id: str | None = None
@@ -77,4 +81,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

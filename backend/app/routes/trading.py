@@ -486,10 +486,18 @@ async def simulation_rules(response: Response) -> dict:
             {"key": "STOP_LIMIT", "label": "조건부 지정가", "description": "감시 가격 도달 후 지정가 주문으로 전환"},
         ],
         "sessions": [
-            {"market": "KR", "label": "KRX 정규장", "time": "09:00–15:30"},
-            {"market": "KR", "label": "NXT 프리·애프터", "time": "08:00–08:50 · 15:40–20:00"},
-            {"market": "US", "label": "미국 정규장", "time": "한국시간 기준 서머타임 변동"},
+            {"market": "KR", "label": "KRX 정규장", "time": "09:00–15:30", "timezone": "Asia/Seoul"},
+            {"market": "KR", "label": "NXT 프리마켓", "time": "08:00–08:50", "timezone": "Asia/Seoul"},
+            {"market": "KR", "label": "NXT 메인마켓", "time": "09:00–15:20", "timezone": "Asia/Seoul"},
+            {"market": "KR", "label": "NXT 애프터마켓", "time": "15:40–20:00", "timezone": "Asia/Seoul"},
+            {"market": "US", "label": "미국 정규장", "time": "09:30–16:00 현지시간", "timezone": "America/New_York"},
         ],
+        "calendar": {
+            "krxSource": "https://global.krx.co.kr/contents/GLB/06/0602/0602020204/GLB0602020204T1.jsp",
+            "nxtSource": "https://nextrade.co.kr/marketOverview/content.do",
+            "usSource": "https://www.nasdaq.com/market-activity/stock-market-holiday-calendar",
+            "policy": "거래소 휴장일과 서머타임은 공식 캘린더 기준으로 운영 점검하며, 가상주문은 시세 최신성·서비스 위험한도를 함께 검증합니다.",
+        },
         "dataPolicy": {
             "maxQuoteAgeSeconds": settings.market_data_max_age_seconds,
             "staleOrderPolicy": "오래된 시세에서는 조건부 주문을 체결하지 않음",
@@ -1127,5 +1135,4 @@ async def websocket_quotes(websocket: WebSocket) -> None:
         pass
     finally:
         quote_fanout.unsubscribe(queue)
-
 
