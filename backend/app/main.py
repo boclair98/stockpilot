@@ -260,4 +260,3 @@ async def traffic_health(_: Identity = Depends(require_operator)) -> JSONRespons
         headers={"Cache-Control": "no-store"},
     )
 
-

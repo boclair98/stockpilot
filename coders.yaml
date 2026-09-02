@@ -75,4 +75,3 @@ services:
 
   cache:
     type: redis
-

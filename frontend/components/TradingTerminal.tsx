@@ -1696,4 +1696,3 @@ export default function TradingTerminal() {
     </main>
   );
 }
-

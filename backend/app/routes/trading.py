@@ -1198,4 +1198,3 @@ async def websocket_quotes(websocket: WebSocket) -> None:
         quote_fanout.unsubscribe(queue)
         await traffic_store.release_connection_slot(scope, slot)
 
-

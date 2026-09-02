@@ -15,4 +15,3 @@ RUN sed -i 's/\r$//' worker-entrypoint.sh && chmod +x worker-entrypoint.sh && \
 USER appuser
 
 ENTRYPOINT ["./worker-entrypoint.sh"]
-

@@ -61,4 +61,3 @@ async def test_request_metrics_are_aggregated_without_user_data():
     assert snapshot["serverErrors"] == 1
     assert snapshot["inFlight"] == 0
     assert snapshot["statuses"] == {"5xx": 1}
-

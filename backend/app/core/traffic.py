@@ -416,4 +416,3 @@ class RequestMetrics:
 
 traffic_store = TrafficStore()
 request_metrics = RequestMetrics()
-

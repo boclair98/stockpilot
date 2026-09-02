@@ -82,4 +82,3 @@ async def readiness() -> JSONResponse:
         },
         headers={"Cache-Control": "no-store"},
     )
-
