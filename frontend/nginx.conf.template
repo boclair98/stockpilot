@@ -9,6 +9,18 @@
 # startup just because the api KSvc isn't reachable yet.
 resolver ${NGINX_RESOLVER} valid=30s ipv6=off;
 
+# Compress JSON and text responses before they leave the public edge. Static
+# chunks are immutable and already cached below; gzip mainly reduces API and
+# HTML transfer size for mobile users without changing application payloads.
+gzip on;
+gzip_comp_level 5;
+gzip_min_length 1024;
+gzip_vary on;
+gzip_types application/json application/javascript application/manifest+json
+           application/xml image/svg+xml text/css text/plain text/xml;
+sendfile on;
+keepalive_timeout 65;
+
 # These have to live at http-context (not inside `server`), because
 # nginx parses the request line + initial headers before it knows which
 # server block to use. Files in /etc/nginx/conf.d/ are already included
@@ -106,4 +118,3 @@ server {
     try_files $uri $uri.html $uri/index.html /index.html;
   }
 }
-

@@ -132,6 +132,7 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | Backend | Python 3.12, FastAPI, Pydantic, SQLAlchemy Async |
 | Database | PostgreSQL 16, Alembic migration |
 | Cache·Traffic | Redis, TTL 캐시, 분산 락, 요청 제한, single-flight |
+| Database Guardrails | 비동기 연결 풀, LIFO 재사용, 연결 타임아웃, 8초 statement timeout |
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API(WebSocket·REST) |
 | Company Data | 금융감독원 OpenDART API, SEC EDGAR Submissions API |

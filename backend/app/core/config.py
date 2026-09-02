@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     database_max_overflow: int = 20
     database_pool_timeout: int = 15
     database_pool_recycle: int = 900
+    # Keep stale DB connections from pinning an API worker. The server-side
+    # statement timeout is intentionally short because all API queries are
+    # bounded user-facing operations; slow work should fail and be retried.
+    database_statement_timeout_ms: int = 8000
+    database_connect_timeout_seconds: float = 5.0
 
     # Redis is optional in local development and mandatory in the production
     # manifest. It keeps hot public responses and abuse limits consistent when
