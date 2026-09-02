@@ -7,10 +7,14 @@
 
 - `DATABASE_URL`, `REDIS_URL`, `AUTH_SESSION_SECRET`는 플랫폼 시크릿으로만
   주입합니다. 저장소와 이미지에 값을 넣지 않습니다.
-- `RUN_MIGRATIONS_ON_BOOT=true`는 현재 단일 API 서비스 배포에서 사용합니다.
-  컨테이너가 여러 개 동시에 시작해도 PostgreSQL advisory lock으로 migration은
-  한 번에 하나만 실행됩니다. 별도 migration job을 운영할 때는 API 환경변수를
-  `false`로 바꾸고 job에서 `uv run alembic upgrade head`를 실행합니다.
+- production의 `RUN_MIGRATIONS_ON_BOOT`는 `false`로 유지합니다. 새 revision을
+  배포할 때는 API rollout 전에 one-shot 컨테이너(또는 안전한 운영 셸)에서
+  `uv run alembic upgrade head`를 한 번 실행하고, 완료 후 API·worker를
+  재배포합니다. 개발 환경에서만 `true`를 임시로 사용할 수 있습니다.
+- `worker` 서비스는 시세 수집·목표가 알림·보호주문 매처를 담당합니다. API
+  replica에는 `RUN_BACKGROUND_WORKERS=false`를 적용해 요청 처리와 장시간
+  polling이 서로 자원을 빼앗지 않게 합니다. Redis lease가 worker 중복 실행을
+  방지하므로 worker replica를 늘리기 전 Redis 상태를 먼저 확인합니다.
 - `ENABLE_API_DOCS=false`를 유지합니다. 내부 점검이 필요할 때만 일시적으로
   켜고, 외부에 `/api/docs`를 공개한 채 운영하지 않습니다.
 - Redis는 시세 수집 리더 선출, 백그라운드 알림·보호주문 단일 실행, 전역 요청
@@ -21,6 +25,9 @@
 
 - API replica를 늘려도 KIS WebSocket 수집기는 `market:collector` lease를
   가진 한 인스턴스만 실행합니다. 나머지 인스턴스는 Redis snapshot을 읽습니다.
+- `/api/trading/ws`는 사용자/IP별 동시 연결 슬롯을 사용합니다. `1013`으로
+  거절된 클라이언트는 지수 백오프로 재시도하고, 탭이 백그라운드가 되면 소켓을
+  닫아 불필요한 연결을 유지하지 않습니다.
 - 목표가 알림과 익절·손절 보호주문 매처도 각각 전역 lease를 사용합니다. lease
   TTL보다 오래 걸리는 작업이 반복되면 `poll_once` 배치 크기와 외부 API 지연을
   먼저 점검합니다.
@@ -56,8 +63,9 @@
 3. KIS 장애 시 모의 주문을 일시 중지하고 Redis snapshot·마지막 시세 시각을
    기준으로 사용자에게 지연 상태를 표시합니다. 오래된 시세로 체결하지
    않습니다.
-4. 배포 직후 migration 오류가 나면 새 replica를 늘리지 말고 migration 로그와
-   advisory lock 보유 세션을 확인합니다.
+4. 배포 직후 migration 오류가 나면 새 replica를 늘리지 말고 one-shot migration
+   로그와 advisory lock 보유 세션을 확인합니다. API/worker가 `503`이면
+   `/api/health/ready`와 worker의 `/health/ready`를 각각 확인합니다.
 
 ## 부하 테스트 권장 시나리오
 
@@ -67,5 +75,8 @@
   없는지 확인합니다.
 - KIS REST/WebSocket을 강제로 지연·끊김 처리해 stale quote 차단과 자동 재연결을
   검증합니다.
+- WebSocket 동시 연결을 사용자/IP별 한도 이상으로 열어 `1013` 거절과 브라우저
+  backoff가 동작하는지 확인합니다. 탭을 숨겼다가 다시 열었을 때 연결이 한 개로
+  수렴해야 합니다.
 
 

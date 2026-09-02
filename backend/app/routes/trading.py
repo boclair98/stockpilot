@@ -26,7 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session
-from app.core.identity import optional_identity, require_identity
+from app.core.identity import (
+    SESSION_COOKIE,
+    decode_session,
+    optional_identity,
+    require_identity,
+)
 from app.core.order_integrity import normalize_idempotency_key, request_fingerprint
 from app.core.traffic import traffic_store
 from app.models import Position, ProtectionPlan, TradeOrder, TradingAccount
@@ -81,6 +86,33 @@ class QuoteFanout:
 
 
 quote_fanout = QuoteFanout()
+
+
+def _websocket_scope(websocket: WebSocket) -> tuple[str, int]:
+    """Return the distributed connection bucket for a quote socket."""
+
+    session_cookie = websocket.cookies.get(SESSION_COOKIE)
+    identity = decode_session(session_cookie)
+    if identity:
+        return (
+            f"user:{identity.id}",
+            settings.websocket_authenticated_limit,
+        )
+    forwarded = websocket.headers.get("cf-connecting-ip")
+    client = forwarded or (websocket.client.host if websocket.client else "unknown")
+    return f"ip:{client}", settings.websocket_anonymous_limit
+
+
+async def _renew_websocket_slot(scope: str, token: str) -> None:
+    """Keep a live socket counted while cleaning up abandoned connections."""
+
+    interval = max(15, settings.websocket_lease_seconds // 3)
+    while True:
+        await asyncio.sleep(interval)
+        if not await traffic_store.renew_connection_slot(
+            scope, token, settings.websocket_lease_seconds
+        ):
+            return
 
 
 def simulation_charges(
@@ -1126,13 +1158,44 @@ async def cancel_order(
 
 @router.websocket("/ws")
 async def websocket_quotes(websocket: WebSocket) -> None:
-    await websocket.accept()
+    scope, limit = _websocket_scope(websocket)
+    slot = await traffic_store.acquire_connection_slot(
+        scope, limit, settings.websocket_lease_seconds
+    )
+    if not slot:
+        # 1013 tells browsers to retry later; the client applies exponential
+        # backoff so a burst of tabs cannot create a reconnect storm.
+        await websocket.close(code=1013, reason="실시간 시세 연결이 많습니다.")
+        return
+    try:
+        await websocket.accept()
+    except Exception:
+        # A browser can navigate away during the handshake. Release the lease
+        # immediately so an abandoned handshake cannot occupy a slot until TTL.
+        await traffic_store.release_connection_slot(scope, slot)
+        raise
     queue = quote_fanout.subscribe()
+    renew_task = asyncio.create_task(
+        _renew_websocket_slot(scope, slot), name="quote-websocket-lease"
+    )
     try:
         while True:
-            await websocket.send_text(await queue.get())
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=25)
+            except TimeoutError:
+                # Even when a market is closed, a small heartbeat keeps the
+                # browser and edge aware that the socket is still healthy.
+                await websocket.send_json(
+                    {"type": "heartbeat", "at": datetime.now(UTC).isoformat()}
+                )
+                continue
+            await websocket.send_text(payload)
     except WebSocketDisconnect:
         pass
     finally:
+        renew_task.cancel()
+        await asyncio.gather(renew_task, return_exceptions=True)
         quote_fanout.unsubscribe(queue)
+        await traffic_store.release_connection_slot(scope, slot)
+
 

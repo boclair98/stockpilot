@@ -44,9 +44,29 @@ services:
       DATABASE_MAX_OVERFLOW: "20"
       DATABASE_STATEMENT_TIMEOUT_MS: "8000"
       DATABASE_CONNECT_TIMEOUT_SECONDS: "5"
+      WEBSOCKET_AUTHENTICATED_LIMIT: "6"
+      WEBSOCKET_ANONYMOUS_LIMIT: "20"
+      WEBSOCKET_LEASE_SECONDS: "300"
       MAX_REQUEST_BODY_BYTES: "64000"
       MARKET_DATA_REQUEST_TIMEOUT_SECONDS: "8"
-      RUN_MIGRATIONS_ON_BOOT: "true"
+      RUN_MIGRATIONS_ON_BOOT: "false"
+      RUN_BACKGROUND_WORKERS: "false"
+      ENABLE_API_DOCS: "false"
+
+  worker:
+    # Long-lived KIS collection, price alerts, and simulated protection
+    # matching run outside API replicas. Redis leases keep a single worker
+    # active even if the platform starts more than one worker pod.
+    dockerfile: backend/worker.Dockerfile
+    context: backend
+    port: 8001
+    expose: internal
+    timeout: 3600
+    env:
+      DATABASE_URL: postgresql+asyncpg://${db.user}:${db.password}@${db.host}:${db.port}/${db.name}
+      REDIS_URL: ${cache.url}
+      RUN_MIGRATIONS_ON_BOOT: "false"
+      RUN_BACKGROUND_WORKERS: "true"
       ENABLE_API_DOCS: "false"
 
   db:
@@ -55,3 +75,4 @@ services:
 
   cache:
     type: redis
+

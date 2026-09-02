@@ -29,6 +29,27 @@ async def test_local_rate_limit_stops_after_limit():
     assert not await store.allow("user:write", 2)
 
 
+async def test_local_connection_slots_are_bounded_and_released():
+    store = TrafficStore()
+
+    first = await store.acquire_connection_slot("ip:127.0.0.1", limit=1)
+    assert first
+    assert await store.acquire_connection_slot("ip:127.0.0.1", limit=1) is None
+
+    assert await store.release_connection_slot("ip:127.0.0.1", first)
+    second = await store.acquire_connection_slot("ip:127.0.0.1", limit=1)
+    assert second
+
+
+async def test_local_connection_slot_renew_requires_owner():
+    store = TrafficStore()
+
+    token = await store.acquire_connection_slot("user:demo", limit=1)
+    assert token
+    assert await store.renew_connection_slot("user:other", token) is False
+    assert await store.renew_connection_slot("user:demo", token)
+
+
 async def test_request_metrics_are_aggregated_without_user_data():
     metrics = RequestMetrics()
     await metrics.begin()
@@ -40,3 +61,4 @@ async def test_request_metrics_are_aggregated_without_user_data():
     assert snapshot["serverErrors"] == 1
     assert snapshot["inFlight"] == 0
     assert snapshot["statuses"] == {"5xx": 1}
+

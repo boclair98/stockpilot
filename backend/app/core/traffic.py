@@ -28,6 +28,7 @@ class TrafficStore:
         self._redis: Redis | None = None
         self._memory: dict[str, tuple[float, str]] = {}
         self._memory_counts: dict[str, tuple[float, int]] = {}
+        self._memory_connections: dict[str, tuple[str, float]] = {}
         self._lock = asyncio.Lock()
         self._single_flight: dict[str, asyncio.Lock] = {}
         self.available = False
@@ -267,6 +268,113 @@ class TrafficStore:
                     if item[0] > now
                 }
             return current <= limit
+
+    async def acquire_connection_slot(
+        self, scope: str, limit: int, ttl_seconds: int = 300
+    ) -> str | None:
+        """Reserve a bounded long-lived connection for a user or IP.
+
+        WebSocket handshakes do not pass through the normal HTTP middleware,
+        so the regular request rate limit cannot protect this path. Redis
+        stores expiring leases in a sorted set, keeping the limit consistent
+        across API replicas while allowing abandoned sockets to age out.
+        """
+
+        key = f"ws:connections:{scope}"
+        token = secrets.token_urlsafe(18)
+        ttl = max(30, int(ttl_seconds))
+        if self._redis:
+            try:
+                now = time.time()
+                result = await self._redis.eval(
+                    "local now = tonumber(ARGV[1]); "
+                    "redis.call('zremrangebyscore', KEYS[1], '-inf', now); "
+                    "if redis.call('zcard', KEYS[1]) >= tonumber(ARGV[2]) then "
+                    "return 0 end; "
+                    "redis.call('zadd', KEYS[1], tonumber(ARGV[3]), ARGV[4]); "
+                    "redis.call('expire', KEYS[1], tonumber(ARGV[5])); "
+                    "return 1",
+                    1,
+                    key,
+                    str(now),
+                    str(max(1, int(limit))),
+                    str(now + ttl),
+                    token,
+                    str(ttl + 10),
+                )
+                return token if result else None
+            except Exception:
+                logger.warning("Redis WebSocket slot acquire failed", exc_info=True)
+                return None
+
+        now = time.monotonic()
+        async with self._lock:
+            self._memory_connections = {
+                item_token: item
+                for item_token, item in self._memory_connections.items()
+                if item[1] > now
+            }
+            active = sum(
+                1 for item_scope, _ in self._memory_connections.values() if item_scope == scope
+            )
+            if active >= max(1, int(limit)):
+                return None
+            self._memory_connections[token] = (scope, now + ttl)
+            return token
+
+    async def renew_connection_slot(
+        self, scope: str, token: str, ttl_seconds: int = 300
+    ) -> bool:
+        """Extend a connection lease only while the socket is still active."""
+
+        key = f"ws:connections:{scope}"
+        ttl = max(30, int(ttl_seconds))
+        if self._redis:
+            try:
+                now = time.time()
+                result = await self._redis.eval(
+                    "if redis.call('zscore', KEYS[1], ARGV[1]) and "
+                    "tonumber(redis.call('zscore', KEYS[1], ARGV[1])) > tonumber(ARGV[2]) "
+                    "then redis.call('zadd', KEYS[1], tonumber(ARGV[3]), ARGV[1]); "
+                    "redis.call('expire', KEYS[1], tonumber(ARGV[4])); return 1 end; "
+                    "return 0",
+                    1,
+                    key,
+                    token,
+                    str(now),
+                    str(now + ttl),
+                    str(ttl + 10),
+                )
+                return bool(result)
+            except Exception:
+                logger.warning("Redis WebSocket slot renew failed", exc_info=True)
+                return False
+        async with self._lock:
+            current = self._memory_connections.get(token)
+            if not current or current[0] != scope or current[1] <= time.monotonic():
+                return False
+            self._memory_connections[token] = (
+                scope,
+                time.monotonic() + ttl,
+            )
+            return True
+
+    async def release_connection_slot(self, scope: str, token: str) -> bool:
+        """Release a connection lease when a WebSocket closes normally."""
+
+        key = f"ws:connections:{scope}"
+        if self._redis:
+            try:
+                return bool(await self._redis.zrem(key, token))
+            except Exception:
+                logger.warning("Redis WebSocket slot release failed", exc_info=True)
+                return False
+        async with self._lock:
+            current = self._memory_connections.get(token)
+            if not current or current[0] != scope:
+                return False
+            self._memory_connections.pop(token, None)
+            return True
 
 
 class RequestMetrics:

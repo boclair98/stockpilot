@@ -37,9 +37,11 @@ from app.services.protection_matcher import protection_matcher
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await traffic_store.start()
-    kis_market.start()
-    price_alert_notifier.start()
-    protection_matcher.start()
+    background_started = settings.run_background_workers
+    if background_started:
+        kis_market.start()
+        price_alert_notifier.start()
+        protection_matcher.start()
     async def warm_instrument_catalog() -> None:
         # Give the above-the-fold bootstrap priority, then prepare first search.
         await asyncio.sleep(3)
@@ -53,9 +55,10 @@ async def lifespan(app: FastAPI):
     finally:
         catalog_task.cancel()
         await asyncio.gather(catalog_task, return_exceptions=True)
-        await price_alert_notifier.stop()
-        await protection_matcher.stop()
-        await kis_market.stop()
+        if background_started:
+            await price_alert_notifier.stop()
+            await protection_matcher.stop()
+            await kis_market.stop()
         await traffic_store.close()
         await engine.dispose()
 

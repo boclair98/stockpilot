@@ -190,7 +190,10 @@ KOSPI 지수는 단순 차트가 아니라 사용자의 투자 판단을 설명�
 
 ### 4. 대규모 접속을 고려한 시장 데이터 처리
 
-KIS 수집기를 단일 수집기로 운영하고 Redis lease·공유 캐시·WebSocket fan-out을 사용합니다. 여러 브라우저가 같은 종목을 요청해도 외부 API 호출과 JSON 직렬화를 반복하지 않도록 구성했습니다.
+KIS 수집기·목표가 알림·보호주문 매처는 전용 `worker` 서비스에서 실행하고,
+API replica는 짧은 요청 처리에 집중합니다. Redis lease·공유 캐시·WebSocket
+fan-out을 사용해 여러 브라우저가 같은 종목을 요청해도 외부 API 호출과 JSON
+직렬화를 반복하지 않도록 구성했습니다.
 
 ### 5. 사용자 증가를 대비한 운영 하드닝
 
@@ -206,6 +209,8 @@ KIS 수집기를 단일 수집기로 운영하고 Redis lease·공유 캐시·We
 - **장애 격리:** Redis가 잠시 끊겨도 로컬 fallback으로 읽기·로그인을 유지하되, 운영 워커 lease는 fail-closed로 중복 실행을 막습니다. readiness probe가 DB·Redis·시세 상태를 분리해 표시합니다.
 - **시세 지연 격리:** KIS REST 슬롯을 제한 시간 안에 획득하지 못하거나 upstream이 느리면 사용자 요청을 빠르게 종료해 API worker가 무한 대기하지 않습니다. 오래된 시세로 주문을 체결하지 않는 정책도 유지합니다.
 - **캐시 미스 single-flight:** 같은 키의 첫 갱신을 한 요청만 수행하고 다른 replica는 공유 결과를 기다려, 인기 종목의 동시 cache miss가 KIS 호출 폭주로 번지지 않게 합니다.
+- **실시간 연결 보호:** WebSocket handshake에도 사용자/IP별 동시 연결 슬롯과 만료 lease를 적용하고, 브라우저는 지수 백오프·jitter로 재연결해 장애·새로고침 폭주를 흡수합니다.
+- **부팅 경량화:** production API·worker는 컨테이너마다 migration을 실행하지 않습니다. 배포 전 one-shot migration을 완료한 뒤 readiness를 통과한 replica만 트래픽을 받습니다.
 - **요청 보호:** 사용자/IP별 읽기·쓰기 rate limit과 API/nginx 본문 크기 제한을 적용하고, 모든 응답에 request ID·보안 헤더를 남겨 추적과 abuse 대응을 가능하게 합니다.
 
 이 보호장치는 “무제한 트래픽”을 보장한다는 뜻이 아니라, 실제 사용자가 늘 때 외부 API·DB·워커가 먼저 무너지는 것을 막는 운영 기준선입니다. 배포 전에는 `docs/OPERATIONS_RUNBOOK.md`의 migration·백업·부하 점검 절차를 따라야 합니다.
@@ -238,6 +243,9 @@ app
 │   └── order_integrity.py
 └── models.py            # 사용자·가상원장·리그·알림·감사 모델
 ```
+
+`app/worker.py`와 `worker.Dockerfile`은 장시간 실행되는 시세·알림·보호주문
+작업을 API replica와 분리한 내부 worker 서비스입니다.
 
 ## 문서
 
@@ -378,7 +386,7 @@ pnpm build
 
 - 운영 URL: [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
 - 공개 저장소: [https://github.com/boclair98/stockpilot](https://github.com/boclair98/stockpilot)
-- 배포 방식: `coders.yaml` 기반 web/api 분리 배포
+- 배포 방식: `coders.yaml` 기반 web/api/worker 분리 배포
 - 현재 상태: KRX·NXT·미국주식 시세 기반 모의투자 서비스 운영 중
 
 ### 다음 개선 후보
@@ -395,3 +403,4 @@ StockPilot은 학습과 경험을 위한 가상투자 서비스입니다. 표시
 ## License
 
 개인 프로젝트입니다. 상업적 사용·재배포 전에는 저장소 관리자에게 문의해 주세요.
+

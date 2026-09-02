@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     leaderboard_cache_seconds: int = 15
     rate_limit_read_per_minute: int = 240
     rate_limit_write_per_minute: int = 30
+    # WebSocket handshakes bypass HTTP middleware, so cap long-lived market
+    # streams separately per authenticated user and anonymous source IP.
+    websocket_authenticated_limit: int = 6
+    websocket_anonymous_limit: int = 20
+    websocket_lease_seconds: int = 300
     # All current API payloads are small JSON commands. Rejecting unexpectedly
     # large bodies before FastAPI parses them protects memory under abuse and
     # keeps a busy replica available for real users.
@@ -50,6 +55,9 @@ class Settings(BaseSettings):
     simulation_kr_sell_tax_rate: Decimal = Decimal("0.002")
     trading_mode: str = "SIMULATION"
     market_data_max_age_seconds: int = 15
+    # API replicas should stay request-focused in production. The dedicated
+    # worker service owns the long-lived market, alert, and protection loops.
+    run_background_workers: bool = True
     risk_max_order_notional_krw: Decimal = Decimal("100000000")
     risk_max_order_notional_usd: Decimal = Decimal("100000")
     risk_max_open_orders: int = 20
@@ -86,3 +94,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

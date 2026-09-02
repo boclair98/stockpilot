@@ -16,8 +16,9 @@ if [ -n "${DATABASE_URL:-}" ]; then
   fi
 fi
 
-if [ "${RUN_MIGRATIONS_ON_BOOT:-true}" = "true" ]; then
+if [ "${RUN_MIGRATIONS_ON_BOOT:-false}" = "true" ]; then
   uv run python scripts/migrate_with_lock.py
 fi
 
 exec uv run uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+

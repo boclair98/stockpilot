@@ -287,7 +287,9 @@ export default function TradingTerminal() {
       if (!document.hidden) void refreshPortfolio();
     }, 10_000);
     let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
+    // Browser timers are numbers; avoid NodeJS.Timeout leaking into the client
+    // bundle's type inference when both DOM and Node types are installed.
+    let reconnectTimer = 0;
     let stopped = false;
     let lastSnapshotSaved = 0;
     const bootstrapController = new AbortController();
@@ -322,29 +324,66 @@ export default function TradingTerminal() {
         if (data.kospi?.points?.length) setBootstrapKospi(data.kospi);
       })
       .catch(() => undefined);
+    let reconnectDelay = 1000;
+    let connecting = false;
     const connect = () => {
-      socket = new WebSocket(
+      if (
+        stopped ||
+        document.hidden ||
+        connecting ||
+        socket?.readyState === WebSocket.OPEN
+      ) {
+        return;
+      }
+      connecting = true;
+      const nextSocket = new WebSocket(
         `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/trading/ws`,
       );
-      socket.onopen = () => setSocketConnected(true);
-      socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === "quotes") {
-          startTransition(() => {
-            setQuotes(message.data);
-            setStatus(message.status);
-          });
-          saveSnapshot(message.data);
+      socket = nextSocket;
+      nextSocket.onopen = () => {
+        connecting = false;
+        reconnectDelay = 1000;
+        setSocketConnected(true);
+      };
+      nextSocket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "quotes") {
+            startTransition(() => {
+              setQuotes(message.data);
+              setStatus(message.status);
+            });
+            saveSnapshot(message.data);
+          }
+        } catch {
+          // Ignore a malformed frame; the next snapshot can still recover.
         }
       };
-      socket.onclose = () => {
+      nextSocket.onclose = () => {
+        if (socket !== nextSocket) return;
+        connecting = false;
         setSocketConnected(false);
-        if (!stopped) reconnectTimer = setTimeout(connect, 1800);
+        if (!stopped && !document.hidden) {
+          const jitter = Math.floor(Math.random() * 400);
+          reconnectTimer = window.setTimeout(connect, reconnectDelay + jitter);
+          reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+        }
       };
-      socket.onerror = () => socket?.close();
+      nextSocket.onerror = () => nextSocket.close();
     };
     const refreshWhenVisible = () => {
-      if (!document.hidden) void refreshPortfolio();
+      if (!document.hidden) {
+        void refreshPortfolio();
+        connect();
+        return;
+      }
+      window.clearTimeout(reconnectTimer);
+      if (
+        socket?.readyState === WebSocket.OPEN ||
+        socket?.readyState === WebSocket.CONNECTING
+      ) {
+        socket.close(1000, "background");
+      }
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
     connect();
@@ -353,7 +392,7 @@ export default function TradingTerminal() {
       bootstrapController.abort();
       window.clearTimeout(initialPortfolioTimer);
       window.clearInterval(portfolioTimer);
-      clearTimeout(reconnectTimer);
+      window.clearTimeout(reconnectTimer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       socket?.close();
     };
@@ -1657,3 +1696,4 @@ export default function TradingTerminal() {
     </main>
   );
 }
+

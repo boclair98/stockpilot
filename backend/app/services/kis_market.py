@@ -188,6 +188,20 @@ class KISMarket:
         for row in cached:
             if isinstance(row, dict) and row.get("id"):
                 self._quotes[str(row["id"])] = row.copy()
+        # API replicas may intentionally not run the collector process. Use
+        # the worker's fresh Redis snapshot as the connection signal so the
+        # browser does not show a false "connecting" state after scale-out.
+        fresh_rows = []
+        for row in cached:
+            try:
+                age = datetime.now(UTC) - datetime.fromisoformat(row["asOf"])
+                if age.total_seconds() <= settings.market_data_max_age_seconds * 2:
+                    fresh_rows.append(row)
+            except (KeyError, TypeError, ValueError):
+                continue
+        self.connected = bool(fresh_rows)
+        if self.connected:
+            self.last_error = None
         return self.snapshot(top_only=top_only)
 
     def _client(self) -> httpx.AsyncClient:
