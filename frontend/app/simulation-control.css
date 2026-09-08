@@ -58,6 +58,38 @@
 .simulation-rule-grid b { font-size: 9px; }
 .simulation-rule-grid p { margin: 7px 0 4px; color: #4e5968; font-size: 9px; line-height: 1.45; }
 .simulation-rule-grid span { color: #8a949f; font-size: 7px; line-height: 1.45; }
+.rebalance-coach { margin-top: 10px; padding: 13px; border: 1px solid #e4ebf4; border-radius: 14px; background: linear-gradient(145deg, #f9fbff, #ffffff); }
+.rebalance-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rebalance-coach-title { display: flex; align-items: center; gap: 8px; }
+.rebalance-coach-title > span { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 9px; background: #e9f3ff; color: #2673dd; }
+.rebalance-coach-title > div { display: grid; gap: 2px; }
+.rebalance-coach-title b { font-size: 10px; }
+.rebalance-coach-title small { color: #8a949f; font-size: 7px; }
+.rebalance-profile select { min-height: 29px; padding: 0 22px 0 8px; border: 1px solid #dce5f0; border-radius: 8px; color: #286fd7; background: #fff; font-size: 8px; font-weight: 800; cursor: pointer; }
+.rebalance-coach-summary { display: flex; align-items: center; gap: 14px; margin-top: 11px; padding: 9px 10px; border-radius: 10px; background: #f0f6ff; }
+.rebalance-coach-summary span { display: grid; gap: 2px; min-width: 64px; }
+.rebalance-coach-summary small { color: #7890aa; font-size: 7px; }
+.rebalance-coach-summary b { color: #2164ba; font-size: 11px; }
+.rebalance-coach-summary em { color: #6e7d8d; font-size: 8px; font-style: normal; line-height: 1.4; }
+.rebalance-table { margin-top: 9px; }
+.rebalance-table-head, .rebalance-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(110px, 1fr) 92px; gap: 10px; align-items: center; }
+.rebalance-table-head { padding: 0 7px 5px; color: #9aa6b3; font-size: 7px; font-weight: 800; }
+.rebalance-row { min-height: 42px; padding: 7px; border-top: 1px solid #edf1f5; }
+.rebalance-row > span { min-width: 0; display: grid; gap: 2px; }
+.rebalance-row > span:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.rebalance-row small { color: #8a949f; font-size: 7px; }
+.rebalance-row > span:nth-child(2) b { font-size: 9px; }
+.rebalance-row > span:nth-child(2) b i { color: #7f8b98; font-size: 7px; font-style: normal; font-weight: 600; }
+.rebalance-row > span:nth-child(2) small.up { color: #188a5c; }
+.rebalance-row > span:nth-child(2) small.down { color: #d23b4a; }
+.rebalance-row > span:nth-child(2) small.flat { color: #8a949f; }
+.rebalance-action { justify-self: end; display: inline-flex !important; align-items: center; justify-content: center; gap: 2px; min-width: 70px; padding: 5px 6px; border-radius: 7px; font-size: 8px; font-weight: 850; }
+.rebalance-action small { display: block; margin-left: 2px; font-weight: 650; }
+.rebalance-action.buy { color: #13875c; background: #eaf8f1; }
+.rebalance-action.sell { color: #d23b4a; background: #fff0f2; }
+.rebalance-action.hold { color: #6d7884; background: #f2f4f6; }
+.rebalance-empty { display: flex; align-items: center; gap: 6px; margin: 12px 0 2px; color: #7f8b98; font-size: 8px; line-height: 1.5; }
+.rebalance-note { margin: 8px 2px 0; color: #9aa4af; font-size: 7px; line-height: 1.5; }
 .simulation-control-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
 .simulation-control-foot > span { display: flex; align-items: center; gap: 5px; color: #8a949f; font-size: 8px; line-height: 1.4; }
 .simulation-control-foot button { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 7px 9px; border: 0; border-radius: 9px; background: #edf5ff; color: #2673dd; font-size: 8px; font-weight: 800; cursor: pointer; }
@@ -72,5 +104,11 @@
   .simulation-live { display: none; }
   .simulation-summary-grid b { font-size: 11px; }
   .simulation-control-foot { align-items: flex-start; flex-direction: column; }
+  .rebalance-coach-head { align-items: flex-start; flex-direction: column; }
+  .rebalance-profile, .rebalance-profile select { width: 100%; }
+  .rebalance-table-head, .rebalance-row { grid-template-columns: minmax(0, 1.2fr) minmax(92px, .9fr) 74px; gap: 6px; }
+  .rebalance-row { padding-right: 4px; padding-left: 4px; }
+  .rebalance-action { min-width: 66px; font-size: 7px; }
+  .rebalance-action small { font-size: 6px; }
 }
 
