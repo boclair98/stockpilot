@@ -33,6 +33,7 @@ import DeferredMount from "./DeferredMount";
 import InstallAppButton from "./InstallAppButton";
 import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
 import MarketHeroCarousel from "./MarketHeroCarousel";
+import MarketNavigation from "./MarketNavigation";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketBriefing from "./MarketBriefing";
@@ -1028,6 +1029,8 @@ export default function TradingTerminal() {
         </div>
       </header>
 
+      <MarketNavigation onSearch={focusSearch} />
+
       <section className="hero nxt-hero" id="market-content" tabIndex={-1}>
         <MarketHeroCarousel live={live} statusText={marketConnectionText} />
         <div className="hero-sessions" aria-label="NXT 거래 세션">
@@ -1046,7 +1049,7 @@ export default function TradingTerminal() {
         </div>
       </section>
 
-      <section className="summary">
+      <section className="summary" id="market-overview" aria-label="시장과 내 투자 요약">
         <article className="balance-card">
           <div className="card-title"><span>내 가상자산</span><small>KRW · USD</small></div>
           <strong>{money(portfolio.cash.KRW + positionValues.KRW, "KRW")}</strong>
@@ -1086,9 +1089,11 @@ export default function TradingTerminal() {
         quoteReady={Boolean(quote?.price)}
       />
 
-      <MarketIndexChart initialData={bootstrapKospi} />
+      <div id="market-indices" className="market-anchor-section">
+        <MarketIndexChart initialData={bootstrapKospi} />
 
-      <KospiBenchmarkCard />
+        <KospiBenchmarkCard />
+      </div>
 
       <DeferredMount minHeight={92} rootMargin="600px 0px">
         <SimulationControlCenter authenticated={portfolio.authenticated} onNotice={notify} />
@@ -1189,7 +1194,7 @@ export default function TradingTerminal() {
         </section>
       </details>
 
-      <section className="content">
+      <section className="content" id="market-rankings">
         <div className="market-column">
           <MarketWatchlist
             items={favoriteItems}
@@ -1214,7 +1219,7 @@ export default function TradingTerminal() {
             </span>
           </div>
           {([["한국", krTop], ["미국", usTop]] as const).map(([label, items]) => (
-            <div className="market-block" key={label}>
+            <div className="market-block" id={label === "한국" ? "kr-top" : "us-top"} key={label}>
               <div className="market-label"><b>{label} 주식</b><span>{label === "한국" ? "KRX+NXT · TOP 10" : "TOP 10"}</span></div>
               <div className="watchlist">
                 {items.length === 0
@@ -1339,12 +1344,14 @@ export default function TradingTerminal() {
             />
           </DeferredMount>
 
-          <DeferredMount minHeight={320} rootMargin="320px 0px">
-            <CompanyInsight
-              symbol={activeSymbol}
-              market={quote?.market ?? "KR"}
-            />
-          </DeferredMount>
+          <div id="news-panel" className="market-anchor-section">
+            <DeferredMount minHeight={320} rootMargin="320px 0px">
+              <CompanyInsight
+                symbol={activeSymbol}
+                market={quote?.market ?? "KR"}
+              />
+            </DeferredMount>
+          </div>
 
           <DeferredMount minHeight={420} rootMargin="320px 0px">
             <InvestorTools
@@ -1696,3 +1703,4 @@ export default function TradingTerminal() {
     </main>
   );
 }
+
