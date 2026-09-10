@@ -34,6 +34,38 @@ button {
 .lounge-app,
 .service-page {
   width: 100%;
+  min-width: 0;
+}
+
+/* Grid/flex children otherwise keep their content's desktop minimum width and
+   can push the entire market terminal beyond a narrow phone viewport. */
+.content,
+.market-column,
+.market-block,
+.market-anchor-section,
+.watchlist,
+.search-card,
+.favorite-board,
+.deferred-mount,
+.deferred-placeholder {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.market-column,
+.market-block,
+.search-card,
+.favorite-board {
+  overflow-x: clip;
+}
+
+.watchlist {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quote {
+  min-width: 0;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
 }
 
 /* Large desktop: use the extra room without stretching text beyond readability. */
@@ -371,3 +403,4 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
