@@ -1,0 +1,219 @@
+/* Naver Stock-inspired information architecture: familiar market tabs,
+   persistent search, and clear anchors without copying any protected UI. */
+.market-navigation {
+  position: sticky;
+  z-index: 15;
+  top: 84px;
+  margin: 0 18px 18px;
+  border: 1px solid #e3e8ee;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 8px 25px rgba(25, 31, 40, .08);
+  backdrop-filter: blur(18px);
+}
+
+.market-navigation-inner {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 56px;
+  padding: 7px 9px 7px 14px;
+}
+
+.market-navigation-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 7px 0 1px;
+  color: #202936;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.market-navigation-brand b {
+  font-size: 12px;
+  letter-spacing: -.2px;
+}
+
+.market-navigation-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #e33c4f;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .8px;
+}
+
+.market-navigation-live i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #e33c4f;
+  box-shadow: 0 0 0 4px rgba(227, 60, 79, .12);
+}
+
+.market-navigation-links {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.market-navigation-links::-webkit-scrollbar {
+  display: none;
+}
+
+.market-navigation-links a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: #667281;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.market-navigation-links a:hover,
+.market-navigation-links a:focus-visible {
+  color: #1f2937;
+  background: #f2f5f8;
+}
+
+.market-navigation-links a:first-child {
+  color: #e33c4f;
+  background: #fff1f3;
+}
+
+.market-navigation-search {
+  min-width: 178px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 0 11px;
+  border: 1px solid #e0e6ed;
+  border-radius: 11px;
+  color: #707b88;
+  background: #f8fafc;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.market-navigation-search:hover {
+  border-color: #b8d0f5;
+  color: #2d6fd8;
+  background: #f3f7ff;
+}
+
+.market-navigation-search span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-navigation-search kbd {
+  min-width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8dee6;
+  border-radius: 5px;
+  color: #8a95a2;
+  background: #fff;
+  font-size: 10px;
+  font-family: inherit;
+  font-weight: 800;
+}
+
+.market-anchor-section,
+.market-block,
+#market-overview,
+#search-card,
+#holdings {
+  scroll-margin-top: 156px;
+}
+
+.market-block {
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .market-navigation-inner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .market-navigation-search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .market-navigation {
+    top: 72px;
+    margin: 0 8px 13px;
+    border-radius: 13px;
+  }
+
+  .market-navigation-inner {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 7px 8px 8px;
+  }
+
+  .market-navigation-brand {
+    min-height: 30px;
+    padding-left: 4px;
+  }
+
+  .market-navigation-links {
+    width: 100%;
+    margin: 0 -1px;
+  }
+
+  .market-navigation-links a {
+    min-height: 40px;
+    padding: 0 11px;
+    font-size: 10px;
+  }
+
+  .market-navigation-links a svg {
+    display: none;
+  }
+
+  .market-navigation-search {
+    min-height: 44px;
+    font-size: 11px;
+  }
+
+  .market-anchor-section,
+  .market-block,
+  #market-overview,
+  #search-card,
+  #holdings {
+    scroll-margin-top: 202px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .market-navigation,
+  .market-navigation * {
+    transition-duration: .01ms !important;
+  }
+}
+
