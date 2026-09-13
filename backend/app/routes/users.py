@@ -15,6 +15,7 @@ from app.core.database import get_session
 from app.core.identity import current_identity, optional_display_name, require_identity
 from app.models import (
     AuditEvent,
+    BillingInterest,
     DailyChallengeAttempt,
     LeagueParticipant,
     LeagueRankSnapshot,
@@ -142,6 +143,7 @@ async def export_my_data(
         ("leagueSnapshots", LeagueRankSnapshot, ("id", "participant_id", "snapshot_date", "rank", "return_rate", "created_at"), "participant_id"),
         ("leagueMemberships", LeagueRoomMember, ("id", "league_id", "nickname", "baseline_krw", "baseline_usd", "joined_at")),
         ("auditEvents", AuditEvent, ("id", "event_type", "entity_type", "entity_id", "request_id", "details", "created_at"), "actor_id"),
+        ("billingInterests", BillingInterest, ("id", "plan_id", "created_at")),
     )
     tables: dict[str, list[dict]] = {
         "posts": _export_rows(posts, ("id", "body", "created_at")),

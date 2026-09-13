@@ -35,6 +35,35 @@ class User(Base):
     )
 
 
+class BillingInterest(Base):
+    """A privacy-minimal record of a user's interest in a paid plan.
+
+    This is intentionally separate from a subscription. It lets the product
+    validate demand before a payment provider is enabled without pretending a
+    user has paid or granting premium entitlements from the browser.
+    """
+
+    __tablename__ = "billing_interests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), nullable=False, index=True
+    )
+    plan_id: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "owner_id", "plan_id", name="uq_billing_interests_owner_plan"
+        ),
+        sa.Index("ix_billing_interests_plan_created_at", "plan_id", "created_at"),
+    )
+
+
 class Post(Base):
     """A short message authored by a logged-in user."""
 

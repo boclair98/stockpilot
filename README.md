@@ -35,6 +35,25 @@ KRX·NXT·미국주식 시세를 바탕으로 검색, 분석, 가상주문, 포�
 | 무엇이 다른가요? | 종목 검색부터 주문 안전장치·투자일지·수익률 리그·시장 타임머신까지 하나의 흐름으로 연결 |
 | 무엇을 약속하지 않나요? | 수익을 보장하거나 실제 거래를 대행하지 않습니다. 과거 데이터는 학습용으로만 사용합니다. |
 
+### 수익화 기획: 핵심 경험은 무료, 깊은 복기는 멤버십으로
+
+StockPilot은 가상투자 서비스이므로 주문 수수료나 실거래 중개가 아니라 **반복해서 사용하는 학습 도구**를 유료화합니다. 누구나 시장 시세와 첫 가상주문을 경험할 수 있어야 유입이 커지고, 알림·복기·리포트·팀 운영처럼 사용 빈도와 업무 가치가 높은 기능에서 지속적인 매출을 만들 수 있습니다.
+
+| 플랜 | 대상 | 제공 가치 | 상태 |
+|---|---|---|---|
+| **시작하기** | 모든 사용자 | KRX·NXT·미국 시세, 가상주문, 기본 리그·학습, 가격 알림 3개 | 운영 중 · 무료 |
+| **Pro (월 5,900원 제안)** | 반복 훈련하는 개인 | 알림 무제한, 시장 타임머신 전체 구간, 샤프·낙폭·슬리피지 리포트, CSV/PDF 내보내기, 광고 없는 화면 | 출시 전 수요 확인 |
+| **Team (월 49,000원부터 제안)** | 스터디·학교·교육기관 | 비공개 리그, 초대 코드, 참가자 대시보드, 주간 리포트, 관리자 권한과 운영 로그 | 출시 전 수요 확인 |
+
+홈의 `Pro 플랜` 카드와 `/pricing` 페이지에서 이 구조를 설명하고, 로그인 사용자는 결제 전 출시 알림을 신청할 수 있습니다. 결제 공급자·환불 정책·서명 검증 웹훅을 연결하기 전에는 어떤 사용자도 유료 권한을 받지 않으며, 브라우저 저장값으로 Pro를 활성화할 수 없습니다. 즉 현재 배포는 **수요 검증 단계**이고 실제 과금은 운영자가 결제 요건을 확정한 뒤 별도 릴리스로 켭니다.
+
+```text
+무료 유입 → 첫 가상주문 → 반복 알림·복기 사용 → Pro 전환
+                                └→ 비공개 리그 운영 → Team 도입
+```
+
+이 구조는 투자 조언·현금 상금·브로커리지 수수료에 의존하지 않고, 교육 품질과 리텐션을 높인 기능에만 가격을 붙입니다. 개인 포트폴리오나 거래내역은 판매하지 않으며, 스폰서 콘텐츠가 추가되더라도 광고임을 명확히 표시합니다.
+
 ### 사용자가 느끼는 5단계 여정
 
 ```text
@@ -122,6 +141,9 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | 성장 | 시장 타임머신 | 과거 실제 시세의 체크포인트에서 전액매수·3회분할·현금대기를 선택하고 10거래일 뒤 결과·최대낙폭·학습점수를 비교 |
 | 경쟁 | 수익률 리그 | 종목과 주문내역은 숨기고 닉네임·수익률·순위만 공개 |
 | 경쟁 | 시즌·1:1 배틀 | 친구 초대코드로 기간형 리그와 개인 대결 진행 |
+| 수익화 | 무료·Pro·Team 플랜 | 핵심 시세·가상주문은 무료로 제공하고, 고급 복기와 팀 운영을 멤버십 상품으로 설계 |
+| 수익화 | 출시 알림·수요 검증 | Google 계정과 플랜 관심만 저장하고 결제 전에는 유료 권한을 부여하지 않음 |
+| 수익화 | 서버 권한 계약 | 플랜·한도·결제 준비 상태를 `/api/billing`에서 관리해 클라이언트 조작으로 권한을 높일 수 없음 |
 | 알림 | 목표가·브라우저 푸시 | 목표가 도달, 주문 상태와 주요 이벤트를 Firebase Web Push로 알림 |
 | 커뮤니티 | 투자 라운지 | 보유자산을 공개하지 않고 투자 습관과 배움을 공유 |
 | 운영 | 운영자 통제센터 | 모의거래 중지, 위험한도, 원장 대사, 감사 이벤트 확인 |
@@ -143,6 +165,7 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | Market Data | 한국투자증권 KIS Open API(WebSocket·REST) |
 | Company Data | 금융감독원 OpenDART API, SEC EDGAR Submissions API |
 | Push | Firebase Cloud Messaging(Web Push) |
+| Monetization | Server-owned plan catalog, entitlement contract, launch-interest ledger |
 | Deployment | Docker, Docker Compose, coders.kr 멀티서비스 배포 |
 | Quality | Pytest, Ruff, ESLint, TypeScript, Next.js production build |
 
@@ -232,6 +255,17 @@ fan-out을 사용해 여러 브라우저가 같은 종목을 요청해도 외부
 
 이 보호장치는 “무제한 트래픽”을 보장한다는 뜻이 아니라, 실제 사용자가 늘 때 외부 API·DB·워커가 먼저 무너지는 것을 막는 운영 기준선입니다. 배포 전에는 `docs/OPERATIONS_RUNBOOK.md`의 migration·백업·부하 점검 절차를 따라야 합니다.
 
+### 결제 연동을 위한 준비 상태
+
+현재 `backend/app/routes/billing.py`가 공개 요금제 카탈로그, 무료 권한 계약, Pro·Team 출시 알림, 결제 미설정 시 fail-closed 응답을 제공합니다.
+
+- `GET /api/billing/plans`: 가격·기능·플랜별 한도와 결제 공급자 상태
+- `GET /api/billing/entitlement`: 현재 계정에 서버가 부여한 플랜과 기능
+- `POST /api/billing/interests`: 추가 개인정보 없이 Google 계정별 출시 알림 저장
+- `POST /api/billing/checkout`: 결제 설정 전에는 503으로 차단하고, 향후 공급자 어댑터가 연결될 자리
+
+실제 과금을 켤 때는 국내 결제 공급자 또는 Stripe 중 하나를 선택하고, 결제 승인·취소·환불 웹훅의 서명 검증과 idempotency를 먼저 구현해야 합니다. 결제 성공 화면만으로 권한을 주지 않고 검증된 서버 이벤트로 `subscriptions`와 `entitlements`를 갱신하는 것이 원칙입니다. 가격 변경, 해지·환불, 세금계산서, 개인정보 보관 기간은 사업자 요건을 확인한 뒤 별도 운영 정책으로 확정합니다.
+
 ## 도메인 구조
 
 ```text
@@ -240,6 +274,7 @@ app
 │   ├── trading.py       # 시세·검색·주문·포트폴리오·KOSPI
 │   ├── growth.py        # 챌린지·투자일지·분석·KOSPI 벤치마크
 │   ├── league.py        # 공개 리그·시즌방·1:1 배틀
+│   ├── billing.py       # 플랜·권한 계약·출시 알림·결제 fail-closed 경계
 │   ├── company.py       # OpenDART 기업·재무·공시
 │   ├── engagement.py    # 목표가·리포트·관심종목·푸시
 │   ├── auth.py          # Google OAuth 세션
@@ -258,7 +293,7 @@ app
 │   ├── traffic.py
 │   ├── security.py
 │   └── order_integrity.py
-└── models.py            # 사용자·가상원장·리그·알림·감사 모델
+└── models.py            # 사용자·가상원장·리그·알림·감사·빌링 관심 모델
 ```
 
 `app/worker.py`와 `worker.Dockerfile`은 장시간 실행되는 시세·알림·보호주문
@@ -293,6 +328,11 @@ app
 | `GET` | `/api/me/export` | 내 개인정보·가상거래 기록 JSON 다운로드 | 필요 |
 | `GET` | `/api/league/rankings` | 공개 수익률 리그 | 선택 |
 | `GET` | `/api/growth/analytics` | 리스크·성과·체결품질 분석 | 필요 |
+| `GET` | `/api/billing/plans` | 무료·Pro·Team 공개 상품 카탈로그 | 없음 |
+| `GET` | `/api/billing/entitlement` | 서버가 부여한 현재 플랜·한도 | 선택 |
+| `POST` | `/api/billing/interests` | 로그인 계정별 Pro·Team 출시 알림 등록 | 필요 |
+| `GET` | `/api/billing/admin/interests` | 운영자용 플랜별 관심 수 집계(개인정보 미노출) | 운영자 |
+| `POST` | `/api/billing/checkout` | 결제 공급자 연결 전 fail-closed 경계 | 필요 |
 | `WS` | `/api/trading/ws` | 실시간 시세 스트림 | 없음 |
 
 ## 프로젝트 구조
@@ -304,6 +344,7 @@ stockpilot
 │   ├── components/             # 시장·주문·성장·리그 UI
 │   │   ├── MarketBriefing.tsx    # 시장·포트폴리오·다음 행동 요약
 │   │   ├── MarketReplayStudio.tsx # 과거 시세 의사결정 리플레이
+│   │   ├── PricingPage.tsx         # 무료·Pro·Team 상품과 출시 알림
 │   ├── lib/                    # API·Firebase·학습 콘텐츠 유틸리티
 │   ├── Dockerfile
 │   └── package.json
@@ -381,7 +422,16 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_ALLOWED_HOSTS=stockpilot.coders.kr,stockpilot.kr,www.stockpilot.kr,localhost,127.0.0.1
 DART_API_KEY=...
 FIREBASE_SERVICE_ACCOUNT_B64=...
+PAYMENT_PROVIDER=none
+PAYMENT_CHECKOUT_ENABLED=false
 ```
+
+| 변수 | 목적 | 필수 | 발급·설정 위치 |
+|---|---|:---:|---|
+| `PAYMENT_PROVIDER` | 결제 어댑터 이름 (`none`으로 비활성) | 아니요 | 결제 공급자 선택 후 운영 Secret |
+| `PAYMENT_CHECKOUT_ENABLED` | 서명 검증된 결제 플로우 활성화 스위치 | 아니요 | 웹훅 구현·환불 정책 검토 후 운영 환경 |
+
+현재는 `none`/`false`를 유지하세요. 키만 넣고 스위치를 켜도 결제 공급자 어댑터와 웹훅이 없으면 과금이 완료되지 않습니다.
 
 ### 커스텀 도메인
 
@@ -428,6 +478,9 @@ pnpm build
 
 ### 다음 개선 후보
 
+- 결제 공급자 선택 후 승인·취소·환불 웹훅과 `subscriptions`·`entitlements` 테이블 연결
+- Pro 전환율·해지율·리텐션·알림 사용량을 익명 집계하는 운영 대시보드
+- Team 좌석·초대·비공개 리그 권한과 교육기관 청구서 흐름
 - 종목 마스터와 기업 로고 데이터의 정기 업데이트 파이프라인
 - 더 긴 기간의 KOSPI·포트폴리오 시계열 저장과 리밸런싱 실행 기록
 - 부하 테스트 결과에 따른 Redis·PostgreSQL 용량 조정

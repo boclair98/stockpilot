@@ -52,6 +52,8 @@ services:
       RUN_MIGRATIONS_ON_BOOT: "false"
       RUN_BACKGROUND_WORKERS: "false"
       ENABLE_API_DOCS: "false"
+      PAYMENT_PROVIDER: "none"
+      PAYMENT_CHECKOUT_ENABLED: "false"
 
   worker:
     # Long-lived KIS collection, price alerts, and simulated protection

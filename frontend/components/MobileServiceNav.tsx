@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  BadgeCheck,
   BrainCircuit,
   Gauge,
   GraduationCap,
@@ -25,6 +26,12 @@ const primaryItems = [
 ];
 
 const moreItems = [
+  {
+    href: "/pricing",
+    label: "Pro 플랜",
+    description: "개인·팀 멤버십과 출시 알림",
+    icon: BadgeCheck,
+  },
   {
     href: "/growth",
     label: "성장 허브",

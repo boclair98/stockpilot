@@ -20,6 +20,7 @@ from app.core.identity import (
 from app.core.security import apply_security_headers
 from app.core.traffic import request_metrics, traffic_store
 from app.routes.auth import router as auth_router
+from app.routes.billing import router as billing_router
 from app.routes.company import router as company_router
 from app.routes.engagement import router as engagement_router
 from app.routes.growth import router as growth_router
@@ -189,6 +190,7 @@ async def traffic_middleware(request: Request, call_next):
 
 app.include_router(users_router)
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(company_router)
 app.include_router(engagement_router)
 app.include_router(growth_router)

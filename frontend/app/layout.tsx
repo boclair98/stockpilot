@@ -29,6 +29,8 @@ import "./briefing.css";
 import "./performance.css";
 import "./watchlist.css";
 import "./market-navigation.css";
+import "./pricing.css";
+import "./monetization.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),

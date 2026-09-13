@@ -96,6 +96,13 @@ class Settings(BaseSettings):
     # encoded before it is stored in the deployment environment.
     firebase_service_account_b64: str | None = None
 
+    # Payment stays disabled until a provider account, business information,
+    # refund policy, and webhook verification are configured. Keeping the
+    # switch server-side prevents a client-side flag from ever granting a
+    # paid entitlement.
+    payment_provider: str = "none"
+    payment_checkout_enabled: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

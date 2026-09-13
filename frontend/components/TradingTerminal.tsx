@@ -6,6 +6,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BarChart3,
+  BadgeCheck,
   Bell,
   BrainCircuit,
   ChevronRight,
@@ -38,6 +39,7 @@ import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketBriefing from "./MarketBriefing";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
+import MonetizationOffer from "./MonetizationOffer";
 
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => <div className="chunk-placeholder" style={{ minHeight: 320 }} aria-hidden="true" />,
@@ -1045,6 +1047,7 @@ export default function TradingTerminal() {
           <a className="league-link" href="/league"><Trophy size={16} /> 수익률 리그</a>
           <a className="league-link practice-link" href="/practice"><BrainCircuit size={16} /> 시세 연습</a>
           <a className="league-link lounge-link" href="/lounge"><MessageCircle size={16} /> 투자 라운지</a>
+          <a className="league-link pricing-link" href="/pricing"><BadgeCheck size={16} /> Pro 플랜</a>
           <InstallAppButton />
           <button type="button" className="help-button" aria-label="처음 이용 안내" title="처음 이용 안내" onClick={() => setGuideOpen(true)}><HelpCircle size={19} /></button>
           <button
@@ -1142,6 +1145,8 @@ export default function TradingTerminal() {
         selectedName={selectedName}
         quoteReady={Boolean(quote?.price)}
       />
+
+      <MonetizationOffer />
 
       <div id="market-indices" className="market-anchor-section">
         <MarketIndexChart initialData={bootstrapKospi} />
