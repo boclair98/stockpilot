@@ -105,6 +105,9 @@
 .order-confirm {
   position: relative;
   width: min(100%, 430px);
+  max-height: min(90vh, 760px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 27px;
   border-radius: 24px;
   background: #fff;
