@@ -150,6 +150,12 @@ type Me = {
   email: string | null;
   picture: string | null;
 };
+type OrderSafetyChecks = {
+  simulation: boolean;
+  quote: boolean;
+  amount: boolean;
+  inventory: boolean;
+};
 
 const palette = ["#111827", "#2563eb", "#76b900", "#ef4444", "#f59e0b", "#0668e1", "#18a46b"];
 const colorFor = (symbol: string) =>
@@ -240,6 +246,12 @@ export default function TradingTerminal() {
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [favoriteStocks, setFavoriteStocks] = useState<SearchItem[]>([]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
+  const [orderSafetyChecks, setOrderSafetyChecks] = useState<OrderSafetyChecks>({
+    simulation: false,
+    quote: false,
+    amount: false,
+    inventory: false,
+  });
   const [stressMove, setStressMove] = useState(-5);
   const [protectionQuantity, setProtectionQuantity] = useState("1");
   const [takeProfitPrice, setTakeProfitPrice] = useState("");
@@ -592,6 +604,38 @@ export default function TradingTerminal() {
           ),
         )
       : 0;
+  const orderSafetyCount = Object.values(orderSafetyChecks).filter(Boolean).length;
+  const orderSafetyReady = orderSafetyCount === 4;
+  const orderSafetyItems: Array<{
+    key: keyof OrderSafetyChecks;
+    label: string;
+    detail: string;
+    disabled?: boolean;
+  }> = [
+    {
+      key: "simulation",
+      label: "실제 증권계좌가 아닌 가상주문임을 확인했어요.",
+      detail: "체결과 잔고는 StockPilot 내부 가상원장에만 기록됩니다.",
+    },
+    {
+      key: "quote",
+      label: "현재 시세와 주문 방식을 확인했어요.",
+      detail: `${quoteFreshness.label} · ${ORDER_LABELS[kind]}`,
+    },
+    {
+      key: "amount",
+      label: "수량과 예상 주문금액을 확인했어요.",
+      detail: `${requestedQuantity.toLocaleString("ko-KR")}주 · ${money(estimatedPrice * requestedQuantity, quote?.currency ?? "KRW")}`,
+    },
+    {
+      key: "inventory",
+      label: side === "SELL" ? "보유 수량과 매도 가능 수량을 확인했어요." : "매수 주문이라 보유 수량 확인이 필요 없어요.",
+      detail: side === "SELL"
+        ? `매도 가능 ${availableSellQuantity.toLocaleString("ko-KR")}주`
+        : "매수 주문 자동 확인",
+      disabled: side !== "SELL",
+    },
+  ];
   const live = socketConnected && Boolean(status?.connected);
   const marketConnectionText = live
     ? "KIS KRX+NXT 통합 시세 연결됨"
@@ -937,10 +981,20 @@ export default function TradingTerminal() {
       notify(sellIssue);
       return;
     }
+    setOrderSafetyChecks({
+      simulation: false,
+      quote: false,
+      amount: false,
+      inventory: side === "SELL" ? false : true,
+    });
     setConfirmingOrder(true);
   }
 
   async function placeOrder() {
+    if (!orderSafetyReady) {
+      notify("주문 전 확인 항목을 모두 체크해 주세요.");
+      return;
+    }
     setBusy(true);
     try {
       // Keep one key for this confirmed submission. Browser/network retries
@@ -1681,6 +1735,32 @@ export default function TradingTerminal() {
             <div className="confirm-simulation-note">
               실제 증권계좌 주문이 아닌 StockPilot 내부 가상주문입니다.
             </div>
+            <div className="confirm-checklist" aria-label="거래 전 안전 확인">
+              <div className="confirm-checklist-head">
+                <span><ShieldCheck size={15} /> 거래 전 안전 확인</span>
+                <b>{orderSafetyCount}/4</b>
+              </div>
+              <p className="confirm-checklist-help">네 항목을 확인하면 가상주문을 접수할 수 있어요.</p>
+              <div className="confirm-checklist-items">
+                {orderSafetyItems.map((item) => (
+                  <label className={`confirm-check${item.disabled ? " disabled" : ""}`} key={item.key}>
+                    <input
+                      type="checkbox"
+                      checked={orderSafetyChecks[item.key]}
+                      disabled={item.disabled || busy}
+                      onChange={() => setOrderSafetyChecks((current) => ({
+                        ...current,
+                        [item.key]: !current[item.key],
+                      }))}
+                    />
+                    <span className="confirm-check-copy">
+                      <b>{item.label}</b>
+                      <small>{item.detail}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
             <div className="confirm-actions">
               <button type="button" disabled={busy} onClick={() => setConfirmingOrder(false)}>
                 다시 확인
@@ -1688,7 +1768,7 @@ export default function TradingTerminal() {
               <button
                 type="button"
                 className={side.toLowerCase()}
-                disabled={busy}
+                disabled={busy || !orderSafetyReady}
                 onClick={() => void placeOrder()}
               >
                 {busy
