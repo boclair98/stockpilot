@@ -476,6 +476,16 @@ pnpm build
 - 배포 방식: `coders.yaml` 기반 web/api/worker 분리 배포
 - 현재 상태: KRX·NXT·미국주식 시세 기반 모의투자 서비스 운영 중
 
+### 저장소와 배포 원본
+
+- **Canonical upstream:** [boclair98/stockpilot](https://github.com/boclair98/stockpilot) — 기능을 개발하고 먼저 push하는 정본
+- **조직 fork:** [coders-kr/stockpilot](https://github.com/coders-kr/stockpilot) — 정본의 실제 GitHub fork, 배포 전 `main`을 동기화
+- **Coders.kr 배포 원본:** canonical upstream의 `main` 브랜치
+
+조직 fork는 정본을 대체하지 않습니다. 변경 후 `git push origin main`을 먼저 실행하고,
+`gh repo sync coders-kr/stockpilot -b main`으로 두 저장소의 전체 커밋 SHA를 맞춘 다음
+Coders.kr에 배포합니다.
+
 ### 다음 개선 후보
 
 - 결제 공급자 선택 후 승인·취소·환불 웹훅과 `subscriptions`·`entitlements` 테이블 연결
