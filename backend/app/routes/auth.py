@@ -47,6 +47,38 @@ def _require_session_secret() -> None:
         raise HTTPException(503, "Google 로그인이 아직 설정되지 않았습니다.")
 
 
+def _oauth_redirect_uri(request: Request) -> str:
+    """Return the callback URI for the current approved public hostname.
+
+    The deployment is reachable through both the Coders.kr hostname and the
+    user's custom domain. Google requires the redirect URI used during the
+    code exchange to exactly match the one used during authorization, so the
+    current host must be reflected consistently in both requests. We only do
+    this for an explicit allow-list of hosts; otherwise we fall back to the
+    configured URI and never trust an arbitrary Host header.
+    """
+
+    forwarded_host = request.headers.get("x-forwarded-host", "")
+    host = (forwarded_host.split(",", 1)[0] or request.url.hostname or "").strip().lower()
+    allowed_hosts = {
+        item.strip().lower()
+        for item in settings.google_allowed_hosts.split(",")
+        if item.strip()
+    }
+    if host not in allowed_hosts:
+        return settings.google_redirect_uri
+
+    # Public traffic terminates TLS at the platform proxy. Preserve HTTP only
+    # for local development so the production cookie remains Secure.
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    scheme = (forwarded_proto.split(",", 1)[0] or request.url.scheme).strip().lower()
+    if host not in {"localhost", "127.0.0.1"}:
+        scheme = "https"
+    elif scheme not in {"http", "https"}:
+        scheme = "http"
+    return f"{scheme}://{host}/api/auth/google/callback"
+
+
 @router.get("/status")
 async def auth_status() -> dict:
     return {"provider": "google", "configured": _ready()}
@@ -54,6 +86,7 @@ async def auth_status() -> dict:
 
 @router.get("/google/login")
 async def google_login(
+    request: Request,
     return_to: str = Query(default="/"),
 ) -> RedirectResponse:
     if not _ready():
@@ -65,7 +98,7 @@ async def google_login(
     )
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": settings.google_redirect_uri,
+        "redirect_uri": _oauth_redirect_uri(request),
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -110,7 +143,7 @@ async def google_callback(
                 "code": code,
                 "client_id": settings.google_client_id,
                 "client_secret": settings.google_client_secret,
-                "redirect_uri": settings.google_redirect_uri,
+                "redirect_uri": _oauth_redirect_uri(request),
                 "grant_type": "authorization_code",
             },
         )

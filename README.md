@@ -365,9 +365,29 @@ KIS_APP_SECRET=...
 KIS_ENV=paper
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+# comma-separated public hosts allowed for Google OAuth callbacks
+GOOGLE_ALLOWED_HOSTS=stockpilot.coders.kr,stockpilot.kr,www.stockpilot.kr,localhost,127.0.0.1
 DART_API_KEY=...
 FIREBASE_SERVICE_ACCOUNT_B64=...
 ```
+
+### 커스텀 도메인
+
+기본 운영 주소는 `https://stockpilot.coders.kr`이며, Coders.kr의 도메인 연결 기능으로
+`stockpilot.kr`을 같은 프로젝트에 연결할 수 있습니다. 도메인 등록 후 발급된 소유권 TXT,
+라우팅 A(또는 DNS 제공업체의 apex CNAME flattening), 인증서 DCV CNAME을 등록하고
+`verify_domain`을 호출해야 인증서가 발급됩니다. 기존 주소와 데이터는 유지됩니다.
+
+Google Cloud Console의 OAuth 클라이언트에는 다음 승인된 리디렉션 URI를 모두 등록해야 합니다.
+
+```text
+https://stockpilot.coders.kr/api/auth/google/callback
+https://stockpilot.kr/api/auth/google/callback
+https://www.stockpilot.kr/api/auth/google/callback
+```
+
+로그인 콜백은 허용된 호스트에서만 현재 호스트를 사용하며, 그 외 Host 헤더는 기존
+`GOOGLE_REDIRECT_URI`로 되돌아가도록 구성되어 있습니다.
 
 KIS는 시세 조회에만 사용하며, 실제 주문 API 자격증명은 이 프로젝트에 사용하지 않습니다.
 
@@ -389,7 +409,7 @@ pnpm build
 
 ## 운영 서비스와 진행 상황
 
-- 운영 URL: [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
+- 운영 URL: [https://stockpilot.coders.kr](https://stockpilot.coders.kr) · 커스텀 도메인: `https://stockpilot.kr` (DNS 인증 후 활성화)
 - 공개 저장소: [https://github.com/boclair98/stockpilot](https://github.com/boclair98/stockpilot)
 - 배포 방식: `coders.yaml` 기반 web/api/worker 분리 배포
 - 현재 상태: KRX·NXT·미국주식 시세 기반 모의투자 서비스 운영 중

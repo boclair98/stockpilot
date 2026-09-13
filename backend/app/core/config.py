@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "https://stockpilot.coders.kr/api/auth/google/callback"
+    # Hostnames that may be used to build the OAuth callback dynamically.
+    # Keep this as an explicit allow-list so an untrusted Host header can
+    # never be reflected into Google's redirect_uri parameter.
+    google_allowed_hosts: str = (
+        "stockpilot.coders.kr,stockpilot.kr,www.stockpilot.kr,localhost,127.0.0.1"
+    )
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
     enable_api_docs: bool = False
