@@ -163,7 +163,7 @@ export default function MarketBriefing({
   const routine = !authenticated
     ? {
         title: "가상계좌를 먼저 준비해요",
-        description: "Google 로그인 후 오늘의 5분 루틴을 시작할 수 있어요.",
+        description: "Google 로그인 후 5분 투자 루틴을 시작할 수 있어요.",
         href: "/api/auth/google/login?return_to=%2F",
         label: "Google로 시작하기",
       }
