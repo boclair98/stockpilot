@@ -152,6 +152,12 @@ select { -webkit-tap-highlight-color: transparent; }
     scroll-snap-align: start;
   }
   .hero-session b { font-size: 13px; }
+  .hero-session-status {
+    grid-column: auto;
+    min-height: 78px;
+    grid-template-columns: 1fr;
+    align-items: initial;
+  }
 
   .summary {
     margin: 12px 10px 0;
