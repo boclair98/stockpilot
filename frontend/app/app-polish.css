@@ -36,6 +36,29 @@ body { color: var(--app-text); background: var(--app-canvas); }
   letter-spacing: -.04em;
 }
 
+.quote-empty {
+  grid-column: 1 / -1;
+  min-height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 20px;
+  border: 1px dashed #dce3ea;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fbfcfd, #f6f8fa);
+  color: var(--app-muted);
+  text-align: left;
+}
+
+.quote-empty-icon { flex: 0 0 auto; color: var(--app-accent); }
+
+.quote-empty span { display: grid; gap: 4px; min-width: 0; }
+
+.quote-empty b { color: var(--app-text); font-size: 13px; }
+
+.quote-empty small { font-size: 11px; line-height: 1.45; }
+
 .content > *,
 .market-anchor-section > *,
 .advanced-checkup,

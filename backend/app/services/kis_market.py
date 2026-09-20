@@ -601,8 +601,21 @@ class KISMarket:
                 retry = min(retry * 2, 30)
             finally:
                 if seed_task:
-                    seed_task.cancel()
-                    await asyncio.gather(seed_task, return_exceptions=True)
+                    # A websocket reconnect can happen while the initial REST
+                    # seed is still filling the TOP instruments.  Cancelling
+                    # the seed here leaves the public snapshot with whichever
+                    # few symbols happened to finish first (usually only the
+                    # first domestic rows), which makes the US TOP 10 card look
+                    # like an endless loading skeleton. Let the bounded REST
+                    # seed finish so the distributed snapshot is complete
+                    # before the collector lease is released.
+                    try:
+                        await asyncio.wait_for(seed_task, timeout=30)
+                    except TimeoutError:
+                        seed_task.cancel()
+                        await asyncio.gather(seed_task, return_exceptions=True)
+                    except asyncio.CancelledError:
+                        pass
                 if self._collector_renew_task:
                     self._collector_renew_task.cancel()
                     await asyncio.gather(

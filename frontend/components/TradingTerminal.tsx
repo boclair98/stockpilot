@@ -1282,7 +1282,15 @@ export default function TradingTerminal() {
               <div className="market-label"><b>{label} 주식</b><span>{label === "한국" ? "KRX+NXT · TOP 10" : "TOP 10"}</span></div>
               <div className="watchlist">
                 {items.length === 0
-                  ? [...Array(10)].map((_, index) => <div className="quote skeleton" key={index} />)
+                  ? (
+                    <div className="quote-empty" role="status" aria-live="polite">
+                      <RefreshCw className="quote-empty-icon spin" size={18} aria-hidden="true" />
+                      <span>
+                        <b>{label} 시세를 불러오는 중이에요</b>
+                        <small>거래소 연결이 완료되면 TOP 10이 표시됩니다.</small>
+                      </span>
+                    </div>
+                  )
                   : items.map((item) => (
                   <button
                     className={`quote ${selected === item.id ? "active" : ""}`}
