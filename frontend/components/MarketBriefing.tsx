@@ -228,10 +228,10 @@ export default function MarketBriefing({
         })}
       </nav>
 
-      <div className="briefing-routine" aria-label="오늘의 5분 루틴">
+      <div className="briefing-routine" aria-label="5분 투자 루틴">
         <div className="briefing-routine-icon"><CalendarClock size={18} /></div>
         <div className="briefing-routine-copy">
-          <span>오늘의 5분 루틴</span>
+          <span>5분 투자 루틴</span>
           <b>{routine.title}</b>
           <p>{routine.description}</p>
           <div className="briefing-routine-progress" aria-label={`루틴 ${routineCompleted}/3 완료`}>
