@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.coders.stockpilot",
+      "sha256_cert_fingerprints": [
+        "63:F4:5C:77:F9:C4:85:8B:85:D4:08:3E:6A:C0:D4:03:44:A1:CF:E6:53:F6:86:88:07:C5:D3:A5:35:F1:93:A9"
+      ]
+    }
+  }
+]

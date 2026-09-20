@@ -39,7 +39,16 @@ frontend/public/.well-known/assetlinks.json
 
 배포 후 `https://stockpilot.coders.kr/.well-known/assetlinks.json`이 인증 없이 JSON으로 열려야 합니다.
 
-Play App Signing의 앱 서명 지문과 로컬 설치용 업로드 키 지문이 다를 수 있습니다. 둘 다 테스트하려면 `sha256_cert_fingerprints` 배열에 두 지문을 넣습니다. 실제 지문을 받기 전에는 잘못된 소유 관계를 공개하지 않기 위해 `assetlinks.json`을 배포하지 않습니다.
+현재 저장소의 `frontend/public/.well-known/assetlinks.json`에는 로컬 내부 테스트 APK에 사용한 업로드 키 지문이 들어 있습니다. Play Console에서 **Play 앱 서명 키 인증서**의 SHA-256 지문을 발급받으면 같은 배열에 추가하고 재배포해야 Play Store 설치본도 전체화면 TWA로 연결됩니다. 업로드 키와 Play 앱 서명 키는 서로 다를 수 있으므로 기존 지문을 삭제하지 않습니다.
+
+현재 로컬에서 생성한 산출물은 저장소에 커밋하지 않도록 `android/twa/`가 Git에서 제외되어 있습니다.
+
+```text
+android/twa/stockpilot-release.aab  # Play Console 업로드용 서명 AAB
+android/twa/stockpilot-release.apk  # 내부 테스트용 서명 APK
+```
+
+서명 키(`android/.release/`)는 Git에 올리지 말고 별도 비밀번호 관리자와 오프라인 백업에 보관합니다. 앱 업데이트는 최초 업로드에 사용한 업로드 키가 필요합니다.
 
 ## 3. Google 로그인 확인
 

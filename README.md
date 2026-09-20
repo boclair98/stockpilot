@@ -158,7 +158,8 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 - 192px·512px·maskable PNG 아이콘과 Android 알림용 badge 제공
 - 네트워크 단절 시 API 응답은 캐시하지 않고 안전한 오프라인 안내 화면 표시
 - 화면 잘림을 줄이는 `viewport-fit=cover` 및 상·하단 safe-area 대응
-- Google 공식 TWA/Bubblewrap 기준의 패키지 ID, Digital Asset Links 템플릿, 출시 체크리스트 제공
+- Google 공식 TWA/Bubblewrap 기준의 패키지 ID(`kr.coders.stockpilot`), Digital Asset Links 연결, 출시 체크리스트 제공
+- 로컬에서 서명 검증된 AAB·APK까지 생성했으며 산출물과 키는 보안을 위해 Git에 커밋하지 않음
 - Android 패키징 절차는 [`android/README.md`](android/README.md)에 문서화
 
 ## 기술 스택

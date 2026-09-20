@@ -15,3 +15,10 @@ __pycache__
 android/twa-app/
 android/.gradle/
 android/**/build/
+android/.tools/
+android/.npm-cache/
+android/.sdk/
+android/.android/
+android/twa/
+android/.release/
+.npm-cache/
