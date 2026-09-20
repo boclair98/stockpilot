@@ -148,9 +148,18 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | 커뮤니티 | 투자 라운지 | 보유자산을 공개하지 않고 투자 습관과 배움을 공유 |
 | 운영 | 운영자 통제센터 | 모의거래 중지, 위험한도, 원장 대사, 감사 이벤트 확인 |
 
-### 시장 홈 UI 업데이트
+### 앱 중심 시장 홈 UI
 
-메인 화면은 네이버 증권의 정보 탐색 흐름에서 영감을 받아, 화면 상단에 **시장 홈 내비게이션**을 추가했습니다. 홈·국내·미국·글로벌·시장지표·뉴스·공시·MY를 한 번에 이동하고, 모든 화면에서 `종목명·지수명 입력` 검색을 열 수 있습니다. 국내 KRX·NXT TOP 10과 미국 TOP 10은 각각 바로가기 앵커를 가지며, 검색·지수·공시·가상주문 영역으로 이동해도 헤더가 가려지지 않도록 스크롤 여백을 적용했습니다. 모바일에서는 메뉴가 가로 스크롤 탭과 44px 검색 버튼으로 바뀌어 손가락으로도 빠르게 탐색할 수 있습니다.
+메인 화면은 현대적인 한국 금융 앱의 명확한 정보 계층을 StockPilot 고유 디자인으로 재구성했습니다. 홈·국내·미국·글로벌·시장지표·뉴스·공시·MY를 한 번에 이동하고, 모든 화면에서 종목 검색을 열 수 있습니다. 모바일에서는 상단을 시장 탭과 44px 검색 버튼 한 줄로 압축하고, 큰 숫자·충분한 여백·엄지손가락 영역의 주문 버튼을 사용합니다. KRX·NXT·미국 TOP 10, 검색, 지수, 공시, 가상주문 기능은 그대로 유지됩니다.
+
+### Android·PWA 출시 준비
+
+- 알림 허용 여부와 관계없이 서비스 워커를 등록해 설치·오프라인 복구·업데이트 안내 제공
+- 192px·512px·maskable PNG 아이콘과 Android 알림용 badge 제공
+- 네트워크 단절 시 API 응답은 캐시하지 않고 안전한 오프라인 안내 화면 표시
+- 화면 잘림을 줄이는 `viewport-fit=cover` 및 상·하단 safe-area 대응
+- Google 공식 TWA/Bubblewrap 기준의 패키지 ID, Digital Asset Links 템플릿, 출시 체크리스트 제공
+- Android 패키징 절차는 [`android/README.md`](android/README.md)에 문서화
 
 ## 기술 스택
 
@@ -164,7 +173,8 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | Authentication | Google OAuth 2.0, 서버 세션 쿠키 |
 | Market Data | 한국투자증권 KIS Open API(WebSocket·REST) |
 | Company Data | 금융감독원 OpenDART API, SEC EDGAR Submissions API |
-| Push | Firebase Cloud Messaging(Web Push) |
+| Push·Install | Firebase Cloud Messaging, Service Worker, Web App Manifest, PWA |
+| Android | Trusted Web Activity, Bubblewrap, Digital Asset Links 준비 |
 | Monetization | Server-owned plan catalog, entitlement contract, launch-interest ledger |
 | Deployment | Docker, Docker Compose, coders.kr 멀티서비스 배포 |
 | Quality | Pytest, Ruff, ESLint, TypeScript, Next.js production build |
@@ -356,6 +366,7 @@ stockpilot
 │   ├── Dockerfile
 │   └── pyproject.toml
 ├── docs/                       # 운영·금융권 연동·준비 문서
+├── android/                    # TWA 패키징·앱 서명 연결 가이드
 ├── compose.yaml                # 로컬 PostgreSQL·Redis·API·Web
 ├── coders.yaml                # coders.kr 배포 정의
 └── README.md
@@ -465,13 +476,14 @@ uv run ruff check app tests unit_tests
 cd frontend
 pnpm lint
 pnpm build
+pnpm verify:pwa
 ```
 
 현재 KOSPI 벤치마크·시뮬레이션 규칙·주문 검증·보안·리그·성장 기능에 대한 자동 테스트를 포함합니다.
 
 ## 운영 서비스와 진행 상황
 
-- 운영 URL: [https://stockpilot.coders.kr](https://stockpilot.coders.kr) · 커스텀 도메인: `https://stockpilot.kr` (DNS 인증 후 활성화)
+- 운영 URL: [https://stockpilot.coders.kr](https://stockpilot.coders.kr)
 - 공개 저장소: [https://github.com/boclair98/stockpilot](https://github.com/boclair98/stockpilot)
 - 배포 방식: `coders.yaml` 기반 web/api/worker 분리 배포
 - 현재 상태: KRX·NXT·미국주식 시세 기반 모의투자 서비스 운영 중

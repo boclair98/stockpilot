@@ -19,7 +19,7 @@ const firebaseConfig = {
 
 const vapidKey =
   "BOMLsaznbUjVNm-3Ak3Fyrmqlf-h58BbC3a377USOOHsh5Z9gY_XlFs8jr8YR_gSgyisBxMv-dhrKp53RZYytjA";
-const serviceWorkerVersion = "20260729-1";
+const serviceWorkerVersion = "20260920-1";
 
 async function messagingClient() {
   if (

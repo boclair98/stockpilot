@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import MobileServiceNav from "@/components/MobileServiceNav";
+import PwaRuntime from "@/components/PwaRuntime";
 import "./globals.css";
 import "./market.css";
 import "./market-index.css";
@@ -31,6 +32,8 @@ import "./watchlist.css";
 import "./market-navigation.css";
 import "./pricing.css";
 import "./monetization.css";
+import "./pwa.css";
+import "./app-polish.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
@@ -58,9 +61,17 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    shortcut: "/icon.svg",
-    apple: "/icons/stockpilot.svg",
+    icon: [
+      { url: "/icons/stockpilot-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icons/stockpilot-192.png",
+    apple: [{ url: "/icons/stockpilot-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "StockPilot",
   },
 };
 
@@ -69,9 +80,10 @@ export const viewport: Viewport = {
   colorScheme: "light",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="ko"><body>{children}<MobileServiceNav /></body></html>;
+  return <html lang="ko"><body>{children}<PwaRuntime /><MobileServiceNav /></body></html>;
 }
 
