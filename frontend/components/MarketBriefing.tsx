@@ -2,6 +2,7 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  CalendarClock,
   Check,
   CircleHelp,
   MousePointerClick,
@@ -25,6 +26,7 @@ type Props = {
   faller: { name: string; changePercent: number } | null;
   authenticated: boolean;
   positionCount: number;
+  orderCount: number;
   concentration: number;
   protectionCoverage: number;
   winners: number;
@@ -50,6 +52,7 @@ export default function MarketBriefing({
   faller,
   authenticated,
   positionCount,
+  orderCount,
   concentration,
   protectionCoverage,
   winners,
@@ -153,6 +156,44 @@ export default function MarketBriefing({
       icon: NotebookPen,
     },
   ];
+  const rawRoutineCompleted = [total > 0, quoteReady, orderCount > 0].filter(Boolean).length;
+  // Anonymous visitors can explore the market and choose a symbol, but a
+  // routine never counts the trading step until their virtual account exists.
+  const routineCompleted = authenticated ? rawRoutineCompleted : Math.min(2, rawRoutineCompleted);
+  const routine = !authenticated
+    ? {
+        title: "가상계좌를 먼저 준비해요",
+        description: "Google 로그인 후 오늘의 5분 루틴을 시작할 수 있어요.",
+        href: "/api/auth/google/login?return_to=%2F",
+        label: "Google로 시작하기",
+      }
+    : routineCompleted === 0
+      ? {
+          title: "시장을 읽고 첫 판단을 남겨요",
+          description: "오늘의 주요 흐름을 확인한 뒤 관심 종목을 골라 보세요.",
+          href: "#market-content",
+          label: "시장부터 보기",
+        }
+      : routineCompleted === 1
+        ? {
+            title: "관심 종목을 하나 골라요",
+            description: "검색 결과에서 종목을 선택하면 주문 전 체크가 열려요.",
+            href: "#search-card",
+            label: "종목 찾기",
+          }
+        : routineCompleted === 2
+          ? {
+              title: "첫 가상주문을 안전하게 연습해요",
+              description: "주문 전 네 가지 확인 항목을 체크하고 가상체결을 경험해 보세요.",
+              href: "#order-ticket",
+              label: "주문 연습하기",
+            }
+          : {
+              title: "오늘의 선택을 복기해요",
+              description: "5분 차트 챌린지와 투자일지로 다음 행동을 정리해요.",
+              href: "/growth#license-challenge",
+              label: "복기 시작하기",
+            };
 
   return (
     <section className="briefing-card" aria-labelledby="briefing-title">
@@ -186,6 +227,22 @@ export default function MarketBriefing({
           );
         })}
       </nav>
+
+      <div className="briefing-routine" aria-label="오늘의 5분 루틴">
+        <div className="briefing-routine-icon"><CalendarClock size={18} /></div>
+        <div className="briefing-routine-copy">
+          <span>오늘의 5분 루틴</span>
+          <b>{routine.title}</b>
+          <p>{routine.description}</p>
+          <div className="briefing-routine-progress" aria-label={`루틴 ${routineCompleted}/3 완료`}>
+            <i style={{ width: `${(routineCompleted / 3) * 100}%` }} />
+          </div>
+        </div>
+        <div className="briefing-routine-side">
+          <strong>{routineCompleted}/3</strong>
+          <a href={routine.href}>{routine.label}<ArrowRight size={13} /></a>
+        </div>
+      </div>
 
       <div className="briefing-grid">
         <article className={`briefing-item ${marketTone}`}>

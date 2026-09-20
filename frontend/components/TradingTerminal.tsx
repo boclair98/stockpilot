@@ -1136,6 +1136,7 @@ export default function TradingTerminal() {
         faller={marketPulse.faller}
         authenticated={portfolio.authenticated}
         positionCount={portfolioCheck.positionCount}
+        orderCount={portfolio.orders.length}
         concentration={portfolioCheck.concentration}
         protectionCoverage={portfolioCheck.protectionCoverage}
         winners={portfolioCheck.winners}
