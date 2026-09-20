@@ -17,7 +17,6 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import InstallAppButton from "./InstallAppButton";
 
 const primaryItems = [
   { href: "/", label: "홈", icon: Home },
@@ -115,8 +114,6 @@ export default function MobileServiceNav() {
                 </Link>
               ))}
             </div>
-
-            <InstallAppButton variant="menu" onInstalled={closeMenu} />
 
             <div className="mobile-menu-note">
               <ShieldCheck size={18} />
