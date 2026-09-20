@@ -8,3 +8,10 @@ __pycache__
 !.env.example
 .DS_Store
 .coders/
+*.jks
+*.keystore
+*.aab
+*.apk
+android/twa-app/
+android/.gradle/
+android/**/build/

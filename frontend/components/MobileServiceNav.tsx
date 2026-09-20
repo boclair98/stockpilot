@@ -16,7 +16,8 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import InstallAppButton from "./InstallAppButton";
 
 const primaryItems = [
   { href: "/", label: "홈", icon: Home },
@@ -65,6 +66,7 @@ function isCurrent(pathname: string, href: string) {
 export default function MobileServiceNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const closeMenu = useCallback(() => setOpen(false), []);
   const hideNavigation = pathname.startsWith("/operations");
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export default function MobileServiceNav() {
             type="button"
             className="mobile-menu-backdrop"
             aria-label="전체 메뉴 닫기"
-            onClick={() => setOpen(false)}
+            onClick={closeMenu}
           />
           <section id="mobile-menu-sheet" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-title">
             <header>
@@ -100,19 +102,21 @@ export default function MobileServiceNav() {
                 <span>STOCKPILOT</span>
                 <h2 id="mobile-menu-title">전체 기능</h2>
               </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="전체 메뉴 닫기">
+              <button type="button" onClick={closeMenu} aria-label="전체 메뉴 닫기">
                 <X size={21} />
               </button>
             </header>
 
             <div className="mobile-menu-grid">
               {moreItems.map(({ href, label, description, icon: Icon }) => (
-                <Link className={isCurrent(pathname, href) ? "active" : ""} href={href} key={href} onClick={() => setOpen(false)}>
+                <Link className={isCurrent(pathname, href) ? "active" : ""} href={href} key={href} onClick={closeMenu}>
                   <span><Icon size={20} /></span>
                   <div><b>{label}</b><small>{description}</small></div>
                 </Link>
               ))}
             </div>
+
+            <InstallAppButton variant="menu" onInstalled={closeMenu} />
 
             <div className="mobile-menu-note">
               <ShieldCheck size={18} />
@@ -120,8 +124,8 @@ export default function MobileServiceNav() {
             </div>
 
             <footer>
-              <Link href="/privacy" onClick={() => setOpen(false)}>개인정보처리방침</Link>
-              <Link href="/terms" onClick={() => setOpen(false)}>이용약관</Link>
+              <Link href="/privacy" onClick={closeMenu}>개인정보처리방침</Link>
+              <Link href="/terms" onClick={closeMenu}>이용약관</Link>
             </footer>
           </section>
         </div>

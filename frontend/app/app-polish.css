@@ -1,0 +1,221 @@
+/* App-first polish: clear hierarchy, roomy typography and restrained surfaces.
+   Inspired by modern Korean finance UX without copying another product's assets. */
+:root {
+  --app-canvas: #f4f5f7;
+  --app-surface: #fff;
+  --app-text: #191f28;
+  --app-muted: #6b7684;
+  --app-line: #e9edf1;
+  --app-accent: #e2354a;
+}
+
+html { background: var(--app-canvas); }
+body { color: var(--app-text); background: var(--app-canvas); }
+.app { width: min(100%, 1240px); }
+
+.topbar {
+  box-shadow: 0 8px 28px rgb(15 23 42 / 12%);
+}
+
+.market-navigation,
+.watchlist,
+.search-card,
+.portfolio-panel,
+.order-card,
+.balance-card,
+.guide-card,
+.market-clock-card {
+  border-color: var(--app-line);
+  box-shadow: 0 4px 18px rgb(15 23 42 / 5%);
+}
+
+.balance-card > strong,
+.order-card .price,
+.quote strong {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+
+.content > *,
+.market-anchor-section > *,
+.advanced-checkup,
+.briefing-section,
+.monetization-offer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 520px;
+}
+
+button,
+a,
+input,
+select { -webkit-tap-highlight-color: transparent; }
+
+@media (max-width: 900px) {
+  .app { width: 100%; overflow: clip; }
+
+  .topbar {
+    top: 0;
+    height: calc(60px + env(safe-area-inset-top));
+    margin: calc(-1 * env(safe-area-inset-top)) 0 0;
+    padding: env(safe-area-inset-top) 14px 0;
+    border-width: 0 0 1px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .brand { font-size: 17px; letter-spacing: -.4px; }
+  .brand > span { width: 32px; height: 32px; }
+
+  .market-navigation {
+    top: 60px;
+    margin: 0;
+    border-width: 0 0 1px;
+    border-radius: 0;
+    box-shadow: 0 5px 18px rgb(15 23 42 / 6%);
+  }
+
+  .market-navigation-inner {
+    min-height: 54px;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    gap: 5px;
+    padding: 5px 8px;
+  }
+
+  .market-navigation-brand { display: none; }
+  .market-navigation-links { grid-column: 1; grid-row: 1; }
+  .market-navigation-links a {
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+
+  .market-navigation-search {
+    grid-column: 2;
+    grid-row: 1;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 13px;
+    color: #4e5968;
+    background: #f2f4f6;
+  }
+
+  .market-navigation-search span,
+  .market-navigation-search kbd { display: none; }
+
+  .nxt-hero {
+    min-height: 310px;
+    margin: 10px 10px 0;
+    padding: 28px 22px 104px;
+    border-radius: 25px;
+    box-shadow: 0 14px 38px rgb(15 23 42 / 15%);
+  }
+
+  .nxt-hero::after { right: -110px; opacity: .7; }
+  .nxt-hero .eyebrow { padding: 6px 9px; font-size: 9px; }
+  .hero-kicker { margin-top: 18px; font-size: 9px; }
+  .nxt-hero h1 {
+    max-width: 330px;
+    margin: 10px 0 12px;
+    font-size: clamp(34px, 10vw, 44px);
+    line-height: 1.06;
+    letter-spacing: -2.4px;
+    word-break: keep-all;
+  }
+  .nxt-hero .hero-copy > p:last-child {
+    max-width: 330px;
+    margin-bottom: 0;
+    font-size: 12px;
+    line-height: 1.62;
+    word-break: keep-all;
+  }
+
+  .market-hero-controls { bottom: -43px; }
+  .market-hero-controls > button { display: none; }
+  .market-hero-controls > div { min-height: 34px; }
+
+  .hero-sessions {
+    grid-template-columns: repeat(4, minmax(145px, 1fr));
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .hero-sessions::-webkit-scrollbar { display: none; }
+  .hero-session {
+    min-height: 78px;
+    padding: 15px 18px;
+    scroll-snap-align: start;
+  }
+  .hero-session b { font-size: 13px; }
+
+  .summary {
+    margin: 12px 10px 0;
+    gap: 10px;
+  }
+  .balance-card,
+  .guide-card,
+  .market-clock-card {
+    border-radius: 22px;
+    box-shadow: none;
+  }
+  .balance-card { padding: 24px 21px; }
+  .balance-card > strong { font-size: clamp(29px, 8.5vw, 38px); }
+
+  .content,
+  .market-anchor-section,
+  .advanced-checkup,
+  .briefing-section,
+  .monetization-offer {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .watchlist,
+  .search-card,
+  .portfolio-panel,
+  .order-card {
+    border-radius: 22px;
+    box-shadow: none;
+  }
+
+  .order-card button,
+  .order-card input,
+  .order-card select,
+  .buy-sell button,
+  .percent-buttons button {
+    min-height: 46px;
+  }
+
+  .order-card .submit-order,
+  .order-card button[type="submit"] {
+    min-height: 52px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 850;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar { padding-right: 10px; padding-left: 10px; }
+  .brand { font-size: 16px; }
+  .nxt-hero { margin-right: 7px; margin-left: 7px; padding-right: 18px; padding-left: 18px; }
+  .summary,
+  .content,
+  .market-anchor-section,
+  .advanced-checkup,
+  .briefing-section,
+  .monetization-offer { margin-right: 7px; margin-left: 7px; }
+}
+
+@media (display-mode: standalone) {
+  .topbar { user-select: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
