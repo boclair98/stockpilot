@@ -83,6 +83,67 @@ class Post(Base):
     author: Mapped[User] = relationship(back_populates="posts")
 
 
+class ContentReport(Base):
+    """A user report that enters the operator moderation queue."""
+
+    __tablename__ = "content_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reporter_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_author_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reason: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, default="PENDING", server_default="PENDING"
+    )
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(sa.UUID(as_uuid=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "post_id", "reporter_id", name="uq_content_reports_post_reporter"
+        ),
+        sa.Index("ix_content_reports_status_created_at", "status", "created_at"),
+    )
+
+
+class UserBlock(Base):
+    """A privacy-preserving block between two app-local users."""
+
+    __tablename__ = "user_blocks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    blocker_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    blocked_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "blocker_id", "blocked_id", name="uq_user_blocks_blocker_blocked"
+        ),
+        sa.CheckConstraint("blocker_id <> blocked_id", name="ck_user_blocks_not_self"),
+    )
+
+
 class TradingAccount(Base):
     __tablename__ = "trading_accounts"
     owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True)

@@ -146,6 +146,8 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | 수익화 | 서버 권한 계약 | 플랜·한도·결제 준비 상태를 `/api/billing`에서 관리해 클라이언트 조작으로 권한을 높일 수 없음 |
 | 알림 | 목표가·브라우저 푸시 | 목표가 도달, 주문 상태와 주요 이벤트를 Firebase Web Push로 알림 |
 | 커뮤니티 | 투자 라운지 | 보유자산을 공개하지 않고 투자 습관과 배움을 공유 |
+| 커뮤니티 안전 | 신고·차단·운영자 검토 | 스팸·괴롭힘·개인정보 노출을 신고하고 사용자를 차단하며, 운영자는 신고를 기각하거나 게시글을 제거 |
+| 개인정보 | 계정 삭제·데이터 내보내기 | 프로필에서 가상원장·주문·게시글·알림·리그 기록을 직접 삭제하고 JSON 사본을 내려받음 |
 | 운영 | 운영자 통제센터 | 모의거래 중지, 위험한도, 원장 대사, 감사 이벤트 확인 |
 
 ### 앱 중심 시장 홈 UI
@@ -337,6 +339,11 @@ app
 | `GET` | `/api/company/{symbol}` | 한국 기업정보·재무·공시 | 없음 |
 | `GET` | `/api/company/us/{symbol}` | SEC EDGAR 미국 제출 이력 | `SEC_USER_AGENT` |
 | `GET` | `/api/me/export` | 내 개인정보·가상거래 기록 JSON 다운로드 | 필요 |
+| `DELETE` | `/api/me` | 계정과 연결된 가상거래·커뮤니티·알림 데이터 삭제 | 필요 |
+| `POST` | `/api/posts/{post_id}/report` | 커뮤니티 게시글 신고(사유별 중복 신고 방지) | 필요 |
+| `POST` / `DELETE` | `/api/users/{user_id}/block` | 사용자 차단·해제 및 피드 숨김 | 필요 |
+| `GET` | `/api/moderation/reports` | 운영자용 미처리 신고 목록 | 운영자 |
+| `POST` | `/api/moderation/reports/{report_id}/resolve` | 신고 기각 또는 게시글 제거 처리 | 운영자 |
 | `GET` | `/api/league/rankings` | 공개 수익률 리그 | 선택 |
 | `GET` | `/api/growth/analytics` | 리스크·성과·체결품질 분석 | 필요 |
 | `GET` | `/api/billing/plans` | 무료·Pro·Team 공개 상품 카탈로그 | 없음 |

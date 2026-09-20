@@ -2,3 +2,63 @@
   background-position: center;
   background-size: cover;
 }
+
+.lounge-terms-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 44px;
+  color: #687482;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.lounge-terms-check input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
+  accent-color: #3182f6;
+}
+
+.lounge-terms-check a {
+  color: #2365c7;
+  font-weight: 800;
+}
+
+.lounge-post-actions {
+  align-self: start;
+  display: flex;
+  gap: 3px;
+}
+
+.lounge-post-actions button,
+.lounge-delete {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #8d98a5;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lounge-post-actions button:hover,
+.lounge-post-actions button:focus-visible {
+  color: #c33b4d;
+  background: #fff0f2;
+}
+
+.lounge-post-actions button:disabled,
+.lounge-delete:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+@media (max-width: 560px) {
+  .lounge-post-actions {
+    flex-direction: column;
+  }
+}

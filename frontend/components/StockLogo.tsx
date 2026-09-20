@@ -68,7 +68,10 @@ export default function StockLogo({
   const normalized = symbol.toUpperCase();
   const brand = useMemo(() => brands[normalized], [normalized]);
   const [failedSource, setFailedSource] = useState("");
-  const source = logoUrl || brand?.src || "";
+  // Prefer the known brand map so a stale/expired catalog URL cannot replace
+  // a stable company mark. Search-only symbols still use the catalog URL and
+  // always fall back to a local monogram when the provider is unavailable.
+  const source = brand?.src || logoUrl || "";
 
   const showImage = Boolean(source && failedSource !== source);
 

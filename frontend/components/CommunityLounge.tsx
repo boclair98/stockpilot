@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowLeft, Clock3, LogIn, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Ban, Clock3, Flag, LogIn, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-import { createPost, deletePost, fetchFeed, type Post } from "@/lib/api";
+import { blockUser, createPost, deletePost, fetchFeed, reportPost, type Post } from "@/lib/api";
 import { signInHref, useMe } from "@/lib/identity";
 
 function dateLabel(value: string) {
@@ -29,6 +29,7 @@ export default function CommunityLounge() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +64,10 @@ export default function CommunityLounge() {
     event.preventDefault();
     const clean = body.trim();
     if (!clean || busy) return;
+    if (!termsAccepted) {
+      setMessage("게시하기 전에 라운지 이용약관에 동의해 주세요.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -86,6 +91,39 @@ export default function CommunityLounge() {
       setMessage("글을 삭제했어요.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "삭제하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function report(post: Post) {
+    if (busy) return;
+    const answer = window.prompt(
+      "신고 사유를 선택해 주세요.\n1 스팸\n2 괴롭힘·혐오\n3 오해를 부르는 정보\n4 개인정보 노출\n5 기타",
+      "1",
+    );
+    const reason = ({ "1": "SPAM", "2": "HARASSMENT", "3": "MISLEADING", "4": "PERSONAL_DATA", "5": "OTHER" } as const)[answer?.trim() as "1" | "2" | "3" | "4" | "5"];
+    if (!reason) return;
+    setBusy(true);
+    try {
+      await reportPost(post.id, reason);
+      setMessage("신고가 접수됐어요. 운영자가 확인할게요.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "신고하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function block(post: Post) {
+    if (busy || !window.confirm(`${post.author_name}님의 글을 앞으로 숨길까요?`)) return;
+    setBusy(true);
+    try {
+      await blockUser(post.author_id);
+      setPosts((current) => current.filter((item) => item.author_id !== post.author_id));
+      setMessage("사용자를 차단했어요. 해당 사용자의 글을 숨겼습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "차단하지 못했어요.");
     } finally {
       setBusy(false);
     }
@@ -126,9 +164,13 @@ export default function CommunityLounge() {
                 maxLength={280}
                 rows={4}
               />
+              <label className="lounge-terms-check">
+                <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
+                <span><Link href="/terms">라운지 이용약관</Link>과 커뮤니티 기준을 확인했어요.</span>
+              </label>
               <div className="composer-actions">
                 <span className={body.length > 250 ? "near-limit" : ""}>{body.length} / 280</span>
-                <button type="submit" disabled={!body.trim() || busy}><Send size={15} /> 공유하기</button>
+                <button type="submit" disabled={!body.trim() || busy || !termsAccepted}><Send size={15} /> 공유하기</button>
               </div>
             </form>
           ) : (
@@ -156,16 +198,21 @@ export default function CommunityLounge() {
                   <div className="lounge-post-meta"><b>{post.author_name}</b><span><Clock3 size={12} /> {dateLabel(post.created_at)}</span></div>
                   <p>{post.body}</p>
                 </div>
-                {me?.id === post.author_id && (
+                {me?.id === post.author_id ? (
                   <button type="button" className="lounge-delete" onClick={() => void remove(post)} disabled={busy} aria-label="내 글 삭제"><Trash2 size={15} /></button>
-                )}
+                ) : me ? (
+                  <div className="lounge-post-actions">
+                    <button type="button" onClick={() => void report(post)} disabled={busy} aria-label="게시글 신고"><Flag size={14} /></button>
+                    <button type="button" onClick={() => void block(post)} disabled={busy} aria-label="사용자 차단"><Ban size={14} /></button>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
         </section>
 
         <aside className="lounge-sidebar">
-          <section><span className="sidebar-icon"><ShieldCheck size={19} /></span><h2>편안한 라운지를 위해</h2><ul><li>수익 보장·종목 선동 글은 올리지 않아요.</li><li>계좌, 주문 내역 등 개인정보를 공개하지 않아요.</li><li>서로의 투자 판단과 속도를 존중해요.</li></ul></section>
+          <section><span className="sidebar-icon"><ShieldCheck size={19} /></span><h2>편안한 라운지를 위해</h2><ul><li>수익 보장·종목 선동 글은 올리지 않아요.</li><li>계좌, 주문 내역 등 개인정보를 공개하지 않아요.</li><li>불편한 글은 신고하고 사용자를 차단할 수 있어요.</li><li>모든 신고는 운영자가 확인해요.</li></ul></section>
           <section className="lounge-notice"><b>꼭 확인해 주세요</b><p>라운지 글은 작성자의 개인적인 경험이며 투자 권유나 자문이 아닙니다.</p><Link href="/guide">서비스 이용 가이드 보기 →</Link></section>
         </aside>
       </div>

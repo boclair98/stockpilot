@@ -63,12 +63,16 @@ https://stockpilot.coders.kr/api/auth/google/callback
 ## 4. Play Console 제출 전 체크
 
 - 개인정보처리방침: `https://stockpilot.coders.kr/privacy`
+- 계정 삭제 안내: `https://stockpilot.coders.kr/account-deletion`
 - 이용약관: `https://stockpilot.coders.kr/terms`
+- 라운지 신고·차단과 게시 전 약관 동의가 실제 기기에서 동작하는지 확인
 - “실거래가 아닌 가상투자·교육 서비스” 문구가 스토어 설명과 앱 화면에 모두 표시되는지 확인
 - 360×800, 390×844, 태블릿, 회전 화면에서 잘림과 가로 스크롤 확인
 - 네트워크 끊김, 서버 오류, Google 로그인 취소, 중복 주문 탭, 보유 수량 초과 매도 확인
 - 앱 아이콘, 알림 아이콘, 스플래시 화면, 알림 권한 요청 시점을 실제 기기에서 확인
 - 내부 테스트 트랙에서 최소 한 차례 설치·업데이트·삭제 후 재설치 확인
+
+현재 생성 프로젝트의 로컬 Bubblewrap 서명 설정은 `android/.release/stockpilot-upload-v2.jks`를 사용합니다. 키 파일과 비밀번호는 저장소에 포함되지 않으며, 새 버전을 만들 때도 동일한 업로드 키를 사용해야 합니다.
 
 ## 아직 사용자 작업이 필요한 항목
 

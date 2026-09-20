@@ -187,7 +187,8 @@
   }
 
   .market-navigation-links a {
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0 11px;
     font-size: 10px;
   }

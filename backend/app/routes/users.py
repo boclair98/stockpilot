@@ -7,18 +7,25 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.identity import current_identity, optional_display_name, require_identity
+from app.core.identity import (
+    SESSION_COOKIE,
+    current_identity,
+    optional_display_name,
+    require_identity,
+)
 from app.models import (
     AuditEvent,
     BillingInterest,
+    ContentReport,
     DailyChallengeAttempt,
     LeagueParticipant,
     LeagueRankSnapshot,
+    LeagueRoom,
     LeagueRoomMember,
     PortfolioDailySnapshot,
     Position,
@@ -26,11 +33,14 @@ from app.models import (
     PriceAlert,
     ProtectionPlan,
     PushDevice,
+    ReconciliationRun,
     TradeJournal,
     TradeOrder,
     TradingAccount,
+    TradingControl,
     User,
     WatchlistItem,
+    UserBlock,
 )
 
 router = APIRouter(prefix="/api", tags=["users"])
@@ -194,3 +204,100 @@ async def export_my_data(
             "Content-Disposition": 'attachment; filename="stockpilot-data-export.json"',
         },
     )
+
+
+@router.delete("/me")
+async def delete_my_account(
+    request: Request,
+    coders_id: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    """Permanently remove the signed-in user's account and app data.
+
+    This endpoint is intentionally explicit and server-side. It removes the
+    virtual ledger, alerts, learning history, posts, league memberships,
+    moderation records, and push tokens before revoking the session cookie.
+    Operational records are removed when they are attributable to this user;
+    no real-money account or broker credential is ever touched.
+    """
+    user = await session.scalar(select(User).where(User.coders_id == coders_id))
+    if user is None:
+        response = JSONResponse({"status": "deleted"})
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return response
+
+    participant_id = await session.scalar(
+        select(LeagueParticipant.id).where(LeagueParticipant.owner_id == coders_id)
+    )
+    room_ids = list(
+        (
+            await session.execute(
+                select(LeagueRoom.id).where(LeagueRoom.owner_id == coders_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    # Remove records that reference the account-local user row first.
+    await session.execute(
+        delete(ContentReport).where(
+            (ContentReport.reporter_id == user.id)
+            | (ContentReport.target_author_id == user.id)
+        )
+    )
+    await session.execute(
+        delete(UserBlock).where(
+            (UserBlock.blocker_id == user.id) | (UserBlock.blocked_id == user.id)
+        )
+    )
+    await session.execute(delete(Post).where(Post.author_id == user.id))
+
+    if participant_id:
+        await session.execute(
+            delete(LeagueRankSnapshot).where(
+                LeagueRankSnapshot.participant_id == participant_id
+            )
+        )
+    if room_ids:
+        await session.execute(
+            delete(LeagueRoomMember).where(LeagueRoomMember.league_id.in_(room_ids))
+        )
+    await session.execute(
+        delete(LeagueRoomMember).where(LeagueRoomMember.owner_id == coders_id)
+    )
+    await session.execute(delete(LeagueRoom).where(LeagueRoom.owner_id == coders_id))
+
+    # Delete virtual portfolio and all user-generated learning data.
+    await session.execute(delete(ProtectionPlan).where(ProtectionPlan.owner_id == coders_id))
+    await session.execute(delete(TradeOrder).where(TradeOrder.owner_id == coders_id))
+    for model in (
+        Position,
+        WatchlistItem,
+        PriceAlert,
+        PushDevice,
+        PortfolioDailySnapshot,
+        DailyChallengeAttempt,
+        TradeJournal,
+        BillingInterest,
+    ):
+        await session.execute(delete(model).where(model.owner_id == coders_id))
+    await session.execute(delete(TradingAccount).where(TradingAccount.owner_id == coders_id))
+    await session.execute(delete(AuditEvent).where(AuditEvent.actor_id == coders_id))
+    await session.execute(
+        delete(ReconciliationRun).where(ReconciliationRun.initiated_by == coders_id)
+    )
+    await session.execute(
+        update(TradingControl)
+        .where(TradingControl.updated_by == coders_id)
+        .values(updated_by=None)
+    )
+    if participant_id:
+        await session.execute(
+            delete(LeagueParticipant).where(LeagueParticipant.id == participant_id)
+        )
+
+    await session.delete(user)
+    response = JSONResponse({"status": "deleted"})
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response

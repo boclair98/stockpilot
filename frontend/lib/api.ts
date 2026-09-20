@@ -76,3 +76,65 @@ export async function deletePost(postId: string): Promise<void> {
     }
   });
 }
+
+export async function reportPost(
+  postId: string,
+  reason: "SPAM" | "HARASSMENT" | "MISLEADING" | "PERSONAL_DATA" | "OTHER",
+): Promise<void> {
+  return tracked(async () => {
+    const r = await fetch(`/api/posts/${postId}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ reason }),
+    });
+    if (!r.ok) {
+      let detail = `신고하지 못했어요 (${r.status})`;
+      try {
+        const j = await r.json();
+        if (j?.detail) detail = String(j.detail);
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(detail);
+    }
+  });
+}
+
+export async function blockUser(userId: string): Promise<void> {
+  return tracked(async () => {
+    const r = await fetch(`/api/users/${userId}/block`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!r.ok) {
+      let detail = `차단하지 못했어요 (${r.status})`;
+      try {
+        const j = await r.json();
+        if (j?.detail) detail = String(j.detail);
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(detail);
+    }
+  });
+}
+
+export async function deleteMyAccount(): Promise<void> {
+  return tracked(async () => {
+    const r = await fetch("/api/me", {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!r.ok) {
+      let detail = `계정을 삭제하지 못했어요 (${r.status})`;
+      try {
+        const j = await r.json();
+        if (j?.detail) detail = String(j.detail);
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(detail);
+    }
+  });
+}
