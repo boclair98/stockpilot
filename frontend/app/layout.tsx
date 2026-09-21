@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import AdSenseScript from "@/components/AdSenseScript";
 import MobileServiceNav from "@/components/MobileServiceNav";
 import PwaRuntime from "@/components/PwaRuntime";
+import { adsenseClient } from "@/lib/ads";
 import "./globals.css";
 import "./market.css";
 import "./market-index.css";
@@ -32,6 +34,7 @@ import "./watchlist.css";
 import "./market-navigation.css";
 import "./pricing.css";
 import "./monetization.css";
+import "./ads.css";
 import "./pwa.css";
 import "./app-polish.css";
 
@@ -84,6 +87,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="ko"><body>{children}<PwaRuntime /><MobileServiceNav /></body></html>;
+  return <html lang="ko"><body>{children}<AdSenseScript client={adsenseClient} /><PwaRuntime /><MobileServiceNav /></body></html>;
 }
 

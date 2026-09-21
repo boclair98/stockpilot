@@ -39,6 +39,7 @@ import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketBriefing from "./MarketBriefing";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
 import MonetizationOffer from "./MonetizationOffer";
+import AdSlot from "./AdSlot";
 
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => <div className="chunk-placeholder" style={{ minHeight: 320 }} aria-hidden="true" />,
@@ -1146,6 +1147,7 @@ export default function TradingTerminal() {
       />
 
       <MonetizationOffer />
+      <AdSlot placement="home" />
 
       <div id="market-indices" className="market-anchor-section">
         <MarketIndexChart initialData={bootstrapKospi} />
@@ -1418,6 +1420,8 @@ export default function TradingTerminal() {
               />
             </DeferredMount>
           </div>
+
+          <AdSlot placement="market-news" />
 
           <DeferredMount minHeight={420} rootMargin="320px 0px">
             <InvestorTools

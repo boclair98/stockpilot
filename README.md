@@ -54,6 +54,10 @@ StockPilot은 가상투자 서비스이므로 주문 수수료나 실거래 중�
 
 이 구조는 투자 조언·현금 상금·브로커리지 수수료에 의존하지 않고, 교육 품질과 리텐션을 높인 기능에만 가격을 붙입니다. 개인 포트폴리오나 거래내역은 판매하지 않으며, 스폰서 콘텐츠가 추가되더라도 광고임을 명확히 표시합니다.
 
+#### 광고 수익화
+
+웹과 TWA에서 공통으로 사용할 수 있도록 홈·뉴스·성장 허브·리그에만 반응형 광고 슬롯을 제공합니다. 주문·로그인·알림·커뮤니티 입력 화면에는 광고를 배치하지 않아 실수 클릭과 핵심 흐름 방해를 줄였습니다. 광고 계정 검토 전에는 슬롯이 렌더링되지 않으며, 자세한 설정은 [`docs/ADS_MONETIZATION.md`](docs/ADS_MONETIZATION.md)에서 확인할 수 있습니다.
+
 ### 사용자가 느끼는 5단계 여정
 
 ```text
@@ -444,12 +448,22 @@ DART_API_KEY=...
 FIREBASE_SERVICE_ACCOUNT_B64=...
 PAYMENT_PROVIDER=none
 PAYMENT_CHECKOUT_ENABLED=false
+NEXT_PUBLIC_ADSENSE_CLIENT=ca-pub-xxxxxxxxxxxxxxxx
+NEXT_PUBLIC_ADSENSE_HOME_SLOT=
+NEXT_PUBLIC_ADSENSE_NEWS_SLOT=
+NEXT_PUBLIC_ADSENSE_GROWTH_SLOT=
+NEXT_PUBLIC_ADSENSE_LEAGUE_SLOT=
 ```
 
 | 변수 | 목적 | 필수 | 발급·설정 위치 |
 |---|---|:---:|---|
 | `PAYMENT_PROVIDER` | 결제 어댑터 이름 (`none`으로 비활성) | 아니요 | 결제 공급자 선택 후 운영 Secret |
 | `PAYMENT_CHECKOUT_ENABLED` | 서명 검증된 결제 플로우 활성화 스위치 | 아니요 | 웹훅 구현·환불 정책 검토 후 운영 환경 |
+| `NEXT_PUBLIC_ADSENSE_CLIENT` | Google AdSense 게시자 ID | 아니요 | AdSense 계정의 사이트 설정 |
+| `NEXT_PUBLIC_ADSENSE_HOME_SLOT` | 홈 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
+| `NEXT_PUBLIC_ADSENSE_NEWS_SLOT` | 뉴스·기업정보 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
+| `NEXT_PUBLIC_ADSENSE_GROWTH_SLOT` | 성장 허브 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
+| `NEXT_PUBLIC_ADSENSE_LEAGUE_SLOT` | 수익률 리그 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
 
 현재는 `none`/`false`를 유지하세요. 키만 넣고 스위치를 켜도 결제 공급자 어댑터와 웹훅이 없으면 과금이 완료되지 않습니다.
 

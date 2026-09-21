@@ -25,6 +25,7 @@ import { signInHref } from "@/lib/identity";
 import FinancialSafetyReport, { type FinancialSafetyData } from "@/components/FinancialSafetyReport";
 import InvestmentLicense, { type InvestmentLicenseData } from "@/components/InvestmentLicense";
 import PortfolioAnalytics from "@/components/PortfolioAnalytics";
+import AdSlot from "@/components/AdSlot";
 
 type Choice = "BUY" | "HOLD" | "SELL";
 type Challenge = {
@@ -305,6 +306,8 @@ export default function GrowthHub() {
       <div id="license-analytics">
         <PortfolioAnalytics />
       </div>
+
+      <AdSlot placement="growth" />
 
       <section className="growth-primary-grid">
         <article className="daily-challenge" id="license-challenge">

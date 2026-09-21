@@ -23,6 +23,7 @@ import Link from "next/link";
 
 import { signInHref, useMe } from "@/lib/identity";
 import LeagueRooms from "./LeagueRooms";
+import AdSlot from "./AdSlot";
 
 type Ranking = {
   rank: number;
@@ -288,6 +289,8 @@ export default function LeagueBoard() {
       </section>
 
       <LeagueRooms authenticated={Boolean(me)} />
+
+      <AdSlot placement="league" />
 
       <section className="league-rules">
         <p>HOW IT WORKS</p>
