@@ -89,6 +89,28 @@ class Settings(BaseSettings):
     )
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
+    # Apps in Toss calls the same API from its WebView origin. Keep the list
+    # explicit so CORS and CSRF checks never trust an arbitrary Origin header.
+    apps_in_toss_allowed_origins: str = (
+        "https://stockpilot-kr.apps.tossmini.com,"
+        "https://stockpilot-kr.private-apps.tossmini.com,"
+        "https://stockpilot-kr.web.tossmini.com,"
+        "https://stockpilot-kr.private-web.tossmini.com"
+    )
+    toss_app_name: str = "stockpilot-kr"
+    toss_api_base_url: str = "https://apps-in-toss-api.toss.im"
+    # Mount the partner mTLS certificate and private key in the API container;
+    # neither value belongs in Git or the browser bundle.
+    toss_client_cert_path: str | None = None
+    toss_client_key_path: str | None = None
+    toss_login_enabled: bool = False
+    toss_iap_enabled: bool = False
+    toss_pro_sku: str = "stockpilot.pro.monthly"
+    toss_team_sku: str = "stockpilot.team.monthly"
+    # Use an opaque path segment for the subscription callback. Apps in Toss
+    # does not document a webhook signature header, so an unguessable token is
+    # the safest application-level gate in front of the callback endpoint.
+    toss_webhook_token: str | None = None
     enable_api_docs: bool = False
 
     # Firebase Cloud Messaging sends browser notifications when a saved
@@ -107,3 +129,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
