@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -14,6 +15,7 @@ from app.core.database import AsyncSessionLocal, engine
 from app.core.identity import (
     SESSION_COOKIE,
     Identity,
+    current_identity,
     decode_session,
     require_operator,
 )
@@ -72,11 +74,21 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.enable_api_docs else None,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip()
+        for origin in settings.apps_in_toss_allowed_origins.split(",")
+        if origin.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _traffic_identity(request: Request) -> str:
-    session_cookie = request.cookies.get(SESSION_COOKIE)
-    identity = decode_session(session_cookie)
+    identity = current_identity(request)
     if identity:
         return f"session:{identity.id}"
     forwarded = request.headers.get("cf-connecting-ip")
@@ -100,6 +112,11 @@ def _same_site_origin(request: Request) -> bool:
     redirect_host = urlsplit(settings.google_redirect_uri).hostname
     if redirect_host:
         expected_hosts.add(redirect_host.lower())
+    expected_hosts.update(
+        urlsplit(origin.strip()).hostname.lower()
+        for origin in settings.apps_in_toss_allowed_origins.split(",")
+        if origin.strip() and urlsplit(origin.strip()).hostname
+    )
     return bool(parsed.hostname and parsed.hostname.lower() in expected_hosts)
 
 
@@ -261,4 +278,5 @@ async def traffic_health(_: Identity = Depends(require_operator)) -> JSONRespons
         content={"status": "ok", **(await request_metrics.snapshot())},
         headers={"Cache-Control": "no-store"},
     )
+
 
