@@ -1,4 +1,4 @@
-"""Google OAuth 2.0 authorization-code login for StockPilot."""
+"""Google OAuth for the public web and Toss Login sessions for the mini-app."""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import settings
 from app.core.identity import (
+    AIT_ACCESS_TOKEN_SALT,
     SESSION_COOKIE,
     SESSION_MAX_AGE,
     decode_signed,
@@ -26,6 +28,22 @@ STATE_MAX_AGE = 600
 GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO = "https://openidconnect.googleapis.com/v1/userinfo"
+
+
+class TossLoginExchange(BaseModel):
+    authorizationCode: str = Field(min_length=1, max_length=4096)
+    referrer: str = Field(pattern="^(DEFAULT|SANDBOX)$")
+
+
+class TossAnonymousSession(BaseModel):
+    hash: str = Field(min_length=16, max_length=4096)
+
+    @field_validator("hash")
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        if value != value.strip() or any(character.isspace() for character in value):
+            raise ValueError("invalid anonymous key")
+        return value
 
 
 def _ready() -> bool:
@@ -81,7 +99,139 @@ def _oauth_redirect_uri(request: Request) -> str:
 
 @router.get("/status")
 async def auth_status() -> dict:
-    return {"provider": "google", "configured": _ready()}
+    return {
+        "provider": "google",
+        "configured": _ready(),
+        "tossLoginConfigured": bool(
+            settings.toss_login_enabled
+            and settings.toss_client_cert_path
+            and settings.toss_client_key_path
+            and settings.auth_session_secret
+        ),
+    }
+
+
+def _toss_ready() -> bool:
+    return bool(
+        settings.toss_login_enabled
+        and settings.toss_client_cert_path
+        and settings.toss_client_key_path
+        and settings.auth_session_secret
+    )
+
+
+async def _toss_client() -> httpx.AsyncClient:
+    if not _toss_ready():
+        raise HTTPException(503, "토스 로그인이 아직 설정되지 않았습니다.")
+    return httpx.AsyncClient(
+        base_url=settings.toss_api_base_url.rstrip("/"),
+        cert=(settings.toss_client_cert_path, settings.toss_client_key_path),
+        timeout=15,
+    )
+
+
+@router.post("/toss/exchange")
+async def toss_exchange(payload: TossLoginExchange, request: Request) -> dict:
+    """Exchange the one-time mini-app authorization code on the server.
+
+    Access/refresh tokens never reach the browser. Only the app-scoped
+    ``userKey`` is retained in the signed session, which is then mapped to a
+    stable app-local UUID so the existing API and virtual ledger can be used
+    without exposing personal data. Toss and Google identities remain
+    separate accounts unless an explicit account-linking flow is added later.
+    """
+
+    client = await _toss_client()
+    try:
+        token_response = await client.post(
+            "/api-partner/v1/apps-in-toss/user/oauth2/generate-token",
+            json={
+                "authorizationCode": payload.authorizationCode,
+                "referrer": payload.referrer,
+            },
+        )
+        if not token_response.is_success:
+            raise HTTPException(502, "토스 인증 토큰을 발급하지 못했어요.")
+        token_payload = token_response.json()
+        if token_payload.get("resultType") != "SUCCESS":
+            raise HTTPException(502, "토스 인증 토큰을 발급하지 못했어요.")
+        access_token = token_payload.get("success", {}).get("accessToken")
+        if not access_token:
+            raise HTTPException(502, "토스 인증 토큰 응답이 올바르지 않아요.")
+
+        profile_response = await client.get(
+            "/api-partner/v1/apps-in-toss/user/oauth2/login-me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if not profile_response.is_success:
+            raise HTTPException(502, "토스 사용자 정보를 확인하지 못했어요.")
+        profile_payload = profile_response.json()
+        if profile_payload.get("resultType") != "SUCCESS":
+            raise HTTPException(502, "토스 사용자 정보를 확인하지 못했어요.")
+        profile = profile_payload.get("success") or {}
+        user_key = profile.get("userKey")
+        if not isinstance(user_key, int):
+            raise HTTPException(502, "토스 사용자 식별자를 받지 못했어요.")
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "토스 사용자 인증을 확인하지 못했어요.") from exc
+    finally:
+        await client.aclose()
+
+    user_id = uuid5(
+        NAMESPACE_URL,
+        f"https://apps-in-toss.toss.im/{settings.toss_app_name}/{user_key}",
+    )
+    session = encode_session(
+        {
+            "id": str(user_id),
+            "name": f"user-{user_key}",
+            "provider": "toss",
+            "toss_user_key": user_key,
+        }
+    )
+    response = JSONResponse({"ok": True, "provider": "toss"})
+    # The mini-app and the shared API have different HTTPS origins. `None` is
+    # required for credentialed cross-origin fetches from the Toss WebView.
+    response.set_cookie(
+        SESSION_COOKIE,
+        session,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+    return response
+
+
+@router.post("/toss/anonymous")
+async def toss_anonymous_session(payload: TossAnonymousSession) -> dict:
+    """Create a stable app-local session from Apps in Toss' anonymous key.
+
+    The raw key is never stored in the cookie or database. It is namespaced to
+    this mini-app and converted into the UUID already used by StockPilot's
+    virtual ledger, keeping the public Google identity completely separate.
+    """
+
+    user_id = uuid5(
+        NAMESPACE_URL,
+        f"https://apps-in-toss.toss.im/{settings.toss_app_name}/anonymous/{payload.hash}",
+    )
+    access_token = encode_signed(
+        {
+            "id": str(user_id),
+            "provider": "toss_anonymous",
+        },
+        AIT_ACCESS_TOKEN_SALT,
+    )
+    # iOS blocks third-party cookies in the Toss WebView. Return a signed
+    # bearer token and keep it in app memory; never depend on Set-Cookie here.
+    return {
+        "ok": True,
+        "provider": "toss_anonymous",
+        "accessToken": access_token,
+        "expiresIn": SESSION_MAX_AGE,
+    }
 
 
 @router.get("/google/login")
@@ -185,7 +335,10 @@ async def google_callback(
 
 
 @router.post("/logout")
-async def logout() -> RedirectResponse:
-    response = RedirectResponse("/", 303)
+async def logout() -> JSONResponse:
+    # Return JSON rather than a cross-origin redirect so the Apps in Toss
+    # WebView can complete the credentialed fetch cleanly.
+    response = JSONResponse({"ok": True})
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
+
