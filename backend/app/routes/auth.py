@@ -341,4 +341,3 @@ async def logout() -> JSONResponse:
     response = JSONResponse({"ok": True})
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
-
