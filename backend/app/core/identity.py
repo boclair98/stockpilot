@@ -1,8 +1,10 @@
-"""Google-backed application identity.
+"""Application identity shared by the browser and Apps in Toss builds.
 
-StockPilot is deployed in coders.kr ``standalone`` mode. Authentication is
-therefore handled by the app itself and never trusts a caller-supplied header.
-The browser receives only a signed, HttpOnly session cookie.
+StockPilot is deployed in coders.kr ``standalone`` mode. Public web users use
+the signed, HttpOnly Google session cookie. Apps in Toss uses a short-lived,
+server-signed bearer token because iOS WebViews block third-party cookies.
+The mini-app identity is derived from the Apps in Toss anonymous key without
+changing the public site's login flow.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from app.core.config import settings
 
 SESSION_COOKIE = "stockpilot_session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 30
+AIT_ACCESS_TOKEN_SALT = "apps-in-toss-access"
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,8 @@ class Identity:
     display_name: str | None
     email: str | None
     picture: str | None
+    provider: str = "google"
+    toss_user_key: int | None = None
 
 
 def encode_signed(payload: dict, salt: str) -> str:
@@ -90,6 +95,25 @@ def decode_session(value: str | None) -> Identity | None:
             display_name=payload.get("name"),
             email=payload.get("email"),
             picture=payload.get("picture"),
+            provider=payload.get("provider", "google"),
+            toss_user_key=payload.get("toss_user_key"),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def decode_apps_in_toss_access_token(value: str | None) -> Identity | None:
+    payload = decode_signed(value, AIT_ACCESS_TOKEN_SALT, SESSION_MAX_AGE)
+    if not payload or payload.get("provider") != "toss_anonymous":
+        return None
+    try:
+        return Identity(
+            id=UUID(payload["id"]),
+            google_sub=None,
+            display_name=None,
+            email=None,
+            picture=None,
+            provider="toss_anonymous",
         )
     except (KeyError, TypeError, ValueError):
         return None
@@ -99,6 +123,11 @@ def current_identity(request: Request) -> Identity | None:
     identity = decode_session(request.cookies.get(SESSION_COOKIE))
     if identity:
         return identity
+    scheme, separator, token = request.headers.get("authorization", "").partition(" ")
+    if separator and scheme.lower() == "bearer":
+        identity = decode_apps_in_toss_access_token(token.strip())
+        if identity:
+            return identity
     if settings.dev_fake_user:
         try:
             return Identity(
@@ -122,16 +151,16 @@ async def optional_display_name(request: Request) -> str | None:
 async def require_identity(request: Request) -> UUID:
     identity = current_identity(request)
     if not identity:
-        raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return identity.id
 
 
 async def require_operator(request: Request) -> Identity:
-    """Require a Google session whose email is explicitly allow-listed."""
+    """Require an operator session whose email is explicitly allow-listed."""
 
     identity = current_identity(request)
     if not identity:
-        raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     allowed = {
         item.strip().lower()
         for item in settings.operator_emails.split(",")
@@ -140,3 +169,4 @@ async def require_operator(request: Request) -> Identity:
     if not identity.email or identity.email.lower() not in allowed:
         raise HTTPException(status_code=403, detail="기관 운영자 권한이 필요합니다.")
     return identity
+
