@@ -278,5 +278,3 @@ async def traffic_health(_: Identity = Depends(require_operator)) -> JSONRespons
         content={"status": "ok", **(await request_metrics.snapshot())},
         headers={"Cache-Control": "no-store"},
     )
-
-
