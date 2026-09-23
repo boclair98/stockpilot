@@ -169,4 +169,3 @@ async def require_operator(request: Request) -> Identity:
     if not identity.email or identity.email.lower() not in allowed:
         raise HTTPException(status_code=403, detail="기관 운영자 권한이 필요합니다.")
     return identity
-
