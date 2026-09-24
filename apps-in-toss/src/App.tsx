@@ -117,7 +117,7 @@ function Sparkline({ values, positive = true }: { values: number[]; positive?: b
 function StockRow({ stock, onOpen, owned }: { stock: Quote; onOpen: (stock: Quote) => void; owned?: number }) {
   const change = stock.changePercent ?? 0;
   return (
-    <button className="stock-row" type="button" onClick={() => onOpen(stock)}>
+    <button className="stock-row" type="button" onClick={() => onOpen(stock)} aria-label={`${stock.name} 가상주문 열기`}>
       <BrandMark symbol={stock.symbol} logoUrl={stock.logoUrl} name={stock.name} />
       <span className="stock-copy">
         <strong>{stock.name}</strong>
@@ -127,6 +127,7 @@ function StockRow({ stock, onOpen, owned }: { stock: Quote; onOpen: (stock: Quot
         <strong>{money(stock.price, stock.currency)}</strong>
         <small className={tone(change)}>{percent(change)}</small>
       </span>
+      <span className="row-chevron" aria-hidden="true">›</span>
     </button>
   );
 }
@@ -204,7 +205,7 @@ function OrderSheet({
       <section className="order-sheet" role="dialog" aria-modal="true" aria-labelledby="order-title">
         <div className="sheet-handle" />
         <div className="sheet-heading">
-          <div><small>실시간 가상주문</small><h2 id="order-title">{stock.name}</h2></div>
+          <div><small>가상주문 · 현재 시세 기준</small><h2 id="order-title">{stock.name}</h2></div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="주문창 닫기">×</button>
         </div>
         <div className="order-quote">
@@ -227,6 +228,9 @@ function OrderSheet({
           <div><dt>예상 주문금액</dt><dd>{money(estimated, stock.currency)}</dd></div>
           <div><dt>보유 수량</dt><dd>{held.toLocaleString("ko-KR")}주</dd></div>
         </dl>
+        <div className="order-safety" aria-label="가상주문 안내">
+          <span>가상 체결</span><span>실거래 없음</span><span>수수료 반영</span>
+        </div>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className={`primary-button ${side === "SELL" ? "sell-button" : ""}`} type="button" disabled={submitting} onClick={placeOrder}>
           {submitting ? "주문 확인 중…" : `${side === "BUY" ? "매수" : "매도"} 주문하기`}
@@ -343,6 +347,14 @@ function App() {
 
   const totalProfit = useMemo(() => portfolio.positions.reduce((sum, item) => sum + (item.currency === "KRW" ? item.profit : 0), 0), [portfolio]);
 
+  const risingQuotes = useMemo(
+    () => (bootstrap?.quotes ?? []).filter((stock) => (stock.changePercent ?? 0) > 0).slice().sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0)).slice(0, 4),
+    [bootstrap?.quotes],
+  );
+
+  const portfolioMarkets = useMemo(() => new Set(portfolio.positions.map((item) => item.market)).size, [portfolio.positions]);
+  const profitablePositions = useMemo(() => portfolio.positions.filter((item) => item.returnRate > 0).length, [portfolio.positions]);
+
   function navigate(next: AppTab) {
     if (next === tab) return;
     window.history.pushState({}, "", appPath(next));
@@ -409,9 +421,9 @@ function App() {
 
   const home = (
     <>
-      <header className="page-header home-header"><div><span className="eyebrow">STOCKPILOT</span><h1>오늘의 투자 연습</h1></div><button className="notice-button" type="button" aria-label="알림">●</button></header>
+      <header className="page-header home-header"><div><span className="eyebrow">STOCKPILOT</span><h1>오늘도 가볍게<br />투자를 연습해요</h1></div><span className="paper-badge"><i aria-hidden="true" /> 모의투자</span></header>
       <section className="asset-card">
-        <span>내 가상자산</span>
+        <div className="asset-kicker"><span>내 가상자산</span><small>실제 돈이 아니에요</small></div>
         <strong>{money(totalKrw)}</strong>
         <p className={tone(totalProfit)}>평가손익 {money(totalProfit)} <b>{totalProfit >= 0 ? "↗" : "↘"}</b></p>
         <div className="asset-actions">
@@ -421,12 +433,19 @@ function App() {
       </section>
       {bootstrap.kospi ? (
         <section className="index-card">
-          <div className="index-copy"><span>코스피</span><strong>{numberFormatter().format(bootstrap.kospi.value)}</strong><small className={tone(bootstrap.kospi.changePercent)}>{percent(bootstrap.kospi.changePercent)}</small></div>
+          <div className="index-copy"><span>오늘의 시장 · KOSPI</span><strong>{numberFormatter().format(bootstrap.kospi.value)}</strong><small className={tone(bootstrap.kospi.changePercent)}>{percent(bootstrap.kospi.changePercent)}</small></div>
           <Sparkline values={(bootstrap.kospi.points || []).map((point) => point.close)} positive={bootstrap.kospi.changePercent >= 0} />
         </section>
       ) : null}
+      <section className="routine-card" aria-labelledby="routine-title">
+        <div className="routine-heading"><div><span>처음이라면</span><h2 id="routine-title">3단계로 투자 연습하기</h2></div><b>약 3분</b></div>
+        <ol className="routine-steps">
+          <li><span>1</span><b>종목 찾기</b></li><li><span>2</span><b>가상 주문</b></li><li><span>3</span><b>수익률 확인</b></li>
+        </ol>
+        <button type="button" onClick={() => navigate("market")}>연습 시작하기 <span aria-hidden="true">→</span></button>
+      </section>
       <section className="section-block">
-        <div className="section-title"><div><h2>실시간 인기 종목</h2><p>국내·미국 대표 종목을 바로 연습해 보세요</p></div><button type="button" onClick={() => navigate("market")}>전체</button></div>
+        <div className="section-title"><div><h2>지금 많이 보는 종목</h2><p>국내·미국 대표 종목으로 연습해 보세요</p></div><button type="button" onClick={() => navigate("market")}>전체</button></div>
         <div className="stock-list">{bootstrap.quotes.slice(0, 7).map((stock) => <StockRow key={`${stock.market}-${stock.exchange}-${stock.symbol}`} stock={stock} onOpen={openStock} />)}</div>
       </section>
       <button className="league-banner" type="button" onClick={() => navigate("league")}>
@@ -443,6 +462,7 @@ function App() {
       <div className="market-tabs" role="tablist" aria-label="시장 선택">
         {(["ALL", "KR", "US"] as const).map((value) => <button key={value} role="tab" aria-selected={market === value} className={market === value ? "active" : ""} type="button" onClick={() => setMarket(value)}>{value === "ALL" ? "전체" : value === "KR" ? "국내" : "미국"}</button>)}
       </div>
+      {risingQuotes.length ? <section className="mover-section" aria-labelledby="mover-title"><div className="mini-heading"><h2 id="mover-title">최근 상승 종목</h2><span>변동률 순</span></div><div className="mover-strip">{risingQuotes.map((stock) => <button type="button" key={`mover-${stock.exchange}-${stock.symbol}`} onClick={() => openStock(stock)}><BrandMark symbol={stock.symbol} logoUrl={stock.logoUrl} name={stock.name} /><span><strong>{stock.name}</strong><small className="up">{percent(stock.changePercent)}</small></span></button>)}</div></section> : null}
       <section className="section-block market-results">
         <div className="section-title"><div><h2>{query ? `‘${query}’ 검색 결과` : "주요 종목"}</h2><p>{query ? "상장 종목을 실시간으로 검색해요" : "현재 관심이 높은 종목이에요"}</p></div></div>
         {searching ? <div className="inline-loading">검색하고 있어요…</div> : null}
@@ -458,6 +478,11 @@ function App() {
       <section className="balance-card">
         <span>총 가상자산</span><strong>{money(totalKrw)}</strong>
         <div><p><small>원화 주문가능</small><b>{money(portfolio.cash.KRW)}</b></p><p><small>달러 주문가능</small><b>{money(portfolio.cash.USD, "USD")}</b></p></div>
+      </section>
+      <section className="portfolio-insight" aria-label="포트폴리오 요약">
+        <div><small>보유 종목</small><strong>{portfolio.positions.length}<span>개</span></strong></div>
+        <div><small>투자 시장</small><strong>{portfolioMarkets}<span>곳</span></strong></div>
+        <div><small>수익 종목</small><strong>{profitablePositions}<span>개</span></strong></div>
       </section>
       <section className="section-block">
         <div className="section-title"><div><h2>보유 주식</h2><p>{portfolio.positions.length}개 종목</p></div></div>
@@ -479,7 +504,7 @@ function App() {
   const leagueView = (
     <>
       <header className="page-header"><div><span className="eyebrow">RETURN LEAGUE</span><h1>수익률 리그</h1></div></header>
-      <section className="league-hero"><span>SEASON</span><h2>종목은 비공개,<br />실력은 수익률로</h2><p>모두 같은 가상자금으로 시작해요. 보유 종목은 공개되지 않습니다.</p><div><strong>{league.participantCount.toLocaleString("ko-KR")}</strong><small>참여자</small></div></section>
+      <section className="league-hero"><span>OPEN LEAGUE</span><h2>종목은 비공개,<br />실력은 수익률로</h2><p>모두 같은 가상자금으로 시작해요. 보유 종목은 공개되지 않습니다.</p><div><strong>{league.participantCount.toLocaleString("ko-KR")}</strong><small>참여자</small></div><em>🔒 보유 종목 비공개</em></section>
       {!league.me.joined ? <section className="join-card"><h2>나도 순위에 도전하기</h2><p>닉네임만 공개되고 보유 종목과 주문은 나만 볼 수 있어요.</p><input type="text" value={nickname} maxLength={12} onChange={(event) => setNickname(event.target.value)} placeholder="닉네임 2~12자 (선택)" aria-label="리그 닉네임" /><button className="primary-button" type="button" onClick={submitLeagueJoin}>무료로 참여하기</button></section> : <section className="my-rank-card"><span>나의 현재 순위</span><strong>{league.me.rank ? `${league.me.rank}위` : "집계 중"}</strong><small>{league.me.nickname} · {percent(league.me.returnRate || 0)}</small></section>}
       <section className="section-block rankings"><div className="section-title"><div><h2>실시간 순위</h2><p>수익률만 공개해요</p></div></div>{league.rankings.length ? league.rankings.slice(0, 50).map((row) => <div className={`rank-row ${row.isMe ? "is-me" : ""}`} key={`${row.rank}-${row.nickname}`}><b>{row.rank}</b><span>{row.nickname}{row.isMe ? <em>나</em> : null}</span><strong className={tone(row.returnRate)}>{percent(row.returnRate)}</strong></div>) : <EmptyState title="첫 순위를 기다리고 있어요" description="리그에 참여하면 매일 수익률 순위가 집계돼요." />}</section>
     </>
@@ -496,7 +521,7 @@ function App() {
       </section>
       <section className="section-block policy-block"><h2>안전한 이용을 위해</h2><ul><li>현금 입금·출금·실제 증권계좌 연결 기능이 없어요.</li><li>시세 지연이나 장 운영시간에 따라 체결 결과가 달라질 수 있어요.</li><li>수익률과 학습 결과는 실제 투자성과를 보장하지 않아요.</li><li>개인 보유종목과 주문내역은 리그에 공개하지 않아요.</li></ul></section>
       <button className="danger-link" type="button" onClick={() => setConfirmDelete(true)}>내 가상투자 데이터 삭제</button>
-      <p className="version">StockPilot for Apps in Toss · v1.0.0</p>
+      <p className="version">StockPilot for Apps in Toss · v1.1.0</p>
     </>
   );
 
@@ -505,7 +530,7 @@ function App() {
       <main className="app-main">{tab === "home" ? home : tab === "market" ? marketView : tab === "portfolio" ? portfolioView : tab === "league" ? leagueView : moreView}</main>
       <nav className="bottom-nav" aria-label="주요 메뉴">{(Object.keys(TAB_LABELS) as AppTab[]).map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} aria-current={tab === item ? "page" : undefined} onClick={() => navigate(item)}><span aria-hidden="true">{item === "home" ? "⌂" : item === "market" ? "⌕" : item === "portfolio" ? "↗" : item === "league" ? "♛" : "≡"}</span><small>{TAB_LABELS[item]}</small></button>)}</nav>
       {selected ? <OrderSheet stock={selected} portfolio={portfolio} onClose={() => setSelected(null)} onComplete={async () => { await refresh(); setToast("가상주문이 처리됐어요."); }} /> : null}
-      {toast ? <div className="toast" role="status">{toast}</div> : null}
+      {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
       {confirmDelete ? <div className="sheet-backdrop"><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><h2 id="delete-title">모든 가상투자 데이터를 삭제할까요?</h2><p>잔액, 주문, 리그 기록이 영구 삭제되며 되돌릴 수 없어요. 실제 금융계좌에는 영향이 없습니다.</p><div><button type="button" onClick={() => setConfirmDelete(false)}>취소</button><button type="button" className="danger" onClick={confirmAccountDeletion}>영구 삭제</button></div></section></div> : null}
     </div>
   );
