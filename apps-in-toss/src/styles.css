@@ -122,6 +122,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(49, 130, 246
 .mover-strip small { font-size: 12px; font-weight: 800; }
 .market-results { margin-top: 26px; }
 .inline-loading { padding: 28px 0; color: var(--grey-500); text-align: center; font-size: 14px; }
+.search-retry { padding: 22px; border: 1px solid #dce9fb; border-radius: 18px; background: #f5f9ff; }
+.search-retry strong { font-size: 15px; }
+.search-retry p { margin: 7px 0 15px; color: var(--grey-600); font-size: 13px; }
+.search-retry button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; color: #fff; background: var(--blue); font-weight: 800; cursor: pointer; }
 
 .balance-card { padding: 24px; border-radius: 24px; background: #f5f9ff; }
 .balance-card > span { color: var(--grey-600); font-size: 14px; }
@@ -217,7 +221,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(49, 130, 246
 .quantity-field input { min-width: 0; border: 0; outline: 0; font-size: 20px; font-weight: 800; }
 .quantity-field span { color: var(--grey-600); }
 .quick-quantity { display: flex; gap: 7px; margin-top: 9px; overflow-x: auto; }
-.quick-quantity button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 11px; color: var(--grey-700); background: var(--grey-100); font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.quick-quantity button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 11px; color: var(--grey-700); background: var(--grey-100); font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.quick-quantity button[aria-pressed="true"] { color: var(--blue); background: var(--blue-soft); }
 .order-summary { display: grid; gap: 10px; margin: 20px 0; }
 .order-summary div { display: flex; justify-content: space-between; gap: 16px; }
 .order-summary dt { color: var(--grey-600); font-size: 13px; }
@@ -232,6 +237,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(49, 130, 246
 .sheet-note { margin: 13px 4px 0; color: var(--grey-500); font-size: 11px; line-height: 1.55; text-align: center; }
 
 .toast { position: fixed; z-index: 80; left: 50%; bottom: calc(88px + var(--safe-bottom)); width: calc(100% - 40px); max-width: 540px; padding: 14px 18px; border-radius: 14px; color: #fff; background: rgba(25,31,40,.93); box-shadow: 0 10px 30px rgba(0,0,0,.18); text-align: center; font-size: 13px; font-weight: 700; transform: translateX(-50%); }
+.order-complete { display: grid; grid-template-columns: minmax(0, 1fr) auto 32px; align-items: center; gap: 8px; margin: 0 0 18px; padding: 14px 10px 14px 16px; border: 1px solid #cbe8d8; border-radius: 18px; background: #f0fbf4; }
+.order-complete > div { min-width: 0; display: grid; gap: 5px; }
+.order-complete strong { font-size: 13px; line-height: 1.4; }
+.order-complete small { color: var(--grey-600); font-size: 11px; line-height: 1.4; }
+.order-complete button { min-height: 44px; padding: 0 9px; border: 0; border-radius: 10px; color: #136c41; background: #dbf4e5; font-size: 12px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.order-complete button.dismiss { width: 32px; padding: 0; background: transparent; color: var(--grey-600); font-size: 21px; }
 .confirm-dialog { width: calc(100% - 40px); max-width: 420px; margin: auto; padding: 24px; border-radius: 22px; background: #fff; }
 .confirm-dialog h2 { margin: 0; font-size: 20px; line-height: 1.4; }
 .confirm-dialog p { margin: 12px 0 22px; color: var(--grey-600); font-size: 13px; line-height: 1.6; }

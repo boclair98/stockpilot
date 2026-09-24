@@ -111,13 +111,13 @@ export function loadDashboard(): Promise<[Bootstrap, Portfolio, League]> {
   ]);
 }
 
-export async function searchStocks(query: string, market: "ALL" | Market): Promise<Quote[]> {
+export async function searchStocks(query: string, market: "ALL" | Market, signal?: AbortSignal): Promise<Quote[]> {
   if (IS_LOCAL_PREVIEW) {
     const needle = query.trim().toLowerCase();
     return PREVIEW_QUOTES.filter((item) => (market === "ALL" || item.market === market) && `${item.name} ${item.symbol}`.toLowerCase().includes(needle));
   }
   const params = new URLSearchParams({ q: query, market, limit: "30" });
-  const result = await request<{ items: Quote[] }>(`/api/trading/search?${params}`);
+  const result = await request<{ items: Quote[] }>(`/api/trading/search?${params}`, { signal });
   return result.items;
 }
 

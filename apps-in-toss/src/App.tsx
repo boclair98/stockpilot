@@ -164,7 +164,7 @@ function OrderSheet({
   stock: Quote;
   portfolio: Portfolio;
   onClose: () => void;
-  onComplete: () => Promise<void>;
+  onComplete: (side: "BUY" | "SELL", name: string) => Promise<void>;
 }) {
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [quantity, setQuantity] = useState("1");
@@ -173,10 +173,20 @@ function OrderSheet({
   const numericQuantity = Math.max(0, Number(quantity) || 0);
   const held = portfolio.positions.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange)?.quantity || 0;
   const estimated = stock.price * numericQuantity;
+  const availableCash = portfolio.cash[stock.currency];
 
   async function placeOrder() {
     if (!Number.isInteger(numericQuantity) || numericQuantity < 1) {
       setError("1주 이상 정수로 입력해 주세요.");
+      return;
+    }
+    if (stock.price <= 0) {
+      setError("현재 시세를 확인할 수 없어 주문할 수 없어요. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    if (side === "BUY" && estimated > availableCash) {
+      setError(`주문 가능 금액은 ${money(availableCash, stock.currency)}이에요. 수량을 줄여 주세요.`);
+      safeHaptic("error");
       return;
     }
     if (side === "SELL" && numericQuantity > held) {
@@ -188,16 +198,16 @@ function OrderSheet({
     setError("");
     try {
       await submitOrder({ stock, side, quantity: numericQuantity });
-      safeHaptic("success");
-      await safeLog("paper_order_completed", { side, symbol: stock.symbol });
-      await onComplete();
-      onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "주문을 처리하지 못했어요.");
       safeHaptic("error");
-    } finally {
       setSubmitting(false);
+      return;
     }
+    safeHaptic("success");
+    void safeLog("paper_order_completed", { side, symbol: stock.symbol });
+    onClose();
+    await onComplete(side, stock.name);
   }
 
   return (
@@ -221,12 +231,12 @@ function OrderSheet({
           <span>주</span>
         </div>
         <div className="quick-quantity">
-          {[1, 5, 10].map((value) => <button type="button" key={value} onClick={() => setQuantity(String(value))}>+{value}주</button>)}
+          {[1, 5, 10].map((value) => <button type="button" key={value} aria-pressed={numericQuantity === value} onClick={() => { setQuantity(String(value)); setError(""); }}>{value}주</button>)}
           {side === "SELL" ? <button type="button" onClick={() => setQuantity(String(Math.floor(held)))}>전량</button> : null}
         </div>
         <dl className="order-summary">
           <div><dt>예상 주문금액</dt><dd>{money(estimated, stock.currency)}</dd></div>
-          <div><dt>보유 수량</dt><dd>{held.toLocaleString("ko-KR")}주</dd></div>
+          <div><dt>{side === "BUY" ? "주문 가능 금액" : "보유 수량"}</dt><dd>{side === "BUY" ? money(availableCash, stock.currency) : `${held.toLocaleString("ko-KR")}주`}</dd></div>
         </dl>
         <div className="order-safety" aria-label="가상주문 안내">
           <span>가상 체결</span><span>실거래 없음</span><span>수수료 반영</span>
@@ -254,6 +264,9 @@ function App() {
   const [market, setMarket] = useState<"ALL" | "KR" | "US">("ALL");
   const [results, setResults] = useState<Quote[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [searchRetry, setSearchRetry] = useState(0);
+  const [completedOrder, setCompletedOrder] = useState<{ side: "BUY" | "SELL"; name: string; refreshed: boolean } | null>(null);
   const [nickname, setNickname] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -321,18 +334,21 @@ function App() {
     if (!trimmed) {
       setResults([]);
       setSearching(false);
+      setSearchError(false);
       return;
     }
     const controller = new AbortController();
     setSearching(true);
+    setSearchError(false);
+    setResults([]);
     const timer = window.setTimeout(() => {
-      searchStocks(trimmed, market)
+      searchStocks(trimmed, market, controller.signal)
         .then((items) => { if (!controller.signal.aborted) setResults(items); })
-        .catch(() => { if (!controller.signal.aborted) setResults([]); })
+        .catch(() => { if (!controller.signal.aborted) setSearchError(true); })
         .finally(() => { if (!controller.signal.aborted) setSearching(false); });
     }, 280);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, market]);
+  }, [query, market, searchRetry]);
 
   useEffect(() => {
     if (!toast) return;
@@ -348,8 +364,8 @@ function App() {
   const totalProfit = useMemo(() => portfolio.positions.reduce((sum, item) => sum + (item.currency === "KRW" ? item.profit : 0), 0), [portfolio]);
 
   const risingQuotes = useMemo(
-    () => (bootstrap?.quotes ?? []).filter((stock) => (stock.changePercent ?? 0) > 0).slice().sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0)).slice(0, 4),
-    [bootstrap?.quotes],
+    () => (bootstrap?.quotes ?? []).filter((stock) => (market === "ALL" || stock.market === market) && (stock.changePercent ?? 0) > 0).slice().sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0)).slice(0, 4),
+    [bootstrap?.quotes, market],
   );
 
   const portfolioMarkets = useMemo(() => new Set(portfolio.positions.map((item) => item.market)).size, [portfolio.positions]);
@@ -445,7 +461,7 @@ function App() {
         <button type="button" onClick={() => navigate("market")}>연습 시작하기 <span aria-hidden="true">→</span></button>
       </section>
       <section className="section-block">
-        <div className="section-title"><div><h2>지금 많이 보는 종목</h2><p>국내·미국 대표 종목으로 연습해 보세요</p></div><button type="button" onClick={() => navigate("market")}>전체</button></div>
+        <div className="section-title"><div><h2>대표 종목</h2><p>국내·미국 종목으로 연습해 보세요</p></div><button type="button" onClick={() => navigate("market")}>전체</button></div>
         <div className="stock-list">{bootstrap.quotes.slice(0, 7).map((stock) => <StockRow key={`${stock.market}-${stock.exchange}-${stock.symbol}`} stock={stock} onOpen={openStock} />)}</div>
       </section>
       <button className="league-banner" type="button" onClick={() => navigate("league")}>
@@ -464,10 +480,11 @@ function App() {
       </div>
       {risingQuotes.length ? <section className="mover-section" aria-labelledby="mover-title"><div className="mini-heading"><h2 id="mover-title">최근 상승 종목</h2><span>변동률 순</span></div><div className="mover-strip">{risingQuotes.map((stock) => <button type="button" key={`mover-${stock.exchange}-${stock.symbol}`} onClick={() => openStock(stock)}><BrandMark symbol={stock.symbol} logoUrl={stock.logoUrl} name={stock.name} /><span><strong>{stock.name}</strong><small className="up">{percent(stock.changePercent)}</small></span></button>)}</div></section> : null}
       <section className="section-block market-results">
-        <div className="section-title"><div><h2>{query ? `‘${query}’ 검색 결과` : "주요 종목"}</h2><p>{query ? "상장 종목을 실시간으로 검색해요" : "현재 관심이 높은 종목이에요"}</p></div></div>
+        <div className="section-title"><div><h2>{query ? `‘${query}’ 검색 결과` : "대표 종목"}</h2><p>{query ? "회사명이나 종목코드로 찾아요" : "국내·미국 대표 종목이에요"}</p></div></div>
         {searching ? <div className="inline-loading">검색하고 있어요…</div> : null}
-        {!searching && query && results.length === 0 ? <EmptyState title="검색 결과가 없어요" description="회사명 또는 종목코드를 다시 확인해 주세요." /> : null}
-        <div className="stock-list">{(query ? results : bootstrap.quotes.filter((stock) => market === "ALL" || stock.market === market)).map((stock) => <StockRow key={`${stock.market}-${stock.exchange}-${stock.symbol}`} stock={stock} onOpen={openStock} />)}</div>
+        {!searching && query && searchError ? <div className="search-retry" role="alert"><strong>검색을 완료하지 못했어요</strong><p>연결을 확인한 뒤 다시 시도해 주세요.</p><button type="button" onClick={() => setSearchRetry((value) => value + 1)}>다시 검색</button></div> : null}
+        {!searching && query && !searchError && results.length === 0 ? <EmptyState title="검색 결과가 없어요" description="회사명 또는 종목코드를 다시 확인해 주세요." /> : null}
+        <div className="stock-list">{(!query ? bootstrap.quotes.filter((stock) => market === "ALL" || stock.market === market) : !searching && !searchError ? results : []).map((stock) => <StockRow key={`${stock.market}-${stock.exchange}-${stock.symbol}`} stock={stock} onOpen={openStock} />)}</div>
       </section>
     </>
   );
@@ -527,9 +544,12 @@ function App() {
 
   return (
     <div className="app-shell">
-      <main className="app-main">{tab === "home" ? home : tab === "market" ? marketView : tab === "portfolio" ? portfolioView : tab === "league" ? leagueView : moreView}</main>
+      <main className="app-main">
+        {completedOrder ? <div className="order-complete" role="status"><div><strong>{completedOrder.name} {completedOrder.side === "BUY" ? "매수" : "매도"} 주문이 처리됐어요</strong><small>{completedOrder.refreshed ? "내 투자에서 잔액과 주문 내역을 확인하세요." : "잔액 갱신이 지연돼요. 내 투자에서 다시 확인해 주세요."}</small></div><button type="button" onClick={() => { setCompletedOrder(null); navigate("portfolio"); }}>내 투자 보기</button><button className="dismiss" type="button" aria-label="주문 결과 닫기" onClick={() => setCompletedOrder(null)}>×</button></div> : null}
+        {tab === "home" ? home : tab === "market" ? marketView : tab === "portfolio" ? portfolioView : tab === "league" ? leagueView : moreView}
+      </main>
       <nav className="bottom-nav" aria-label="주요 메뉴">{(Object.keys(TAB_LABELS) as AppTab[]).map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} aria-current={tab === item ? "page" : undefined} onClick={() => navigate(item)}><span aria-hidden="true">{item === "home" ? "⌂" : item === "market" ? "⌕" : item === "portfolio" ? "↗" : item === "league" ? "♛" : "≡"}</span><small>{TAB_LABELS[item]}</small></button>)}</nav>
-      {selected ? <OrderSheet stock={selected} portfolio={portfolio} onClose={() => setSelected(null)} onComplete={async () => { await refresh(); setToast("가상주문이 처리됐어요."); }} /> : null}
+      {selected ? <OrderSheet stock={selected} portfolio={portfolio} onClose={() => setSelected(null)} onComplete={async (side, name) => { let refreshed = true; try { await refresh(); } catch { refreshed = false; } setCompletedOrder({ side, name, refreshed }); }} /> : null}
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
       {confirmDelete ? <div className="sheet-backdrop"><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><h2 id="delete-title">모든 가상투자 데이터를 삭제할까요?</h2><p>잔액, 주문, 리그 기록이 영구 삭제되며 되돌릴 수 없어요. 실제 금융계좌에는 영향이 없습니다.</p><div><button type="button" onClick={() => setConfirmDelete(false)}>취소</button><button type="button" className="danger" onClick={confirmAccountDeletion}>영구 삭제</button></div></section></div> : null}
     </div>
