@@ -78,7 +78,7 @@ async def test_toss_origin_preflight_allows_order_headers() -> None:
         response = await client.options(
             "/api/trading/orders",
             headers={
-                "Origin": "https://stockpilot-kr.web.tossmini.com",
+                "Origin": "https://stockpilot-kr.private-apps.tossmini.com",
                 "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": (
                     "authorization,content-type,idempotency-key"
@@ -87,6 +87,9 @@ async def test_toss_origin_preflight_allows_order_headers() -> None:
         )
 
     assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == (
+        "https://stockpilot-kr.private-apps.tossmini.com"
+    )
     allowed_headers = response.headers["access-control-allow-headers"].lower()
     assert "authorization" in allowed_headers
     assert "content-type" in allowed_headers
