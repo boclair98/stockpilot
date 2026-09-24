@@ -1,5 +1,5 @@
 import { User } from "@apps-in-toss/web-framework";
-import type { Bootstrap, League, Market, Portfolio, Quote } from "./types";
+import type { Bootstrap, GrowthOverview, League, Market, Portfolio, Quote, SimulationRules, TradeJournal, WatchItem } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://stockpilot.coders.kr";
 const TOKEN_KEY = "stockpilot:toss-access:v1";
@@ -46,6 +46,13 @@ const PREVIEW_LEAGUE: League = {
     { rank: 4, nickname: "반도체꿈나무", returnRate: 11.23, rankChange: 0 },
   ],
   me: { joined: false },
+};
+
+const previewWatchlist: WatchItem[] = [];
+const previewJournals: TradeJournal[] = [];
+const previewPortfolio: Portfolio = structuredClone(PREVIEW_PORTFOLIO);
+const PREVIEW_RULES: SimulationRules = {
+  fees: { commissionRate: 0.015, krSellTaxRate: 0.2, slippage: "체결 시 시장 상황을 반영" },
 };
 
 let accessToken = localStorage.getItem(TOKEN_KEY) || "";
@@ -102,7 +109,7 @@ export function clearSession(): void {
 
 export function loadDashboard(): Promise<[Bootstrap, Portfolio, League]> {
   if (IS_LOCAL_PREVIEW) {
-    return Promise.resolve([PREVIEW_BOOTSTRAP, PREVIEW_PORTFOLIO, PREVIEW_LEAGUE]);
+    return Promise.resolve([PREVIEW_BOOTSTRAP, structuredClone(previewPortfolio), PREVIEW_LEAGUE]);
   }
   return Promise.all([
     request<Bootstrap>("/api/trading/bootstrap"),
@@ -123,7 +130,7 @@ export async function searchStocks(query: string, market: "ALL" | Market, signal
 
 export function loadQuote(stock: Pick<Quote, "symbol" | "market" | "exchange">): Promise<Quote> {
   if (IS_LOCAL_PREVIEW) {
-    return Promise.resolve(PREVIEW_QUOTES.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange) || { ...stock, name: stock.symbol, currency: stock.market === "KR" ? "KRW" : "USD", price: 0 });
+    return Promise.resolve({ ...(PREVIEW_QUOTES.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange) || { ...stock, name: stock.symbol, currency: stock.market === "KR" ? "KRW" : "USD", price: 0 }), asOf: new Date().toISOString() });
   }
   const params = new URLSearchParams({
     symbol: stock.symbol,
@@ -138,7 +145,34 @@ export function submitOrder(input: {
   side: "BUY" | "SELL";
   quantity: number;
 }): Promise<{ id: string; status: string; fillPrice?: number }> {
-  if (IS_LOCAL_PREVIEW) return Promise.resolve({ id: crypto.randomUUID(), status: "FILLED", fillPrice: input.stock.price });
+  if (IS_LOCAL_PREVIEW) {
+    const id = crypto.randomUUID();
+    const { stock, side, quantity } = input;
+    const fee = stock.price * quantity * PREVIEW_RULES.fees.commissionRate / 100;
+    const current = previewPortfolio.positions.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange);
+    if (side === "SELL" && (!current || current.quantity < quantity)) return Promise.reject(new ApiError("보유 수량이 부족해요.", 409));
+    if (side === "BUY" && previewPortfolio.cash[stock.currency] < stock.price * quantity + fee) return Promise.reject(new ApiError("주문 가능 금액이 부족해요.", 409));
+    previewPortfolio.cash[stock.currency] += side === "BUY" ? -(stock.price * quantity + fee) : stock.price * quantity - fee;
+    if (side === "BUY") {
+      if (current) {
+        current.averagePrice = (current.averagePrice * current.quantity + stock.price * quantity) / (current.quantity + quantity);
+        current.quantity += quantity;
+      } else {
+        previewPortfolio.positions.push({ ...stock, quantity, averagePrice: stock.price, currentPrice: stock.price, marketValue: 0, profit: 0, returnRate: 0 });
+      }
+    } else if (current) {
+      current.quantity -= quantity;
+      if (current.quantity === 0) previewPortfolio.positions.splice(previewPortfolio.positions.indexOf(current), 1);
+    }
+    const changed = previewPortfolio.positions.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange);
+    if (changed) {
+      changed.marketValue = changed.currentPrice * changed.quantity;
+      changed.profit = (changed.currentPrice - changed.averagePrice) * changed.quantity;
+      changed.returnRate = changed.averagePrice > 0 ? (changed.currentPrice / changed.averagePrice - 1) * 100 : 0;
+    }
+    previewPortfolio.orders.unshift({ id, symbol: stock.symbol, exchange: stock.exchange, side, orderType: "MARKET", quantity, fillPrice: stock.price, status: "FILLED", createdAt: new Date().toISOString() });
+    return Promise.resolve({ id, status: "FILLED", fillPrice: stock.price });
+  }
   return request("/api/trading/orders", {
     method: "POST",
     headers: { "Idempotency-Key": crypto.randomUUID() },
@@ -151,6 +185,58 @@ export function submitOrder(input: {
       quantity: input.quantity,
     }),
   });
+}
+
+export function loadWatchlist(): Promise<WatchItem[]> {
+  if (IS_LOCAL_PREVIEW) return Promise.resolve([...previewWatchlist]);
+  return request<{ watchlist: WatchItem[] }>("/api/features/dashboard").then((data) => data.watchlist);
+}
+
+export function addWatchlist(stock: Quote): Promise<{ id: string; added: boolean }> {
+  if (IS_LOCAL_PREVIEW) {
+    const current = previewWatchlist.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange);
+    if (current) return Promise.resolve({ id: current.id, added: false });
+    const id = crypto.randomUUID();
+    previewWatchlist.unshift({ id, symbol: stock.symbol, name: stock.name, market: stock.market, currency: stock.currency, exchange: stock.exchange, price: stock.price, changePercent: stock.changePercent ?? null });
+    return Promise.resolve({ id, added: true });
+  }
+  return request("/api/features/watchlist", { method: "POST", body: JSON.stringify({ symbol: stock.symbol, market: stock.market, exchange: stock.exchange }) });
+}
+
+export function removeWatchlist(id: string): Promise<void> {
+  if (IS_LOCAL_PREVIEW) {
+    const index = previewWatchlist.findIndex((item) => item.id === id);
+    if (index >= 0) previewWatchlist.splice(index, 1);
+    return Promise.resolve();
+  }
+  return request(`/api/features/watchlist/${encodeURIComponent(id)}`, { method: "DELETE" }).then(() => undefined);
+}
+
+export function loadSimulationRules(): Promise<SimulationRules> {
+  if (IS_LOCAL_PREVIEW) return Promise.resolve(PREVIEW_RULES);
+  return request<SimulationRules>("/api/trading/rules");
+}
+
+export function loadGrowthOverview(): Promise<GrowthOverview> {
+  if (IS_LOCAL_PREVIEW) return Promise.resolve({ journals: [...previewJournals] });
+  return request<GrowthOverview>("/api/growth/overview");
+}
+
+export function createJournal(input: Pick<TradeJournal, "symbol" | "exchange" | "thesis" | "horizon" | "confidence">): Promise<GrowthOverview> {
+  if (IS_LOCAL_PREVIEW) {
+    previewJournals.unshift({ ...input, id: crypto.randomUUID(), name: PREVIEW_QUOTES.find((quote) => quote.symbol === input.symbol && quote.exchange === input.exchange)?.name || input.symbol, review: null, outcome: null, createdAt: new Date().toISOString() });
+    return Promise.resolve({ journals: [...previewJournals] });
+  }
+  return request<GrowthOverview>("/api/growth/journals", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function reviewJournal(id: string, review: string, outcome: "WIN" | "LOSS" | "EVEN" | "OPEN"): Promise<GrowthOverview> {
+  if (IS_LOCAL_PREVIEW) {
+    const item = previewJournals.find((journal) => journal.id === id);
+    if (item) { item.review = review; item.outcome = outcome; }
+    return Promise.resolve({ journals: [...previewJournals] });
+  }
+  return request<GrowthOverview>(`/api/growth/journals/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ review, outcome }) });
 }
 
 export function joinLeague(nickname: string): Promise<League> {

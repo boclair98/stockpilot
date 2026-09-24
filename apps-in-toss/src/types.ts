@@ -86,4 +86,34 @@ export interface Bootstrap {
   status?: Record<string, unknown>;
 }
 
+export interface WatchItem {
+  id: string;
+  symbol: string;
+  name: string;
+  market: Market;
+  currency: "KRW" | "USD";
+  exchange: Exchange;
+  price: number | null;
+  changePercent: number | null;
+}
+
+export interface SimulationRules {
+  fees: { commissionRate: number; krSellTaxRate: number; slippage: string };
+}
+
+export interface TradeJournal {
+  id: string;
+  symbol: string;
+  name: string;
+  exchange: Exchange;
+  thesis: string;
+  horizon: "DAY" | "WEEK" | "MONTH" | "LONG";
+  confidence: number;
+  review: string | null;
+  outcome: "WIN" | "LOSS" | "EVEN" | "OPEN" | null;
+  createdAt: string;
+}
+
+export interface GrowthOverview { journals: TradeJournal[] }
+
 export type AppTab = "home" | "market" | "portfolio" | "league" | "more";

@@ -2,16 +2,25 @@ import { Analytics, Device, NavigationBar, SafeArea } from "@apps-in-toss/web-fr
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  addWatchlist,
   clearSession,
+  createJournal,
   deleteAccount,
   initializeTossSession,
   joinLeague,
   loadDashboard,
+  loadGrowthOverview,
   loadQuote,
+  loadSimulationRules,
+  loadWatchlist,
+  removeWatchlist,
+  reviewJournal,
   searchStocks,
   submitOrder,
 } from "./api";
-import type { AppTab, Bootstrap, League, Portfolio, Position, Quote } from "./types";
+import JournalPanel from "./JournalPanel";
+import { quoteTime, sessionLabel } from "./marketInfo";
+import type { AppTab, Bootstrap, GrowthOverview, League, Portfolio, Position, Quote, SimulationRules, TradeJournal, WatchItem } from "./types";
 
 const EMPTY_PORTFOLIO: Portfolio = {
   authenticated: false,
@@ -34,6 +43,17 @@ const TAB_LABELS: Record<AppTab, string> = {
   league: "리그",
   more: "전체",
 };
+
+const RECENT_KEY = "stockpilot:toss-recent:v1";
+type RecentStock = Pick<Quote, "symbol" | "name" | "market" | "currency" | "exchange">;
+function stockKey(stock: Pick<Quote, "symbol" | "exchange">): string { return `${stock.exchange}:${stock.symbol}`; }
+function readRecent(): RecentStock[] {
+  try {
+    const rows: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((row): row is RecentStock => !!row && typeof row === "object" && typeof row.symbol === "string" && typeof row.name === "string" && typeof row.exchange === "string" && (row.market === "KR" || row.market === "US") && (row.currency === "KRW" || row.currency === "USD")).slice(0, 8);
+  } catch { return []; }
+}
 
 const formatters = new Map<string, Intl.NumberFormat>();
 
@@ -132,6 +152,11 @@ function StockRow({ stock, onOpen, owned }: { stock: Quote; onOpen: (stock: Quot
   );
 }
 
+function SavedStockStrip({ title, stocks, onOpen }: { title: string; stocks: (RecentStock | WatchItem)[]; onOpen: (stock: RecentStock | WatchItem) => void }) {
+  if (!stocks.length) return null;
+  return <section className="saved-section" aria-label={title}><h2>{title}</h2><div className="saved-strip">{stocks.map((stock) => <button type="button" key={stockKey(stock)} onClick={() => onOpen(stock)}><strong>{stock.name}</strong><small>{stock.symbol} · {stock.exchange}</small></button>)}</div></section>;
+}
+
 function LoadingView() {
   return (
     <main className="app-main skeleton-page" aria-busy="true" aria-label="데이터 불러오는 중">
@@ -158,24 +183,44 @@ function EmptyState({ title, description }: { title: string; description: string
 function OrderSheet({
   stock,
   portfolio,
+  rules,
+  favorite,
   onClose,
   onComplete,
+  onFavorite,
+  onRefreshQuote,
 }: {
   stock: Quote;
   portfolio: Portfolio;
+  rules: SimulationRules | null;
+  favorite: boolean;
   onClose: () => void;
-  onComplete: (side: "BUY" | "SELL", name: string) => Promise<void>;
+  onComplete: (side: "BUY" | "SELL", stock: Quote) => Promise<void>;
+  onFavorite: () => Promise<void>;
+  onRefreshQuote: () => Promise<void>;
 }) {
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [quantity, setQuantity] = useState("1");
   const [submitting, setSubmitting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [refreshingQuote, setRefreshingQuote] = useState(false);
+  const [, setTimeTick] = useState(0);
   const [error, setError] = useState("");
   const numericQuantity = Math.max(0, Number(quantity) || 0);
   const held = portfolio.positions.find((item) => item.symbol === stock.symbol && item.exchange === stock.exchange)?.quantity || 0;
   const estimated = stock.price * numericQuantity;
   const availableCash = portfolio.cash[stock.currency];
+  const estimatedFee = rules ? estimated * rules.fees.commissionRate / 100 : null;
+  const estimatedTax = rules && side === "SELL" && stock.market === "KR" ? estimated * rules.fees.krSellTaxRate / 100 : 0;
+  const estimatedAfterCash = side === "BUY" ? availableCash - estimated - (estimatedFee || 0) : availableCash + estimated - (estimatedFee || 0) - estimatedTax;
+  const timing = quoteTime(stock);
 
-  async function placeOrder() {
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeTick((value) => value + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  function reviewOrder() {
     if (!Number.isInteger(numericQuantity) || numericQuantity < 1) {
       setError("1주 이상 정수로 입력해 주세요.");
       return;
@@ -184,7 +229,7 @@ function OrderSheet({
       setError("현재 시세를 확인할 수 없어 주문할 수 없어요. 잠시 후 다시 시도해 주세요.");
       return;
     }
-    if (side === "BUY" && estimated > availableCash) {
+    if (side === "BUY" && estimated + (estimatedFee || 0) > availableCash) {
       setError(`주문 가능 금액은 ${money(availableCash, stock.currency)}이에요. 수량을 줄여 주세요.`);
       safeHaptic("error");
       return;
@@ -194,6 +239,12 @@ function OrderSheet({
       safeHaptic("error");
       return;
     }
+    setError("");
+    setReviewing(true);
+  }
+
+  async function placeOrder() {
+    if (!reviewing) return;
     setSubmitting(true);
     setError("");
     try {
@@ -207,7 +258,14 @@ function OrderSheet({
     safeHaptic("success");
     void safeLog("paper_order_completed", { side, symbol: stock.symbol });
     onClose();
-    await onComplete(side, stock.name);
+    await onComplete(side, stock);
+  }
+
+  async function refreshQuote() {
+    setRefreshingQuote(true); setError("");
+    try { await onRefreshQuote(); setReviewing(false); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "시세를 새로고침하지 못했어요."); }
+    finally { setRefreshingQuote(false); }
   }
 
   return (
@@ -216,15 +274,17 @@ function OrderSheet({
         <div className="sheet-handle" />
         <div className="sheet-heading">
           <div><small>가상주문 · 현재 시세 기준</small><h2 id="order-title">{stock.name}</h2></div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="주문창 닫기">×</button>
+          <div className="sheet-actions"><button className="icon-button favorite-button" type="button" onClick={() => void onFavorite()} aria-label={favorite ? "관심종목에서 삭제" : "관심종목에 추가"} aria-pressed={favorite}>{favorite ? "★" : "☆"}</button><button className="icon-button" type="button" onClick={onClose} aria-label="주문창 닫기">×</button></div>
         </div>
         <div className="order-quote">
           <span>현재 기준가</span><strong>{money(stock.price, stock.currency)}</strong>
         </div>
-        <div className="segment" aria-label="주문 방향">
-          <button type="button" className={side === "BUY" ? "active buy" : ""} onClick={() => { setSide("BUY"); setError(""); }}>매수</button>
-          <button type="button" className={side === "SELL" ? "active sell" : ""} onClick={() => { setSide("SELL"); setError(""); }}>매도</button>
-        </div>
+        <div className="quote-freshness"><div><strong className={timing.stale ? "stale" : ""}>{timing.label}</strong><small>{sessionLabel(stock)} · 휴장일은 별도 확인</small></div><button type="button" disabled={refreshingQuote} onClick={() => void refreshQuote()}>{refreshingQuote ? "확인 중" : "시세 새로고침"}</button></div>
+        {!reviewing ? <>
+          <div className="segment" aria-label="주문 방향">
+            <button type="button" className={side === "BUY" ? "active buy" : ""} onClick={() => { setSide("BUY"); setError(""); }}>매수</button>
+            <button type="button" className={side === "SELL" ? "active sell" : ""} onClick={() => { setSide("SELL"); setError(""); }}>매도</button>
+          </div>
         <label className="field-label" htmlFor="quantity">수량</label>
         <div className="quantity-field">
           <input id="quantity" type="number" inputMode="numeric" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
@@ -238,12 +298,13 @@ function OrderSheet({
           <div><dt>예상 주문금액</dt><dd>{money(estimated, stock.currency)}</dd></div>
           <div><dt>{side === "BUY" ? "주문 가능 금액" : "보유 수량"}</dt><dd>{side === "BUY" ? money(availableCash, stock.currency) : `${held.toLocaleString("ko-KR")}주`}</dd></div>
         </dl>
+        </> : <div className="order-review"><h3>가상주문을 확인해 주세요</h3><dl className="order-summary"><div><dt>주문</dt><dd>{side === "BUY" ? "매수" : "매도"} {numericQuantity}주</dd></div><div><dt>기준가 × 수량</dt><dd>{money(estimated, stock.currency)}</dd></div><div><dt>예상 수수료</dt><dd>{estimatedFee === null ? "확인 불가" : money(estimatedFee, stock.currency)}</dd></div>{side === "SELL" && stock.market === "KR" ? <div><dt>예상 국내 매도세</dt><dd>{rules ? money(estimatedTax, stock.currency) : "확인 불가"}</dd></div> : null}<div><dt>예상 주문 후 현금</dt><dd>{rules ? money(estimatedAfterCash, stock.currency) : "확인 불가"}</dd></div></dl><p>{timing.stale ? "표시된 시세가 오래됐을 수 있어요. 새로고침 후 확인하는 것을 권장해요. " : ""}시장가 가상주문이에요. 실제 체결가·비용은 슬리피지 등에 따라 달라질 수 있고 서버에서 최종 검증해요.</p><button type="button" className="review-back" onClick={() => setReviewing(false)}>수량 다시 수정</button></div>}
         <div className="order-safety" aria-label="가상주문 안내">
           <span>가상 체결</span><span>실거래 없음</span><span>수수료 반영</span>
         </div>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
-        <button className={`primary-button ${side === "SELL" ? "sell-button" : ""}`} type="button" disabled={submitting} onClick={placeOrder}>
-          {submitting ? "주문 확인 중…" : `${side === "BUY" ? "매수" : "매도"} 주문하기`}
+        <button className={`primary-button ${side === "SELL" ? "sell-button" : ""}`} type="button" disabled={submitting} onClick={reviewing ? () => void placeOrder() : reviewOrder}>
+          {submitting ? "주문 확인 중…" : reviewing ? `${side === "BUY" ? "매수" : "매도"} 가상주문 확정` : "주문 내용 확인"}
         </button>
         <p className="sheet-note">실제 돈이 오가지 않는 교육용 모의투자예요. 체결가에는 가상 수수료와 슬리피지가 반영될 수 있어요.</p>
       </section>
@@ -266,7 +327,14 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [searchRetry, setSearchRetry] = useState(0);
-  const [completedOrder, setCompletedOrder] = useState<{ side: "BUY" | "SELL"; name: string; refreshed: boolean } | null>(null);
+  const [completedOrder, setCompletedOrder] = useState<{ side: "BUY" | "SELL"; stock: Quote; refreshed: boolean } | null>(null);
+  const [watchlist, setWatchlist] = useState<WatchItem[]>([]);
+  const [watchlistError, setWatchlistError] = useState(false);
+  const [recent, setRecent] = useState<RecentStock[]>(readRecent);
+  const [rules, setRules] = useState<SimulationRules | null>(null);
+  const [growth, setGrowth] = useState<GrowthOverview | null>(null);
+  const [growthError, setGrowthError] = useState(false);
+  const [journalDraft, setJournalDraft] = useState<Pick<TradeJournal, "symbol" | "exchange"> | null>(null);
   const [nickname, setNickname] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -320,6 +388,21 @@ function App() {
     void start();
     return () => { active = false; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (loading || fatal || !bootstrap) return;
+    let active = true;
+    void loadWatchlist().then((items) => { if (active) { setWatchlist(items); setWatchlistError(false); } }).catch(() => { if (active) setWatchlistError(true); });
+    void loadSimulationRules().then((data) => { if (active) setRules(data); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [loading, fatal, bootstrap !== null]);
+
+  useEffect(() => {
+    if (loading || fatal || tab !== "portfolio" || growth !== null || growthError) return;
+    let active = true;
+    void loadGrowthOverview().then((data) => { if (active) setGrowth(data); }).catch(() => { if (active) setGrowthError(true); });
+    return () => { active = false; };
+  }, [tab, loading, fatal, growth !== null, growthError]);
 
   useEffect(() => {
     try {
@@ -379,7 +462,7 @@ function App() {
     safeHaptic();
   }
 
-  async function openStock(stock: Quote | Position) {
+  async function openStock(stock: Quote | Position, refreshQuote = true) {
     const base: Quote = "price" in stock ? stock : {
       symbol: stock.symbol,
       name: stock.name,
@@ -389,13 +472,51 @@ function App() {
       price: stock.currentPrice,
       logoUrl: stock.logoUrl,
     };
+    const recentItem: RecentStock = { symbol: base.symbol, name: base.name, market: base.market, currency: base.currency, exchange: base.exchange };
+    setRecent((previous) => {
+      const next = [recentItem, ...previous.filter((item) => stockKey(item) !== stockKey(recentItem))].slice(0, 8);
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* Private browsing may disable storage. */ }
+      return next;
+    });
     setSelected(base);
+    if (!refreshQuote) return;
     try {
       const fresh = await loadQuote(base);
       setSelected(fresh);
     } catch {
       // The latest known quote remains usable while a refresh is retried later.
     }
+  }
+
+  async function openSavedStock(stock: RecentStock | WatchItem) {
+    try { await openStock(await loadQuote(stock), false); }
+    catch (reason) { setToast(reason instanceof Error ? reason.message : "종목 시세를 불러오지 못했어요."); }
+  }
+
+  async function toggleFavorite(stock: Quote) {
+    try {
+      const existing = watchlist.find((item) => stockKey(item) === stockKey(stock));
+      if (existing) {
+        await removeWatchlist(existing.id);
+        setWatchlist((items) => items.filter((item) => item.id !== existing.id));
+        setToast("관심종목에서 삭제했어요.");
+      } else {
+        const result = await addWatchlist(stock);
+        setWatchlist((items) => [{ id: result.id, symbol: stock.symbol, name: stock.name, market: stock.market, currency: stock.currency, exchange: stock.exchange, price: stock.price, changePercent: stock.changePercent ?? null }, ...items].slice(0, 20));
+        setToast("관심종목에 저장했어요.");
+      }
+      safeHaptic();
+    } catch (reason) { setToast(reason instanceof Error ? reason.message : "관심종목을 변경하지 못했어요."); }
+  }
+
+  async function saveJournal(input: Pick<TradeJournal, "symbol" | "exchange" | "thesis" | "horizon" | "confidence">) {
+    const next = await createJournal(input);
+    setGrowth(next); setJournalDraft(null); setToast("매매 이유를 저장했어요.");
+  }
+
+  async function saveJournalReview(id: string, review: string, outcome: "WIN" | "LOSS" | "EVEN" | "OPEN") {
+    const next = await reviewJournal(id, review, outcome);
+    setGrowth(next); setToast("복기를 저장했어요.");
   }
 
   async function submitLeagueJoin() {
@@ -415,6 +536,8 @@ function App() {
     try {
       await deleteAccount();
       clearSession();
+      try { localStorage.removeItem(RECENT_KEY); } catch { /* Storage is optional. */ }
+      setRecent([]); setWatchlist([]); setGrowth(null);
       setConfirmDelete(false);
       setFatal("계정 데이터가 삭제됐어요. 앱을 다시 열면 새 가상계좌로 시작할 수 있어요.");
     } catch (reason) {
@@ -460,6 +583,8 @@ function App() {
         </ol>
         <button type="button" onClick={() => navigate("market")}>연습 시작하기 <span aria-hidden="true">→</span></button>
       </section>
+      <SavedStockStrip title="내 관심종목" stocks={watchlist.slice(0, 5)} onOpen={(stock) => void openSavedStock(stock)} />
+      <SavedStockStrip title="최근 본 종목" stocks={recent.slice(0, 5)} onOpen={(stock) => void openSavedStock(stock)} />
       <section className="section-block">
         <div className="section-title"><div><h2>대표 종목</h2><p>국내·미국 종목으로 연습해 보세요</p></div><button type="button" onClick={() => navigate("market")}>전체</button></div>
         <div className="stock-list">{bootstrap.quotes.slice(0, 7).map((stock) => <StockRow key={`${stock.market}-${stock.exchange}-${stock.symbol}`} stock={stock} onOpen={openStock} />)}</div>
@@ -478,6 +603,7 @@ function App() {
       <div className="market-tabs" role="tablist" aria-label="시장 선택">
         {(["ALL", "KR", "US"] as const).map((value) => <button key={value} role="tab" aria-selected={market === value} className={market === value ? "active" : ""} type="button" onClick={() => setMarket(value)}>{value === "ALL" ? "전체" : value === "KR" ? "국내" : "미국"}</button>)}
       </div>
+      {!query ? <><SavedStockStrip title="내 관심종목" stocks={watchlist} onOpen={(stock) => void openSavedStock(stock)} /><SavedStockStrip title="최근 본 종목 · 이 기기" stocks={recent} onOpen={(stock) => void openSavedStock(stock)} />{!watchlist.length && !watchlistError ? <p className="saved-hint">종목 주문창의 ☆을 누르면 여기에 모아 볼 수 있어요.</p> : null}{watchlistError ? <p className="saved-hint">관심종목을 불러오지 못했어요. <button type="button" onClick={() => void loadWatchlist().then((items) => { setWatchlist(items); setWatchlistError(false); }).catch(() => setToast("관심종목을 불러오지 못했어요."))}>다시 시도</button></p> : null}</> : null}
       {risingQuotes.length ? <section className="mover-section" aria-labelledby="mover-title"><div className="mini-heading"><h2 id="mover-title">최근 상승 종목</h2><span>변동률 순</span></div><div className="mover-strip">{risingQuotes.map((stock) => <button type="button" key={`mover-${stock.exchange}-${stock.symbol}`} onClick={() => openStock(stock)}><BrandMark symbol={stock.symbol} logoUrl={stock.logoUrl} name={stock.name} /><span><strong>{stock.name}</strong><small className="up">{percent(stock.changePercent)}</small></span></button>)}</div></section> : null}
       <section className="section-block market-results">
         <div className="section-title"><div><h2>{query ? `‘${query}’ 검색 결과` : "대표 종목"}</h2><p>{query ? "회사명이나 종목코드로 찾아요" : "국내·미국 대표 종목이에요"}</p></div></div>
@@ -515,6 +641,7 @@ function App() {
         <div className="section-title"><div><h2>최근 주문</h2><p>최대 30건을 보여드려요</p></div></div>
         {portfolio.orders.length ? portfolio.orders.slice(0, 10).map((order) => <div className="history-row" key={order.id}><span className={order.side === "BUY" ? "history-side buy" : "history-side sell"}>{order.side === "BUY" ? "매수" : "매도"}</span><span><strong>{order.symbol}</strong><small>{order.quantity}주 · {order.status}</small></span><time>{new Date(order.createdAt).toLocaleDateString("ko-KR")}</time></div>) : <EmptyState title="주문 내역이 없어요" description="연습 주문을 하면 체결 결과가 여기에 쌓여요." />}
       </section>
+      {growthError ? <div className="search-retry journal-retry" role="alert"><strong>매매 기록을 불러오지 못했어요</strong><p>연결을 확인하고 다시 시도해 주세요.</p><button type="button" onClick={() => void loadGrowthOverview().then((data) => { setGrowth(data); setGrowthError(false); }).catch(() => setToast("매매 기록을 불러오지 못했어요."))}>다시 시도</button></div> : <JournalPanel orders={portfolio.orders} overview={growth} draft={journalDraft} onCreate={saveJournal} onReview={saveJournalReview} />}
     </>
   );
 
@@ -538,18 +665,18 @@ function App() {
       </section>
       <section className="section-block policy-block"><h2>안전한 이용을 위해</h2><ul><li>현금 입금·출금·실제 증권계좌 연결 기능이 없어요.</li><li>시세 지연이나 장 운영시간에 따라 체결 결과가 달라질 수 있어요.</li><li>수익률과 학습 결과는 실제 투자성과를 보장하지 않아요.</li><li>개인 보유종목과 주문내역은 리그에 공개하지 않아요.</li></ul></section>
       <button className="danger-link" type="button" onClick={() => setConfirmDelete(true)}>내 가상투자 데이터 삭제</button>
-      <p className="version">StockPilot for Apps in Toss · v1.1.0</p>
+      <p className="version">StockPilot for Apps in Toss · v1.2.0</p>
     </>
   );
 
   return (
     <div className="app-shell">
       <main className="app-main">
-        {completedOrder ? <div className="order-complete" role="status"><div><strong>{completedOrder.name} {completedOrder.side === "BUY" ? "매수" : "매도"} 주문이 처리됐어요</strong><small>{completedOrder.refreshed ? "내 투자에서 잔액과 주문 내역을 확인하세요." : "잔액 갱신이 지연돼요. 내 투자에서 다시 확인해 주세요."}</small></div><button type="button" onClick={() => { setCompletedOrder(null); navigate("portfolio"); }}>내 투자 보기</button><button className="dismiss" type="button" aria-label="주문 결과 닫기" onClick={() => setCompletedOrder(null)}>×</button></div> : null}
+        {completedOrder ? <div className="order-complete" role="status"><div><strong>{completedOrder.stock.name} {completedOrder.side === "BUY" ? "매수" : "매도"} 주문이 처리됐어요</strong><small>{completedOrder.refreshed ? "내 투자에서 잔액과 주문 내역을 확인하세요." : "잔액 갱신이 지연돼요. 내 투자에서 다시 확인해 주세요."}</small></div><div className="order-complete-actions"><button type="button" onClick={() => { setCompletedOrder(null); navigate("portfolio"); }}>내 투자 보기</button><button type="button" onClick={() => { setJournalDraft({ symbol: completedOrder.stock.symbol, exchange: completedOrder.stock.exchange }); setCompletedOrder(null); navigate("portfolio"); window.setTimeout(() => document.getElementById("journal")?.scrollIntoView({ behavior: "smooth" }), 90); }}>이유 기록</button></div><button className="dismiss" type="button" aria-label="주문 결과 닫기" onClick={() => setCompletedOrder(null)}>×</button></div> : null}
         {tab === "home" ? home : tab === "market" ? marketView : tab === "portfolio" ? portfolioView : tab === "league" ? leagueView : moreView}
       </main>
       <nav className="bottom-nav" aria-label="주요 메뉴">{(Object.keys(TAB_LABELS) as AppTab[]).map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} aria-current={tab === item ? "page" : undefined} onClick={() => navigate(item)}><span aria-hidden="true">{item === "home" ? "⌂" : item === "market" ? "⌕" : item === "portfolio" ? "↗" : item === "league" ? "♛" : "≡"}</span><small>{TAB_LABELS[item]}</small></button>)}</nav>
-      {selected ? <OrderSheet stock={selected} portfolio={portfolio} onClose={() => setSelected(null)} onComplete={async (side, name) => { let refreshed = true; try { await refresh(); } catch { refreshed = false; } setCompletedOrder({ side, name, refreshed }); }} /> : null}
+      {selected ? <OrderSheet stock={selected} portfolio={portfolio} rules={rules} favorite={watchlist.some((item) => stockKey(item) === stockKey(selected))} onFavorite={() => toggleFavorite(selected)} onRefreshQuote={async () => { setSelected(await loadQuote(selected)); }} onClose={() => setSelected(null)} onComplete={async (side, stock) => { let refreshed = true; try { await refresh(); } catch { refreshed = false; } setCompletedOrder({ side, stock, refreshed }); }} /> : null}
       {toast ? <div className="toast" role="status" aria-live="polite">{toast}</div> : null}
       {confirmDelete ? <div className="sheet-backdrop"><section className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><h2 id="delete-title">모든 가상투자 데이터를 삭제할까요?</h2><p>잔액, 주문, 리그 기록이 영구 삭제되며 되돌릴 수 없어요. 실제 금융계좌에는 영향이 없습니다.</p><div><button type="button" onClick={() => setConfirmDelete(false)}>취소</button><button type="button" className="danger" onClick={confirmAccountDeletion}>영구 삭제</button></div></section></div> : null}
     </div>
