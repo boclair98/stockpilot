@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -13,8 +14,10 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.core.identity import (
     SESSION_COOKIE,
+    SESSION_MAX_AGE,
     Identity,
     decode_session,
+    decode_signed,
     require_operator,
 )
 from app.core.security import apply_security_headers
@@ -74,9 +77,40 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 
 
+def _toss_origins() -> list[str]:
+    return [
+        item.strip().rstrip("/")
+        for item in settings.toss_allowed_origins.split(",")
+        if item.strip()
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_toss_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Request-ID",
+    ],
+    expose_headers=["Content-Disposition", "X-Request-ID", "X-Response-Time"],
+    max_age=3600,
+)
+
+
 def _traffic_identity(request: Request) -> str:
     session_cookie = request.cookies.get(SESSION_COOKIE)
     identity = decode_session(session_cookie)
+    if not identity:
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            payload = decode_signed(token, "toss-access", SESSION_MAX_AGE)
+            if payload and payload.get("id"):
+                return f"session:{payload['id']}"
     if identity:
         return f"session:{identity.id}"
     forwarded = request.headers.get("cf-connecting-ip")
@@ -100,7 +134,10 @@ def _same_site_origin(request: Request) -> bool:
     redirect_host = urlsplit(settings.google_redirect_uri).hostname
     if redirect_host:
         expected_hosts.add(redirect_host.lower())
-    return bool(parsed.hostname and parsed.hostname.lower() in expected_hosts)
+    if parsed.hostname and parsed.hostname.lower() in expected_hosts:
+        return True
+    normalized_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    return normalized_origin in _toss_origins()
 
 
 @app.middleware("http")

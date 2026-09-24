@@ -30,6 +30,7 @@ class Identity:
     display_name: str | None
     email: str | None
     picture: str | None
+    provider: str = "google"
 
 
 def encode_signed(payload: dict, salt: str) -> str:
@@ -90,6 +91,7 @@ def decode_session(value: str | None) -> Identity | None:
             display_name=payload.get("name"),
             email=payload.get("email"),
             picture=payload.get("picture"),
+            provider=payload.get("provider", "google"),
         )
     except (KeyError, TypeError, ValueError):
         return None
@@ -99,10 +101,31 @@ def current_identity(request: Request) -> Identity | None:
     identity = decode_session(request.cookies.get(SESSION_COOKIE))
     if identity:
         return identity
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() == "bearer" and token:
+        payload = decode_signed(token, "toss-access", SESSION_MAX_AGE)
+        if payload:
+            try:
+                return Identity(
+                    id=UUID(payload["id"]),
+                    google_sub=None,
+                    display_name=payload.get("name") or "토스 사용자",
+                    email=None,
+                    picture=None,
+                    provider="toss",
+                )
+            except (KeyError, TypeError, ValueError):
+                pass
     if settings.dev_fake_user:
         try:
             return Identity(
-                UUID(settings.dev_fake_user), None, "개발 사용자", None, None
+                UUID(settings.dev_fake_user),
+                None,
+                "개발 사용자",
+                None,
+                None,
+                "development",
             )
         except ValueError:
             pass
@@ -122,7 +145,7 @@ async def optional_display_name(request: Request) -> str | None:
 async def require_identity(request: Request) -> UUID:
     identity = current_identity(request)
     if not identity:
-        raise HTTPException(status_code=401, detail="Google 로그인이 필요합니다.")
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return identity.id
 
 

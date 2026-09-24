@@ -39,8 +39,8 @@ from app.models import (
     TradingAccount,
     TradingControl,
     User,
-    WatchlistItem,
     UserBlock,
+    WatchlistItem,
 )
 
 router = APIRouter(prefix="/api", tags=["users"])
@@ -75,7 +75,7 @@ async def me(
     platform_name: str | None = Depends(optional_display_name),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Return the signed-in Google user's app-local row."""
+    """Return the signed-in user's app-local row."""
     user = await upsert_local_user(session, coders_id, platform_name)
     identity = current_identity(request)
     return {
@@ -84,7 +84,7 @@ async def me(
         "display_name": user.display_name,
         "email": identity.email if identity else None,
         "picture": identity.picture if identity else None,
-        "provider": "google",
+        "provider": identity.provider if identity else "unknown",
         "first_seen_at": user.first_seen_at.isoformat(),
     }
 
@@ -186,7 +186,7 @@ async def export_my_data(
             "codersId": str(user.coders_id),
             "displayName": user.display_name,
             "email": identity.email if identity else None,
-            "provider": "google",
+            "provider": identity.provider if identity else "unknown",
         },
         "tradingAccount": _export_rows(
             [account] if account else [], ("owner_id", "cash", "cash_krw")

@@ -22,3 +22,6 @@ android/.android/
 android/twa/
 android/.release/
 .npm-cache/
+*.ait
+*.tsbuildinfo
+apps-in-toss/dist/

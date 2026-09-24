@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 from urllib.parse import urlencode
 from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.identity import (
@@ -26,6 +28,11 @@ STATE_MAX_AGE = 600
 GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO = "https://openidconnect.googleapis.com/v1/userinfo"
+TOSS_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{24,256}$")
+
+
+class TossAnonymousSessionRequest(BaseModel):
+    anonymous_key: str = Field(min_length=24, max_length=256)
 
 
 def _ready() -> bool:
@@ -81,7 +88,47 @@ def _oauth_redirect_uri(request: Request) -> str:
 
 @router.get("/status")
 async def auth_status() -> dict:
-    return {"provider": "google", "configured": _ready()}
+    return {
+        "provider": "google",
+        "configured": _ready(),
+        "tossAnonymousSession": bool(settings.auth_session_secret),
+    }
+
+
+@router.post("/toss/anonymous")
+async def toss_anonymous_session(payload: TossAnonymousSessionRequest) -> JSONResponse:
+    """Exchange the Apps in Toss anonymous user hash for an app session.
+
+    The raw Toss hash is never persisted or returned. StockPilot derives a
+    stable internal UUID and signs it with the same server-side secret used by
+    the web session. The WebView then sends the token as an Authorization
+    bearer because third-party cookie behavior differs between iOS and Android.
+    """
+
+    _require_session_secret()
+    anonymous_key = payload.anonymous_key.strip()
+    if not TOSS_KEY_PATTERN.fullmatch(anonymous_key):
+        raise HTTPException(400, "앱인토스 사용자 식별키 형식이 올바르지 않습니다.")
+    user_id = uuid5(
+        NAMESPACE_URL,
+        f"https://apps-in-toss.toss.im/anonymous/{anonymous_key}",
+    )
+    token = encode_signed(
+        {
+            "id": str(user_id),
+            "name": f"toss-{str(user_id)[:8]}",
+            "provider": "toss",
+        },
+        "toss-access",
+    )
+    return JSONResponse(
+        {
+            "access_token": token,
+            "token_type": "bearer",
+            "expires_in": SESSION_MAX_AGE,
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/google/login")

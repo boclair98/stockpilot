@@ -87,6 +87,13 @@ class Settings(BaseSettings):
     google_allowed_hosts: str = (
         "stockpilot.coders.kr,stockpilot.kr,www.stockpilot.kr,localhost,127.0.0.1"
     )
+    # Apps in Toss SDK 3.x hosts the production and QR-test bundles on these
+    # exact origins. They may call the public StockPilot API with a short-lived
+    # signed bearer token, while all other cross-origin writes stay blocked.
+    toss_allowed_origins: str = (
+        "https://stockpilot-kr.web.tossmini.com,"
+        "https://stockpilot-kr.private-web.tossmini.com"
+    )
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
     enable_api_docs: bool = False

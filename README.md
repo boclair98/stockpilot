@@ -169,6 +169,22 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 - 로컬에서 서명 검증된 AAB·APK까지 생성했으며 산출물과 키는 보안을 위해 Git에 커밋하지 않음
 - Android 패키징 절차는 [`android/README.md`](android/README.md)에 문서화
 
+### 앱인토스 전용 앱
+
+기존 웹 서비스는 그대로 유지하고, `apps-in-toss/`에 토스 앱 안에서 실행되는 별도 CSR 앱을 제공합니다. 웹 화면을 그대로 감싸지 않고 토스의 작은 화면·뒤로가기·안전영역에 맞춰 홈, 종목 검색, 가상주문, 포트폴리오, 수익률 리그를 다시 구성했습니다.
+
+| 항목 | 구현 내용 |
+|---|---|
+| 사용자 식별 | Apps in Toss의 익명 식별값을 서버가 단방향 UUID로 변환하고 30일 Bearer 세션 발급 |
+| 시장 탐색 | KRX·NXT·미국 TOP 종목, 한국어 종목명·종목코드·티커 검색 |
+| 가상주문 | 가격과 수량을 분리해 입력 중 시세 갱신 영향을 차단하고, 미보유·초과 매도는 제출 전에 안내 |
+| 자산·리그 | 웹과 같은 가상원장·포트폴리오를 사용하고 종목은 숨긴 채 닉네임·순위·수익률만 공개 |
+| 네이티브 경험 | safe-area, 토스 내비게이션 바, 햅틱, 화면 분석 이벤트를 지원하되 브리지 실패 시 핵심 기능은 유지 |
+| 개인정보 | Google 로그인 없이 익명 키만 사용하며, 앱 안에서 데이터 삭제 가능 |
+| 광고 | 사업자 등록 전에는 광고 SDK·AdSense를 넣지 않으며 주문 화면에는 향후에도 광고를 배치하지 않음 |
+
+앱인토스 딥링크 후보는 `intoss://stockpilot-kr/`, `/market`, `/portfolio`, `/league`입니다. 실제 증권 주문·투자자문·수익 보장 기능은 없으며 모든 주문은 StockPilot 가상원장에서만 처리됩니다.
+
 ## 기술 스택
 
 | 구분 | 기술 |
@@ -183,6 +199,7 @@ StockPilot은 과거 데이터를 단순히 보여주는 데서 끝나지 않고
 | Company Data | 금융감독원 OpenDART API, SEC EDGAR Submissions API |
 | Push·Install | Firebase Cloud Messaging, Service Worker, Web App Manifest, PWA |
 | Android | Trusted Web Activity, Bubblewrap, Digital Asset Links 준비 |
+| Apps in Toss | React 18, Vite 6, `@apps-in-toss/web-framework` 3.5.0, CSR AIT bundle |
 | Monetization | Server-owned plan catalog, entitlement contract, launch-interest ledger |
 | Deployment | Docker, Docker Compose, coders.kr 멀티서비스 배포 |
 | Quality | Pytest, Ruff, ESLint, TypeScript, Next.js production build |
@@ -338,6 +355,7 @@ app
 | `GET` | `/api/growth/benchmark` | KOSPI 국면·5/20거래일 수익률·상대성과 | 선택 |
 | `GET` | `/api/trading/portfolio` | 개인 가상잔고·포지션·주문 | 선택 |
 | `POST` | `/api/trading/orders` | 가상주문 접수 및 체결 | 필요 |
+| `POST` | `/api/auth/toss/anonymous` | 토스 익명 식별값을 StockPilot Bearer 세션으로 교환 | 토스 앱 |
 | `GET` | `/api/trading/statement` | 개인 계좌 명세·거래 규칙 | 선택 |
 | `GET` | `/api/features/history` | 종목 일별 차트 | 없음 |
 | `GET` | `/api/features/news` | 종목 뉴스 | 없음 |
@@ -380,6 +398,7 @@ stockpilot
 │   └── pyproject.toml
 ├── docs/                       # 운영·금융권 연동·준비 문서
 ├── android/                    # TWA 패키징·앱 서명 연결 가이드
+├── apps-in-toss/               # 기존 웹과 분리된 앱인토스 CSR 앱·AIT 설정
 ├── compose.yaml                # 로컬 PostgreSQL·Redis·API·Web
 ├── coders.yaml                # coders.kr 배포 정의
 └── README.md
@@ -425,6 +444,25 @@ docker compose up --build
 | API | http://localhost:8000 |
 | API health | http://localhost:8000/api/health |
 
+앱인토스 전용 앱은 별도로 실행합니다.
+
+```bash
+cd apps-in-toss
+pnpm install
+pnpm dev
+
+# 출시용 타입 검사 + Vite 번들 + stockpilot-kr.ait 생성
+pnpm build
+```
+
+앱인토스 콘솔 MCP는 다음과 같이 OAuth로 연결합니다. 토큰이나 쿠키를 저장소에 넣지 않습니다.
+
+```bash
+codex mcp add apps-in-toss-console \
+  --url https://mcp.toss.im/adapters/apps-in-toss-console/mcp \
+  --oauth-client-id mcp-gateway
+```
+
 ### 환경변수
 
 ```bash
@@ -444,6 +482,7 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 # comma-separated public hosts allowed for Google OAuth callbacks
 GOOGLE_ALLOWED_HOSTS=stockpilot.coders.kr,stockpilot.kr,www.stockpilot.kr,localhost,127.0.0.1
+TOSS_ALLOWED_ORIGINS=https://stockpilot-kr.web.tossmini.com,https://stockpilot-kr.private-web.tossmini.com
 DART_API_KEY=...
 FIREBASE_SERVICE_ACCOUNT_B64=...
 PAYMENT_PROVIDER=none
@@ -464,6 +503,7 @@ NEXT_PUBLIC_ADSENSE_LEAGUE_SLOT=
 | `NEXT_PUBLIC_ADSENSE_NEWS_SLOT` | 뉴스·기업정보 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
 | `NEXT_PUBLIC_ADSENSE_GROWTH_SLOT` | 성장 허브 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
 | `NEXT_PUBLIC_ADSENSE_LEAGUE_SLOT` | 수익률 리그 광고 단위 슬롯 ID | 아니요 | AdSense 광고 단위 |
+| `TOSS_ALLOWED_ORIGINS` | 앱인토스 공개·테스트 origin CORS 허용 목록 | 앱인토스 출시 시 | 앱인토스 콘솔에서 발급된 고정 origin |
 
 현재는 `none`/`false`를 유지하세요. 키만 넣고 스위치를 켜도 결제 공급자 어댑터와 웹훅이 없으면 과금이 완료되지 않습니다.
 
@@ -500,6 +540,11 @@ cd frontend
 pnpm lint
 pnpm build
 pnpm verify:pwa
+
+# 앱인토스 전용 앱
+cd ../apps-in-toss
+pnpm typecheck
+pnpm build
 ```
 
 현재 KOSPI 벤치마크·시뮬레이션 규칙·주문 검증·보안·리그·성장 기능에 대한 자동 테스트를 포함합니다.
@@ -510,6 +555,7 @@ pnpm verify:pwa
 - 공개 저장소: [https://github.com/boclair98/stockpilot](https://github.com/boclair98/stockpilot)
 - 배포 방식: `coders.yaml` 기반 web/api/worker 분리 배포
 - 현재 상태: KRX·NXT·미국주식 시세 기반 모의투자 서비스 운영 중
+- 앱인토스 상태: 전용 AIT 번들·익명 세션·모바일 핵심 흐름 구현 완료, 콘솔 테스트와 검토 승인 전
 
 ### 저장소와 배포 원본
 
