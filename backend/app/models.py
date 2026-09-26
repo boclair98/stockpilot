@@ -155,6 +155,47 @@ class TradingAccount(Base):
     )
 
 
+class TossGameAccount(Base):
+    """Isolated fictional-price ledger; never shared with the web portfolio."""
+
+    __tablename__ = "toss_game_accounts"
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True)
+    cash_krw: Mapped[Decimal] = mapped_column(sa.Numeric(18, 2), nullable=False, default=100_000_000)
+    cash_usd: Mapped[Decimal] = mapped_column(sa.Numeric(18, 2), nullable=False, default=100_000)
+    nickname: Mapped[str | None] = mapped_column(sa.String(12), unique=True)
+    joined_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+
+class TossGamePosition(Base):
+    __tablename__ = "toss_game_positions"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    average_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    __table_args__ = (
+        sa.UniqueConstraint("owner_id", "symbol", name="uq_toss_game_position_owner_symbol"),
+        sa.CheckConstraint("quantity > 0", name="ck_toss_game_position_quantity"),
+    )
+
+
+class TossGameOrder(Base):
+    __tablename__ = "toss_game_orders"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False, index=True)
+    request_key: Mapped[str] = mapped_column(sa.String(80), nullable=False)
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    side: Mapped[str] = mapped_column(sa.String(4), nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    fill_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False)
+    __table_args__ = (
+        sa.UniqueConstraint("owner_id", "request_key", name="uq_toss_game_order_request"),
+        sa.Index("ix_toss_game_orders_owner_created", "owner_id", "created_at"),
+        sa.CheckConstraint("quantity > 0", name="ck_toss_game_order_quantity"),
+    )
+
+
 class Position(Base):
     __tablename__ = "positions"
     id: Mapped[uuid.UUID] = mapped_column(

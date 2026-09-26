@@ -34,6 +34,9 @@ from app.models import (
     ProtectionPlan,
     PushDevice,
     ReconciliationRun,
+    TossGameAccount,
+    TossGameOrder,
+    TossGamePosition,
     TradeJournal,
     TradeOrder,
     TradingAccount,
@@ -137,6 +140,9 @@ async def export_my_data(
     account = await session.scalar(
         select(TradingAccount).where(TradingAccount.owner_id == coders_id)
     )
+    toss_game_account = await session.scalar(
+        select(TossGameAccount).where(TossGameAccount.owner_id == coders_id)
+    )
     participant = await session.scalar(
         select(LeagueParticipant).where(LeagueParticipant.owner_id == coders_id)
     )
@@ -154,6 +160,8 @@ async def export_my_data(
         ("leagueMemberships", LeagueRoomMember, ("id", "league_id", "nickname", "baseline_krw", "baseline_usd", "joined_at")),
         ("auditEvents", AuditEvent, ("id", "event_type", "entity_type", "entity_id", "request_id", "details", "created_at"), "actor_id"),
         ("billingInterests", BillingInterest, ("id", "plan_id", "created_at")),
+        ("tossGamePositions", TossGamePosition, ("id", "symbol", "quantity", "average_price")),
+        ("tossGameOrders", TossGameOrder, ("id", "symbol", "side", "quantity", "fill_price", "created_at")),
     )
     tables: dict[str, list[dict]] = {
         "posts": _export_rows(posts, ("id", "body", "created_at")),
@@ -190,6 +198,10 @@ async def export_my_data(
         },
         "tradingAccount": _export_rows(
             [account] if account else [], ("owner_id", "cash", "cash_krw")
+        ),
+        "tossGameAccount": _export_rows(
+            [toss_game_account] if toss_game_account else [],
+            ("owner_id", "cash_krw", "cash_usd", "nickname", "joined_at"),
         ),
         "leagueProfile": _export_rows(
             [participant] if participant else [], ("id", "nickname", "joined_at", "active")
@@ -269,6 +281,9 @@ async def delete_my_account(
     await session.execute(delete(LeagueRoom).where(LeagueRoom.owner_id == coders_id))
 
     # Delete virtual portfolio and all user-generated learning data.
+    await session.execute(delete(TossGameOrder).where(TossGameOrder.owner_id == coders_id))
+    await session.execute(delete(TossGamePosition).where(TossGamePosition.owner_id == coders_id))
+    await session.execute(delete(TossGameAccount).where(TossGameAccount.owner_id == coders_id))
     await session.execute(delete(ProtectionPlan).where(ProtectionPlan.owner_id == coders_id))
     await session.execute(delete(TradeOrder).where(TradeOrder.owner_id == coders_id))
     for model in (
