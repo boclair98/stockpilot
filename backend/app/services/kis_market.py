@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 TOP_IDS = {item.id for item in TOP_INSTRUMENTS}
 MAX_DYNAMIC_SUBSCRIPTIONS = 20
 REST_LOCK_TIMEOUT_SECONDS = 3.0
+FEATURED_SNAPSHOT_TTL_SECONDS = 86400 * 7
 DOMESTIC_REST_MARKET = "UN"
 DOMESTIC_STREAM_TR_ID = "H0UNCNT0"
 
@@ -102,6 +103,8 @@ class KISMarket:
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._snapshot_task: asyncio.Task | None = None
+        self._featured_refresh_task: asyncio.Task | None = None
+        self._next_featured_refresh_at = 0.0
         self._collector_token: str | None = None
         self._collector_renew_task: asyncio.Task | None = None
         self._http: httpx.AsyncClient | None = None
@@ -156,6 +159,10 @@ class KISMarket:
         if self._snapshot_task:
             self._snapshot_task.cancel()
             await asyncio.gather(self._snapshot_task, return_exceptions=True)
+        if self._featured_refresh_task:
+            self._featured_refresh_task.cancel()
+            await asyncio.gather(self._featured_refresh_task, return_exceptions=True)
+            self._featured_refresh_task = None
         if self._collector_renew_task:
             self._collector_renew_task.cancel()
             await asyncio.gather(self._collector_renew_task, return_exceptions=True)
@@ -184,7 +191,8 @@ class KISMarket:
             return local
         cached = await traffic_store.get_json("market:quotes:top")
         if not isinstance(cached, list):
-            return []
+            self.schedule_featured_refresh()
+            return local
         for row in cached:
             if isinstance(row, dict) and row.get("id"):
                 self._quotes[str(row["id"])] = row.copy()
@@ -202,7 +210,47 @@ class KISMarket:
         self.connected = bool(fresh_rows)
         if self.connected:
             self.last_error = None
-        return self.snapshot(top_only=top_only)
+        result = self.snapshot(top_only=top_only)
+        if len(cached) < len(TOP_INSTRUMENTS) or not fresh_rows:
+            self.schedule_featured_refresh()
+        return result
+
+    def schedule_featured_refresh(self) -> None:
+        """Warm a missing featured snapshot even when the worker is scaled to zero."""
+        if not self.configured or self._stop.is_set():
+            return
+        now = asyncio.get_running_loop().time()
+        if now < self._next_featured_refresh_at:
+            return
+        self._next_featured_refresh_at = now + 60
+        if self._featured_refresh_task and not self._featured_refresh_task.done():
+            return
+        self._featured_refresh_task = asyncio.create_task(
+            self._refresh_featured_on_demand(), name="kis-featured-on-demand"
+        )
+
+    async def _refresh_featured_on_demand(self) -> None:
+        token = await traffic_store.acquire_lock("market:featured:refresh", 120)
+        if not token:
+            return
+        try:
+            if await traffic_store.get_json("market:featured:refresh:cooldown"):
+                return
+            await traffic_store.set_json("market:featured:refresh:cooldown", True, 300)
+            for instrument in TOP_INSTRUMENTS:
+                if self._stop.is_set():
+                    return
+                try:
+                    await self._fetch_rest(instrument)
+                except Exception as exc:
+                    logger.info("KIS featured refresh failed for %s: %s", instrument.id, exc)
+                rows = self.snapshot(top_only=True)
+                if rows:
+                    await traffic_store.set_json(
+                        "market:quotes:top", rows, FEATURED_SNAPSHOT_TTL_SECONDS
+                    )
+        finally:
+            await traffic_store.release_lock("market:featured:refresh", token)
 
     def _client(self) -> httpx.AsyncClient:
         if self._http is None:
@@ -231,7 +279,9 @@ class KISMarket:
         while not self._stop.is_set():
             rows = self.snapshot(top_only=True)
             if rows and self._collector_token:
-                await traffic_store.set_json("market:quotes:top", rows, 300)
+                await traffic_store.set_json(
+                    "market:quotes:top", rows, FEATURED_SNAPSHOT_TTL_SECONDS
+                )
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=2)
             except TimeoutError:
@@ -702,6 +752,8 @@ class KISMarket:
                         output.get("prdy_vrss"),
                         output.get("prdy_ctrt"),
                         "REST",
+                        volume=output.get("acml_vol"),
+                        market_cap_eok=output.get("hts_avls"),
                     )
             else:
                 response = await client.get(
@@ -722,6 +774,7 @@ class KISMarket:
                         output.get("diff"),
                         output.get("rate"),
                         "REST",
+                        volume=output.get("tvol"),
                     )
 
     async def _seed_quotes(self) -> None:
@@ -818,11 +871,15 @@ class KISMarket:
         change_value: object,
         percent_value: object,
         transport: str,
+        *,
+        volume: object | None = None,
+        market_cap_eok: object | None = None,
     ) -> None:
         price = _number(price_value)
         if price <= 0:
             return
         venue = "KRX+NXT 통합" if instrument.market == "KR" else "미국 현지시장"
+        previous = self._quotes.get(instrument.id, {})
         self._quotes[instrument.id] = {
             **instrument.public(),
             "price": float(price),
@@ -832,6 +889,12 @@ class KISMarket:
             "asOf": datetime.now(UTC).isoformat(),
             "venue": venue,
             "source": f"KIS {venue} · {transport}",
+            "volume": float(_number(volume)) if volume is not None else previous.get("volume"),
+            "marketCapEok": (
+                float(_number(market_cap_eok))
+                if market_cap_eok is not None
+                else previous.get("marketCapEok")
+            ),
         }
 
 
