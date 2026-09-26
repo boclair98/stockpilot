@@ -49,8 +49,7 @@ services:
       WEBSOCKET_LEASE_SECONDS: "300"
       MAX_REQUEST_BODY_BYTES: "64000"
       MARKET_DATA_REQUEST_TIMEOUT_SECONDS: "8"
-      # Temporary for the 0015 rollout; restore false after the new tables exist.
-      RUN_MIGRATIONS_ON_BOOT: "true"
+      RUN_MIGRATIONS_ON_BOOT: "false"
       RUN_BACKGROUND_WORKERS: "false"
       ENABLE_API_DOCS: "false"
       PAYMENT_PROVIDER: "none"
