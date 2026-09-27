@@ -584,6 +584,7 @@ class LeagueRoom(Base):
     max_members: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=100, server_default="100"
     )
+    duration_days: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=7, server_default="7")
     starts_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False
     )
@@ -627,6 +628,49 @@ class LeagueRoomMember(Base):
             "nickname",
             name="uq_league_room_member_nickname",
         ),
+    )
+
+
+class ChallengeAccount(Base):
+    __tablename__ = "challenge_accounts"
+    room_id: Mapped[uuid.UUID] = mapped_column(sa.ForeignKey("league_rooms.id", ondelete="CASCADE"), primary_key=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True)
+    cash_krw: Mapped[Decimal] = mapped_column(sa.Numeric(18, 2), nullable=False, default=1000000)
+    __table_args__ = (sa.CheckConstraint("cash_krw >= 0", name="ck_challenge_cash_nonnegative"),)
+
+
+class ChallengePosition(Base):
+    __tablename__ = "challenge_positions"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(sa.ForeignKey("league_rooms.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False)
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    average_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    __table_args__ = (
+        sa.UniqueConstraint("room_id", "owner_id", "symbol", "exchange", name="uq_challenge_position"),
+        sa.Index("ix_challenge_positions_room_owner", "room_id", "owner_id"),
+        sa.CheckConstraint("quantity > 0", name="ck_challenge_position_quantity"),
+    )
+
+
+class ChallengeOrder(Base):
+    __tablename__ = "challenge_orders"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(sa.ForeignKey("league_rooms.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False)
+    request_key: Mapped[str] = mapped_column(sa.String(80), nullable=False)
+    symbol: Mapped[str] = mapped_column(sa.String(12), nullable=False)
+    exchange: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    side: Mapped[str] = mapped_column(sa.String(4), nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    fill_price: Mapped[Decimal] = mapped_column(sa.Numeric(18, 4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False)
+    __table_args__ = (
+        sa.UniqueConstraint("room_id", "owner_id", "request_key", name="uq_challenge_order_request"),
+        sa.Index("ix_challenge_orders_room_owner_created", "room_id", "owner_id", "created_at"),
+        sa.CheckConstraint("quantity > 0", name="ck_challenge_order_quantity"),
     )
 
 

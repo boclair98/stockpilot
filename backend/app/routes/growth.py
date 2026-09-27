@@ -835,6 +835,62 @@ async def analytics(
     return {"authenticated": True, "analytics": result}
 
 
+@router.get("/weekly-review")
+async def weekly_review(
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Server-derived weekly behavior; never infer a return from a truncated order list."""
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=7)
+    rows = list((await session.execute(
+        sa.select(TradeOrder).where(
+            TradeOrder.owner_id == owner,
+            TradeOrder.status == "FILLED",
+            TradeOrder.created_at >= cutoff,
+        ).order_by(TradeOrder.created_at.asc())
+    )).scalars())
+    snapshots = list((await session.execute(
+        sa.select(PortfolioDailySnapshot).where(
+            PortfolioDailySnapshot.owner_id == owner,
+            PortfolioDailySnapshot.snapshot_date >= cutoff.date(),
+        ).order_by(PortfolioDailySnapshot.snapshot_date.asc())
+    )).scalars())
+    weekly_return = _weekly_return(snapshots)
+    loss_rebuys = _loss_rebuys(rows)
+    return {
+        "periodStart": cutoff.isoformat(),
+        "periodEnd": now.isoformat(),
+        "weeklyReturnPercent": weekly_return,
+        "filledOrderCount": len(rows),
+        "lossRebuyCount": len(loss_rebuys),
+        "lossRebuys": loss_rebuys[:10],
+        "snapshotCount": len(snapshots),
+    }
+
+
+def _weekly_return(snapshots: list[PortfolioDailySnapshot]) -> float | None:
+    if len(snapshots) < 2:
+        return None
+    start = Decimal(snapshots[0].return_rate)
+    end = Decimal(snapshots[-1].return_rate)
+    denominator = Decimal("100") + start
+    return float(((end - start) / denominator * 100).quantize(Decimal("0.01"))) if denominator > 0 else None
+
+
+def _loss_rebuys(rows: list[TradeOrder]) -> list[dict]:
+    result = []
+    last_loss_sale: dict[tuple[str, str], datetime] = {}
+    for row in rows:
+        key = (row.symbol, row.exchange)
+        if row.side == "SELL" and row.realized_pnl is not None and row.realized_pnl < 0:
+            last_loss_sale[key] = row.created_at
+        elif row.side == "BUY" and key in last_loss_sale:
+            result.append({"symbol": row.symbol, "exchange": row.exchange, "soldAt": last_loss_sale.pop(key).isoformat(), "reboughtAt": row.created_at.isoformat()})
+    return result
+
+
 @router.get("/benchmark")
 async def benchmark(
     response: Response,

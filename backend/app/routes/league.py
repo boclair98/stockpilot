@@ -12,7 +12,7 @@ from typing import Literal
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,9 @@ from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
 from app.core.traffic import traffic_store
 from app.models import (
+    ChallengeAccount,
+    ChallengeOrder,
+    ChallengePosition,
     LeagueParticipant,
     LeagueRankSnapshot,
     LeagueRoom,
@@ -31,15 +34,21 @@ from app.models import (
 )
 from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.risk_engine import load_control, quote_age_seconds
 
 router = APIRouter(prefix="/api/league", tags=["league"])
 
 INITIAL_KRW = Decimal("100000000")
 INITIAL_USD = Decimal("100000")
+CHALLENGE_KRW = Decimal("1000000")
 SEOUL = timezone(timedelta(hours=9))
 NICKNAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣_-]+$")
 ROOM_NAME_PATTERN = re.compile(r"^[0-9A-Za-z가-힣 _-]+$")
 OPEN_RANKINGS_CACHE_KEY = "league:open-rankings:v3"
+
+
+def challenge_return_rate(equity_krw: Decimal) -> Decimal:
+    return ((equity_krw / CHALLENGE_KRW - Decimal("1")) * 100).quantize(Decimal("0.0001"))
 
 
 class JoinIn(BaseModel):
@@ -60,7 +69,8 @@ class RoomCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=24)
     nickname: str = Field(min_length=2, max_length=12)
     durationDays: int = Field(default=30, ge=1, le=90)
-    mode: Literal["SEASON", "DUEL"] = "SEASON"
+    mode: Literal["SEASON", "DUEL", "CHALLENGE"] = "SEASON"
+    maxMembers: int = Field(default=3, ge=3, le=10)
 
     @field_validator("name")
     @classmethod
@@ -99,6 +109,41 @@ class RoomJoinIn(BaseModel):
         if not NICKNAME_PATTERN.fullmatch(value):
             raise ValueError("닉네임은 한글·영문·숫자·_-만 사용할 수 있습니다.")
         return value
+
+
+class ChallengeOrderIn(BaseModel):
+    symbol: str = Field(min_length=1, max_length=12)
+    exchange: Literal["KRX", "NXT"] = "KRX"
+    side: Literal["BUY", "SELL"]
+    quantity: int = Field(ge=1, le=10000)
+
+
+async def _challenge_equity(session: AsyncSession, room: LeagueRoom, members: list[LeagueRoomMember]) -> tuple[dict[UUID, Decimal], dict[UUID, list[dict]]]:
+    accounts = {row.owner_id: row for row in (await session.execute(sa.select(ChallengeAccount).where(ChallengeAccount.room_id == room.id))).scalars()}
+    positions = list((await session.execute(sa.select(ChallengePosition).where(ChallengePosition.room_id == room.id))).scalars())
+    keys = sorted({(row.symbol, row.exchange) for row in positions})
+    instruments = dict(zip(keys, await asyncio.gather(*(instrument_catalog.get(symbol, "KR", exchange) for symbol, exchange in keys)), strict=True))
+
+    async def market_price(key: tuple[str, str]) -> Decimal | None:
+        item = instruments[key]
+        if not item:
+            return None
+        quote = kis_market.quote(item.symbol, item.market, item.exchange)
+        if not quote:
+            try:
+                quote = await kis_market.fetch_quote(item)
+            except Exception:
+                quote = None
+        return Decimal(str(quote["price"])) if quote and quote.get("price") else None
+
+    prices = dict(zip(keys, await asyncio.gather(*(market_price(key) for key in keys)), strict=True))
+    equity = {member.owner_id: Decimal(accounts[member.owner_id].cash_krw) if member.owner_id in accounts else CHALLENGE_KRW for member in members}
+    private_positions: dict[UUID, list[dict]] = {member.owner_id: [] for member in members}
+    for row in positions:
+        price = prices.get((row.symbol, row.exchange)) or Decimal(row.average_price)
+        equity[row.owner_id] += price * row.quantity
+        private_positions[row.owner_id].append({"symbol": row.symbol, "exchange": row.exchange, "quantity": row.quantity, "currentPrice": float(price), "priceAvailable": prices.get((row.symbol, row.exchange)) is not None})
+    return equity, private_positions
 
 
 def combined_return_rate(krw_equity: Decimal, usd_equity: Decimal) -> Decimal:
@@ -265,6 +310,32 @@ async def _room_payload(session: AsyncSession, room: LeagueRoom, owner: UUID) ->
     member = next((item for item in members if item.owner_id == owner), None)
     if not member:
         raise HTTPException(403, "참여 중인 리그만 볼 수 있습니다.")
+    if room.mode == "CHALLENGE":
+        challenge_equity, private_positions = await _challenge_equity(session, room, members)
+        account = await session.get(ChallengeAccount, (room.id, owner))
+        rankings = [
+            {
+                "nickname": item.nickname,
+                "returnRate": float(challenge_return_rate(challenge_equity[item.owner_id])),
+                "isMe": item.owner_id == owner,
+                "joinedAt": item.joined_at.isoformat(),
+            }
+            for item in members
+        ]
+        rankings.sort(key=lambda row: (-row["returnRate"], row["joinedAt"]))
+        for rank, row in enumerate(rankings, start=1):
+            row["rank"] = rank
+        return {
+            "id": str(room.id), "name": room.name, "inviteCode": room.invite_code,
+            "mode": room.mode, "maxMembers": room.max_members,
+            "status": _room_status(room), "startsAt": room.starts_at.isoformat(),
+            "endsAt": room.ends_at.isoformat(), "participantCount": len(members),
+            "isOwner": room.owner_id == owner, "rankings": rankings,
+            "startingCashKrw": float(CHALLENGE_KRW),
+            "myCashKrw": float(account.cash_krw) if account else float(CHALLENGE_KRW),
+            "myPositions": private_positions.get(owner, []),
+            "pricingNote": "실제 조회 시세 기반 가상거래. 시세 장애 시 마지막 매수가로 임시 평가할 수 있습니다.",
+        }
     equity = await _owner_equity(session, [item.owner_id for item in members])
     rankings = []
     for item in members:
@@ -578,16 +649,18 @@ async def create_room(
     )
     if (room_count or 0) >= 10:
         raise HTTPException(409, "만들 수 있는 비공개 리그는 최대 10개입니다.")
-    current = (await _owner_equity(session, [owner]))[owner]
+    current = (await _owner_equity(session, [owner]))[owner] if payload.mode != "CHALLENGE" else {"KRW": CHALLENGE_KRW, "USD": INITIAL_USD}
     now = datetime.now(UTC)
+    waiting_start = now + timedelta(days=3650)
     room = LeagueRoom(
         owner_id=owner,
         name=payload.name.strip(),
         invite_code=await _new_invite_code(session),
         mode=payload.mode,
-        max_members=2 if payload.mode == "DUEL" else 100,
-        starts_at=now,
-        ends_at=now + timedelta(days=payload.durationDays),
+        max_members=2 if payload.mode == "DUEL" else payload.maxMembers if payload.mode == "CHALLENGE" else 100,
+        duration_days=payload.durationDays,
+        starts_at=waiting_start if payload.mode == "CHALLENGE" else now,
+        ends_at=(waiting_start if payload.mode == "CHALLENGE" else now) + timedelta(days=payload.durationDays),
     )
     session.add(room)
     await session.flush()
@@ -601,6 +674,9 @@ async def create_room(
         )
     )
     await session.flush()
+    if payload.mode == "CHALLENGE":
+        session.add(ChallengeAccount(room_id=room.id, owner_id=owner, cash_krw=CHALLENGE_KRW))
+        await session.flush()
     return await _room_payload(session, room, owner)
 
 
@@ -613,12 +689,14 @@ async def join_room(
     room = await session.scalar(
         sa.select(LeagueRoom).where(
             LeagueRoom.invite_code == payload.inviteCode.strip().upper()
-        )
+        ).with_for_update()
     )
     if not room:
         raise HTTPException(404, "초대코드가 올바르지 않습니다.")
     if _room_status(room) == "ENDED":
         raise HTTPException(409, "이미 종료된 리그입니다.")
+    if room.mode == "CHALLENGE" and _room_status(room) != "UPCOMING":
+        raise HTTPException(409, "이미 시작한 챌린지에는 참여할 수 없습니다.")
     existing = await session.scalar(
         sa.select(LeagueRoomMember).where(
             LeagueRoomMember.league_id == room.id,
@@ -645,7 +723,7 @@ async def join_room(
     )
     if duplicate_name:
         raise HTTPException(409, "리그에서 이미 사용 중인 닉네임입니다.")
-    current = (await _owner_equity(session, [owner]))[owner]
+    current = (await _owner_equity(session, [owner]))[owner] if room.mode != "CHALLENGE" else {"KRW": CHALLENGE_KRW, "USD": INITIAL_USD}
     session.add(
         LeagueRoomMember(
             league_id=room.id,
@@ -656,6 +734,12 @@ async def join_room(
         )
     )
     await session.flush()
+    if room.mode == "CHALLENGE":
+        session.add(ChallengeAccount(room_id=room.id, owner_id=owner, cash_krw=CHALLENGE_KRW))
+        if (member_count or 0) + 1 == room.max_members:
+            room.starts_at = datetime.now(UTC)
+            room.ends_at = room.starts_at + timedelta(days=room.duration_days)
+        await session.flush()
     return await _room_payload(session, room, owner)
 
 
@@ -670,6 +754,8 @@ async def leave_room(
         raise HTTPException(404, "리그를 찾을 수 없습니다.")
     if room.owner_id == owner:
         raise HTTPException(409, "방장은 리그를 나갈 수 없습니다.")
+    if room.mode == "CHALLENGE" and _room_status(room) != "UPCOMING":
+        raise HTTPException(409, "시작된 챌린지에서는 나갈 수 없습니다.")
     member = await session.scalar(
         sa.select(LeagueRoomMember).where(
             LeagueRoomMember.league_id == room_id,
@@ -679,4 +765,95 @@ async def leave_room(
     if not member:
         raise HTTPException(404, "참여 중인 리그가 아닙니다.")
     await session.delete(member)
+    if room.mode == "CHALLENGE":
+        account = await session.get(ChallengeAccount, (room.id, owner))
+        if account:
+            await session.delete(account)
     return {"left": True}
+
+
+@router.post("/rooms/{room_id}/challenge-orders", status_code=201)
+async def challenge_order(
+    room_id: UUID,
+    payload: ChallengeOrderIn,
+    idempotency_key: str = Header(min_length=8, max_length=80),
+    owner: UUID = Depends(require_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Room-only virtual market order, serialized per member account."""
+
+    room = await session.get(LeagueRoom, room_id)
+    if not room or room.mode != "CHALLENGE":
+        raise HTTPException(404, "친구 챌린지를 찾을 수 없습니다.")
+    if _room_status(room) != "ACTIVE":
+        raise HTTPException(409, "모든 참가자가 모여 챌린지가 시작된 뒤 주문할 수 있습니다.")
+    if settings.trading_mode.upper() != "SIMULATION" or (await load_control(session)).halted:
+        raise HTTPException(503, "현재 가상거래가 일시 중지되었습니다.")
+    account = await session.scalar(sa.select(ChallengeAccount).where(
+        ChallengeAccount.room_id == room_id,
+        ChallengeAccount.owner_id == owner,
+    ).with_for_update())
+    if not account:
+        raise HTTPException(403, "이 챌린지에 참여하지 않았습니다.")
+    prior = await session.scalar(sa.select(ChallengeOrder).where(
+        ChallengeOrder.room_id == room_id,
+        ChallengeOrder.owner_id == owner,
+        ChallengeOrder.request_key == idempotency_key,
+    ))
+    if prior:
+        if (prior.symbol, prior.exchange, prior.side, prior.quantity) != (payload.symbol.upper(), payload.exchange, payload.side, payload.quantity):
+            raise HTTPException(409, "같은 요청 키로 다른 주문을 보낼 수 없습니다.")
+        return {"id": str(prior.id), "status": "FILLED", "fillPrice": float(prior.fill_price), "replayed": True}
+    daily_orders = await session.scalar(sa.select(sa.func.count()).where(
+        ChallengeOrder.room_id == room_id,
+        ChallengeOrder.owner_id == owner,
+        ChallengeOrder.created_at >= datetime.now(UTC) - timedelta(days=1),
+    ))
+    if (daily_orders or 0) >= 100:
+        raise HTTPException(429, "하루 가상주문 한도 100건에 도달했습니다.")
+    instrument = await instrument_catalog.get(payload.symbol.upper(), "KR", payload.exchange)
+    if not instrument or instrument.market != "KR":
+        raise HTTPException(404, "국내 종목을 찾을 수 없습니다.")
+    current = await kis_market.fetch_quote(instrument)
+    if not current or not current.get("price"):
+        raise HTTPException(503, "실제 시세를 확인할 수 없어 가상주문을 중지했습니다.")
+    quote_age = quote_age_seconds(current)
+    if quote_age is None or quote_age > settings.market_data_max_age_seconds:
+        raise HTTPException(503, "시세가 오래되어 가상주문을 중지했습니다.")
+    price = Decimal(str(current["price"]))
+    if price <= 0:
+        raise HTTPException(503, "유효한 시세를 확인할 수 없습니다.")
+    cost = (price * payload.quantity).quantize(Decimal("0.01"))
+    position = await session.scalar(sa.select(ChallengePosition).where(
+        ChallengePosition.room_id == room_id,
+        ChallengePosition.owner_id == owner,
+        ChallengePosition.symbol == instrument.symbol,
+        ChallengePosition.exchange == instrument.exchange,
+    ).with_for_update())
+    if payload.side == "BUY":
+        if cost > account.cash_krw:
+            raise HTTPException(409, "챌린지 가상 현금이 부족합니다.")
+        if not position:
+            open_positions = await session.scalar(sa.select(sa.func.count()).where(
+                ChallengePosition.room_id == room_id,
+                ChallengePosition.owner_id == owner,
+            ))
+            if (open_positions or 0) >= 20:
+                raise HTTPException(409, "챌린지의 보유 종목은 최대 20개입니다.")
+        account.cash_krw -= cost
+        if position:
+            position.average_price = (position.average_price * position.quantity + cost) / (position.quantity + payload.quantity)
+            position.quantity += payload.quantity
+        else:
+            session.add(ChallengePosition(room_id=room_id, owner_id=owner, symbol=instrument.symbol, exchange=instrument.exchange, quantity=payload.quantity, average_price=price))
+    else:
+        if not position or position.quantity < payload.quantity:
+            raise HTTPException(409, "챌린지에서 보유한 수량만 매도할 수 있습니다.")
+        account.cash_krw += cost
+        position.quantity -= payload.quantity
+        if position.quantity == 0:
+            await session.delete(position)
+    order = ChallengeOrder(room_id=room_id, owner_id=owner, request_key=idempotency_key, symbol=instrument.symbol, exchange=instrument.exchange, side=payload.side, quantity=payload.quantity, fill_price=price)
+    session.add(order)
+    await session.flush()
+    return {"id": str(order.id), "status": "FILLED", "fillPrice": float(price), "replayed": False}

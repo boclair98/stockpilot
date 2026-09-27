@@ -21,6 +21,9 @@ from app.core.identity import (
 from app.models import (
     AuditEvent,
     BillingInterest,
+    ChallengeAccount,
+    ChallengeOrder,
+    ChallengePosition,
     ContentReport,
     DailyChallengeAttempt,
     LeagueParticipant,
@@ -158,6 +161,9 @@ async def export_my_data(
         ("portfolioSnapshots", PortfolioDailySnapshot, ("id", "snapshot_date", "equity_krw", "equity_usd", "return_rate", "created_at")),
         ("leagueSnapshots", LeagueRankSnapshot, ("id", "participant_id", "snapshot_date", "rank", "return_rate", "created_at"), "participant_id"),
         ("leagueMemberships", LeagueRoomMember, ("id", "league_id", "nickname", "baseline_krw", "baseline_usd", "joined_at")),
+        ("challengeAccounts", ChallengeAccount, ("room_id", "cash_krw")),
+        ("challengePositions", ChallengePosition, ("id", "room_id", "symbol", "exchange", "quantity", "average_price")),
+        ("challengeOrders", ChallengeOrder, ("id", "room_id", "symbol", "exchange", "side", "quantity", "fill_price", "created_at")),
         ("auditEvents", AuditEvent, ("id", "event_type", "entity_type", "entity_id", "request_id", "details", "created_at"), "actor_id"),
         ("billingInterests", BillingInterest, ("id", "plan_id", "created_at")),
         ("tossGamePositions", TossGamePosition, ("id", "symbol", "quantity", "average_price")),
@@ -272,6 +278,9 @@ async def delete_my_account(
             )
         )
     if room_ids:
+        await session.execute(delete(ChallengeOrder).where(ChallengeOrder.room_id.in_(room_ids)))
+        await session.execute(delete(ChallengePosition).where(ChallengePosition.room_id.in_(room_ids)))
+        await session.execute(delete(ChallengeAccount).where(ChallengeAccount.room_id.in_(room_ids)))
         await session.execute(
             delete(LeagueRoomMember).where(LeagueRoomMember.league_id.in_(room_ids))
         )
@@ -279,6 +288,10 @@ async def delete_my_account(
         delete(LeagueRoomMember).where(LeagueRoomMember.owner_id == coders_id)
     )
     await session.execute(delete(LeagueRoom).where(LeagueRoom.owner_id == coders_id))
+
+    await session.execute(delete(ChallengeOrder).where(ChallengeOrder.owner_id == coders_id))
+    await session.execute(delete(ChallengePosition).where(ChallengePosition.owner_id == coders_id))
+    await session.execute(delete(ChallengeAccount).where(ChallengeAccount.owner_id == coders_id))
 
     # Delete virtual portfolio and all user-generated learning data.
     await session.execute(delete(TossGameOrder).where(TossGameOrder.owner_id == coders_id))

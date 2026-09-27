@@ -381,6 +381,8 @@ app
 | `POST` | `/api/moderation/reports/{report_id}/resolve` | 신고 기각 또는 게시글 제거 처리 | 운영자 |
 | `GET` | `/api/league/rankings` | 공개 수익률 리그 | 선택 |
 | `GET` | `/api/growth/analytics` | 리스크·성과·체결품질 분석 | 필요 |
+| `GET` | `/api/growth/weekly-review` | 지난 7일 실제 체결·일별 성과·손실 후 재매수 복기 | 필요 |
+| `POST` | `/api/league/rooms/{id}/challenge-orders` | 앱인토스 동일 시작금 친구 챌린지의 독립 가상주문 | 필요 |
 | `GET` | `/api/billing/plans` | 무료·Pro·Team 공개 상품 카탈로그 | 없음 |
 | `GET` | `/api/billing/entitlement` | 서버가 부여한 현재 플랜·한도 | 선택 |
 | `POST` | `/api/billing/interests` | 로그인 계정별 Pro·Team 출시 알림 등록 | 필요 |
