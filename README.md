@@ -383,6 +383,8 @@ app
 | `GET` | `/api/growth/analytics` | 리스크·성과·체결품질 분석 | 필요 |
 | `GET` | `/api/growth/weekly-review` | 지난 7일 실제 체결·일별 성과·손실 후 재매수 복기 | 필요 |
 | `POST` | `/api/league/rooms/{id}/challenge-orders` | 앱인토스 동일 시작금 친구 챌린지의 독립 가상주문 | 필요 |
+
+투자 복기의 일별 성과 기록은 로그인 사용자가 웹 또는 앱인토스에서 `GET /api/trading/portfolio`를 조회할 때 서울 날짜 기준으로 갱신됩니다. 같은 날짜의 웹·앱 조회는 한 기록에 합쳐지며, 서로 다른 날짜의 기록이 2일 미만이면 최대 하락 폭은 `null`(기록 부족)입니다. 과거에 기록되지 않은 날짜의 수익률은 소급 생성하지 않습니다.
 | `GET` | `/api/billing/plans` | 무료·Pro·Team 공개 상품 카탈로그 | 없음 |
 | `GET` | `/api/billing/entitlement` | 서버가 부여한 현재 플랜·한도 | 선택 |
 | `POST` | `/api/billing/interests` | 로그인 계정별 Pro·Team 출시 알림 등록 | 필요 |

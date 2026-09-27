@@ -62,7 +62,7 @@ def build_portfolio_analytics(
     changes = [
         right - left for left, right in zip(values, values[1:], strict=False)
     ]
-    _, max_drawdown = _drawdown_series(values) if values else (0.0, 0.0)
+    _, max_drawdown = _drawdown_series(values) if len(values) >= 2 else (0.0, None)
 
     average_change = fmean(changes) if changes else None
     daily_volatility = pstdev(changes) if len(changes) >= 2 else None

@@ -25,11 +25,15 @@ from app.models import (
 from app.services.firebase_push import firebase_push
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.portfolio_snapshots import (
+    INITIAL_KRW,
+    INITIAL_USD,
+    combined_return_rate,
+    record_daily_snapshot,
+)
 
 router = APIRouter(prefix="/api/features", tags=["features"])
 
-INITIAL_KRW = Decimal("100000000")
-INITIAL_USD = Decimal("100000")
 SEOUL = timezone(timedelta(hours=9))
 
 
@@ -50,13 +54,6 @@ class PushDeviceIn(BaseModel):
 
 def return_rate(equity: Decimal, initial: Decimal) -> Decimal:
     return (equity / initial - Decimal("1")) * Decimal("100")
-
-
-def combined_return_rate(equity_krw: Decimal, equity_usd: Decimal) -> Decimal:
-    return (
-        (equity_krw / INITIAL_KRW + equity_usd / INITIAL_USD) / Decimal("2")
-        - Decimal("1")
-    ) * Decimal("100")
 
 
 def alert_triggered(direction: str, current: Decimal, target: Decimal) -> bool:
@@ -313,27 +310,7 @@ async def dashboard(
         if order.realized_pnl is not None:
             realized[currency] += Decimal(order.realized_pnl)
     combined = combined_return_rate(equity_krw, equity_usd)
-    today = datetime.now(SEOUL).date()
-    snapshot = await session.scalar(
-        sa.select(PortfolioDailySnapshot).where(
-            PortfolioDailySnapshot.owner_id == owner,
-            PortfolioDailySnapshot.snapshot_date == today,
-        )
-    )
-    if snapshot:
-        snapshot.equity_krw = equity_krw
-        snapshot.equity_usd = equity_usd
-        snapshot.return_rate = combined
-    else:
-        session.add(
-            PortfolioDailySnapshot(
-                owner_id=owner,
-                snapshot_date=today,
-                equity_krw=equity_krw,
-                equity_usd=equity_usd,
-                return_rate=combined,
-            )
-        )
+    await record_daily_snapshot(session, owner, equity_krw, equity_usd)
     history = (
         (
             await session.execute(

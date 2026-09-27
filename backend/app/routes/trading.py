@@ -39,6 +39,7 @@ from app.services.audit import record_audit
 from app.services.execution_quality import simulated_fill
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.portfolio_snapshots import record_daily_snapshot
 from app.services.risk_engine import assess_pretrade, load_control, quote_age_seconds
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
@@ -716,6 +717,8 @@ async def portfolio(
     )
 
     position_rows = []
+    equity_krw = Decimal(wallet.cash_krw)
+    equity_usd = Decimal(wallet.cash)
     for position in positions:
         instrument = await instrument_catalog.get(
             position.symbol, exchange=position.exchange
@@ -736,6 +739,10 @@ async def portfolio(
         cost_basis = quantity * average_price
         market_value = quantity * current_price
         profit = market_value - cost_basis
+        if instrument.currency == "KRW":
+            equity_krw += market_value
+        else:
+            equity_usd += market_value
         position_rows.append(
             {
                 "symbol": position.symbol,
@@ -757,6 +764,8 @@ async def portfolio(
                 ),
             }
         )
+
+    await record_daily_snapshot(session, owner, equity_krw, equity_usd)
 
     return {
         "authenticated": True,

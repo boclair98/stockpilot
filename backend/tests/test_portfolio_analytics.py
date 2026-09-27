@@ -42,7 +42,7 @@ def test_analytics_fails_open_with_starting_state():
     )
 
     assert result["dataQuality"] == "STARTING"
-    assert result["maxDrawdown"] == 0.0
+    assert result["maxDrawdown"] is None
     assert result["sharpeRatio"] is None
     assert result["winRate"] is None
     assert result["dailySeries"][0]["change"] is None
