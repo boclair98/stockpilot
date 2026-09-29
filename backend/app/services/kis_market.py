@@ -18,6 +18,7 @@ from app.services.instrument_catalog import (
     Instrument,
     instrument_catalog,
 )
+from app.services.us_quote_details import normalize_us_details
 
 logger = logging.getLogger(__name__)
 TOP_IDS = {item.id for item in TOP_INSTRUMENTS}
@@ -345,6 +346,34 @@ class KISMarket:
             self._quotes[instrument.id] = shared
             return shared.copy()
         return None
+
+    async def us_quote_details(self, instrument: Instrument) -> dict | None:
+        if instrument.market != "US" or not self.configured:
+            return None
+
+        async def fetch_details() -> dict:
+            async with self._rest_slot():
+                await self._rate_limit_rest()
+                token = await self._token()
+                response = await self._client().get(
+                    f"{self.rest_base}/uapi/overseas-price/v1/quotations/price-detail",
+                    headers=self._headers(token, "HHDFS76200200"),
+                    params={"AUTH": "", "EXCD": instrument.exchange, "SYMB": instrument.symbol},
+                )
+                data = response.json()
+                if not response.is_success or not isinstance(data, dict) or data.get("rt_cd") != "0" or not isinstance(data.get("output"), dict):
+                    raise ValueError("KIS US detail unavailable")
+                return normalize_us_details(data["output"], instrument.symbol, instrument.exchange)
+
+        try:
+            return await asyncio.wait_for(
+                traffic_store.get_or_set(f"market:us-details:v1:{instrument.id}", 120, fetch_details),
+                timeout=6,
+            )
+        except (TimeoutError, ValueError, httpx.HTTPError):
+            # Optional data never prevents the existing quote/order path.
+            logger.info("US detail unavailable for %s", instrument.id)
+            return None
 
     async def watch(self, instrument: Instrument) -> None:
         if instrument.id in self._watched:

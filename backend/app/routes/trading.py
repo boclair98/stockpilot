@@ -492,6 +492,23 @@ async def quote(
     return current
 
 
+@router.get("/quote-details")
+async def quote_details(
+    response: Response,
+    symbol: str = Query(min_length=1, max_length=12),
+    market: str = Query(pattern="^US$"),
+    exchange: str = Query(pattern="^(NAS|NYS|AMS)$"),
+) -> dict:
+    instrument = await instrument_catalog.get(symbol, market, exchange)
+    if not instrument:
+        raise HTTPException(404, "종목을 찾을 수 없습니다.")
+    details = await kis_market.us_quote_details(instrument)
+    if not details:
+        raise HTTPException(503, "추가 종목 정보를 아직 불러오지 못했습니다.", headers={"Cache-Control": "no-store", "Retry-After": "30"})
+    response.headers["Cache-Control"] = "public, max-age=30, s-maxage=60"
+    return details
+
+
 @router.get("/market-status")
 async def market_status(response: Response) -> dict:
     response.headers["Cache-Control"] = "public, max-age=2, s-maxage=5, stale-while-revalidate=30"
