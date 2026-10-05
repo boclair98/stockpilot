@@ -50,8 +50,6 @@ services:
       MAX_REQUEST_BODY_BYTES: "64000"
       MARKET_DATA_REQUEST_TIMEOUT_SECONDS: "8"
       RUN_MIGRATIONS_ON_BOOT: "false"
-      # Explicitly approved, revision-pinned one-shot; remove after verification.
-      BOOTSTRAP_SCHEMA_REVISION: "0017_toss_practice_rewards"
       RUN_BACKGROUND_WORKERS: "false"
       ENABLE_API_DOCS: "false"
       PAYMENT_PROVIDER: "none"
