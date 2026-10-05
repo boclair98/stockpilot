@@ -28,11 +28,11 @@ from app.core.config import settings
 from app.core.database import get_session
 from app.core.identity import (
     SESSION_COOKIE,
+    current_identity,
     decode_session,
-    optional_identity,
-    require_identity,
 )
 from app.core.order_integrity import normalize_idempotency_key, request_fingerprint
+from app.core.practice import optional_practice_identity, require_practice_identity
 from app.core.traffic import traffic_store
 from app.models import Position, ProtectionPlan, TradeOrder, TradingAccount
 from app.services.audit import record_audit
@@ -560,7 +560,7 @@ async def simulation_rules(response: Response) -> dict:
 @router.get("/statement")
 async def account_statement(
     response: Response,
-    owner: UUID | None = Depends(optional_identity),
+    owner: UUID | None = Depends(optional_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Return an explainable account statement without exposing private holdings publicly."""
@@ -689,7 +689,8 @@ async def kospi(response: Response) -> dict:
 
 @router.get("/portfolio")
 async def portfolio(
-    owner: UUID | None = Depends(optional_identity),
+    request: Request,
+    owner: UUID | None = Depends(optional_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     if not owner:
@@ -785,6 +786,7 @@ async def portfolio(
     await record_daily_snapshot(session, owner, equity_krw, equity_usd)
 
     return {
+        "accountScope": "practice" if current_identity(request) and current_identity(request).id != owner else "original",
         "authenticated": True,
         "cash": {"KRW": float(wallet.cash_krw), "USD": float(wallet.cash)},
         "positions": position_rows,
@@ -857,7 +859,7 @@ async def order(
     payload: OrderIn,
     request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    owner: UUID = Depends(require_identity),
+    owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ):
     try:
@@ -1064,7 +1066,7 @@ async def order(
 async def create_protection(
     payload: ProtectionIn,
     request: Request,
-    owner: UUID = Depends(require_identity),
+    owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     symbol = payload.symbol.upper()
@@ -1126,7 +1128,7 @@ async def create_protection(
 async def cancel_protection(
     plan_id: UUID,
     request: Request,
-    owner: UUID = Depends(require_identity),
+    owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     plan = (
@@ -1156,7 +1158,7 @@ async def cancel_protection(
 async def cancel_order(
     order_id: UUID,
     request: Request,
-    owner: UUID = Depends(require_identity),
+    owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     row = (

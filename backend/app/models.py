@@ -144,6 +144,38 @@ class UserBlock(Base):
     )
 
 
+class PracticeState(Base):
+    __tablename__ = "toss_practice_states"
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True)
+    active_round_id: Mapped[uuid.UUID | None] = mapped_column(sa.UUID(as_uuid=True))
+    selected_scope: Mapped[str] = mapped_column(sa.String(8), nullable=False, server_default="original")
+    last_reset_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+
+class PracticeRound(Base):
+    __tablename__ = "toss_practice_rounds"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False)
+    ledger_owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    __table_args__ = (sa.Index("ix_toss_practice_owner_created", "owner_id", "created_at"),)
+
+
+class PracticeRewardTicket(Base):
+    __tablename__ = "toss_practice_reward_tickets"
+    id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), nullable=False)
+    request_key: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    ad_group_id: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    round_id: Mapped[uuid.UUID | None] = mapped_column(sa.ForeignKey("toss_practice_rounds.id"))
+    expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    __table_args__ = (
+        sa.UniqueConstraint("owner_id", "request_key", name="uq_toss_practice_ticket_request"),
+        sa.Index("ix_toss_practice_ticket_owner_created", "owner_id", "created_at"),
+    )
+
+
 class TradingAccount(Base):
     __tablename__ = "trading_accounts"
     owner_id: Mapped[uuid.UUID] = mapped_column(sa.UUID(as_uuid=True), primary_key=True)

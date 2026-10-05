@@ -33,6 +33,9 @@ from app.models import (
     PortfolioDailySnapshot,
     Position,
     Post,
+    PracticeRewardTicket,
+    PracticeRound,
+    PracticeState,
     PriceAlert,
     ProtectionPlan,
     PushDevice,
@@ -190,6 +193,17 @@ async def export_my_data(
         push_devices, ("id", "user_agent", "enabled", "last_seen_at", "created_at")
     )
 
+    practice_owners = select(PracticeRound.ledger_owner_id).where(PracticeRound.owner_id == coders_id)
+    practice_rounds = list((await session.execute(select(PracticeRound).where(PracticeRound.owner_id == coders_id))).scalars())
+    tables["practiceRounds"] = _export_rows(practice_rounds, ("id", "created_at"))
+    for label, model, fields in (
+        ("practiceAccounts", TradingAccount, ("owner_id", "cash", "cash_krw")),
+        ("practicePositions", Position, ("owner_id", "symbol", "exchange", "quantity", "average_price")),
+        ("practiceOrders", TradeOrder, ("owner_id", "id", "symbol", "exchange", "side", "quantity", "fill_price", "status", "created_at")),
+        ("practiceSnapshots", PortfolioDailySnapshot, ("owner_id", "snapshot_date", "return_rate")),
+    ):
+        rows = list((await session.execute(select(model).where(model.owner_id.in_(practice_owners)))).scalars())
+        tables[label] = _export_rows(rows, fields)
     identity = current_identity(request)
     content = {
         "schemaVersion": 1,
@@ -244,6 +258,14 @@ async def delete_my_account(
         response.delete_cookie(SESSION_COOKIE, path="/")
         return response
 
+    # Privacy deletion includes all practice ledgers; an ordinary restart never
+    # executes this path or removes the original competitive account.
+    practice_owners = select(PracticeRound.ledger_owner_id).where(PracticeRound.owner_id == coders_id)
+    for model in (ProtectionPlan, TradeOrder, Position, PortfolioDailySnapshot, TradingAccount):
+        await session.execute(delete(model).where(model.owner_id.in_(practice_owners)))
+    await session.execute(delete(PracticeRewardTicket).where(PracticeRewardTicket.owner_id == coders_id))
+    await session.execute(delete(PracticeState).where(PracticeState.owner_id == coders_id))
+    await session.execute(delete(PracticeRound).where(PracticeRound.owner_id == coders_id))
     participant_id = await session.scalar(
         select(LeagueParticipant.id).where(LeagueParticipant.owner_id == coders_id)
     )

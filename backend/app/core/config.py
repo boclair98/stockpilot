@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     )
     auth_session_secret: str | None = None
     auth_cookie_secure: bool = True
+    # Publishable console ID; empty disables rewarded practice restarts.
+    toss_practice_rewarded_group: str = ""
+    toss_practice_allow_test_ads: bool = False
     enable_api_docs: bool = False
 
     # Firebase Cloud Messaging sends browser notifications when a saved

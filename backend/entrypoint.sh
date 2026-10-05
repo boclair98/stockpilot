@@ -20,4 +20,8 @@ if [ "${RUN_MIGRATIONS_ON_BOOT:-false}" = "true" ]; then
   uv run python scripts/migrate_with_lock.py
 fi
 
+if [ "${BOOTSTRAP_SCHEMA_REVISION:-}" = "0017_toss_practice_rewards" ]; then
+  uv run python scripts/migrate_practice_once.py
+fi
+
 exec uv run uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"

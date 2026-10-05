@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.identity import optional_identity, require_identity
+from app.core.practice import optional_practice_identity, require_practice_identity
 from app.models import (
     DailyChallengeAttempt,
     PortfolioDailySnapshot,
@@ -777,7 +778,7 @@ async def overview(
 
 @router.get("/analytics")
 async def analytics(
-    owner: UUID | None = Depends(optional_identity),
+    owner: UUID | None = Depends(optional_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Return explainable risk and execution metrics without revealing holdings."""
@@ -837,7 +838,7 @@ async def analytics(
 
 @router.get("/weekly-review")
 async def weekly_review(
-    owner: UUID = Depends(require_identity),
+    owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Server-derived weekly behavior; never infer a return from a truncated order list."""
