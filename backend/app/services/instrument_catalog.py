@@ -248,6 +248,33 @@ class InstrumentCatalog:
                 )
         return items
 
+    async def page(self, market: str, exchange: str, offset: int, limit: int) -> dict:
+        """Paginate the official catalog without fetching thousands of quotes."""
+        await self.ensure_loaded()
+        unique = {}
+        for item in self._items.values():
+            if item.market != market:
+                continue
+            if market == "KR" and item.exchange != "KRX":
+                continue
+            listing = item.listing_market or (
+                "KOSPI" if item.is_top and market == "KR" else ""
+            )
+            if (
+                exchange != "ALL"
+                and (listing if market == "KR" else item.exchange) != exchange
+            ):
+                continue
+            unique.setdefault((item.exchange, item.symbol), item)
+        rows = sorted(unique.values(), key=lambda item: (item.symbol, item.exchange))
+        return {
+            "items": [item.public() for item in rows[offset : offset + limit]],
+            "total": len(rows),
+            "partial": not self._loaded,
+            "hasMore": offset + limit < len(rows),
+            "nextOffset": offset + limit if offset + limit < len(rows) else None,
+        }
+
     async def search(
         self, query: str, market: str = "ALL", limit: int = 20
     ) -> list[dict]:
@@ -273,7 +300,12 @@ class InstrumentCatalog:
         best_matches = heapq.nsmallest(
             limit,
             matches,
-            key=lambda row: (row[0], not row[1].is_top, len(row[1].symbol), row[1].name)
+            key=lambda row: (
+                row[0],
+                not row[1].is_top,
+                len(row[1].symbol),
+                row[1].name,
+            ),
         )
         return [item.public() for _, item in best_matches]
 

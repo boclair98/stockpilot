@@ -1,6 +1,9 @@
 node_modules
 .next
 __pycache__
+.pytest_cache/
+.ruff_cache/
+*.log
 *.pyc
 .venv
 .env

@@ -33,6 +33,7 @@ from app.routes.posts import router as posts_router
 from app.routes.practice import router as practice_router
 from app.routes.toss_game import router as toss_game_router
 from app.routes.trading import router as trading_router
+from app.routes.toss_market import router as toss_market_router
 from app.routes.users import router as users_router
 from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
@@ -238,6 +239,7 @@ app.include_router(league_router)
 app.include_router(operations_router)
 app.include_router(posts_router)
 app.include_router(trading_router)
+app.include_router(toss_market_router)
 app.include_router(practice_router)
 app.include_router(toss_game_router)
 
