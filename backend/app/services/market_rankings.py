@@ -38,6 +38,7 @@ def request_spec(
             raise ValueError("Invalid US exchange")
         params = {"EXCD": exchange, "VOL_RANG": "0", "KEYB": key, "AUTH": ""}
         if metric == "CAP":
+            params["CURR_GB"] = "0"
             return "/uapi/overseas-stock/v1/ranking/market-cap", "HHDFS76350100", params
         params["NDAY"] = "0"
         if metric == "VOLUME":
@@ -69,7 +70,7 @@ def request_spec(
     params.update(
         FID_COND_SCR_DIV_CODE="20170",
         FID_RANK_SORT_CLS_CODE="0" if metric == "UP" else "1",
-        FID_INPUT_CNT_1="100",
+        FID_INPUT_CNT_1="0",
         FID_PRC_CLS_CODE="0",
         FID_RSFL_RATE1="",
         FID_RSFL_RATE2="",
@@ -190,6 +191,13 @@ async def provider_exchange(market: str, metric: str, exchange: str) -> dict:
             raw_rows = data.get("output" if market == "KR" else "output2")
             if not isinstance(raw_rows, list):
                 raise ValueError("Invalid ranking response")
+            output1 = data.get("output1")
+            if (
+                market == "US"
+                and metric == "CAP"
+                and (not isinstance(output1, dict) or output1.get("curr") != "USD")
+            ):
+                raise ValueError("Unverified US market cap currency")
             added = 0
             for raw in raw_rows:
                 if not isinstance(raw, dict):
@@ -200,19 +208,22 @@ async def provider_exchange(market: str, metric: str, exchange: str) -> dict:
                     rows.append(row)
                     added += 1
             more = response.headers.get("tr_cont") in {"M", "F"}
-            output1 = data.get("output1")
             next_key = str(output1.get("keyb", "")) if isinstance(output1, dict) else ""
             if not more or not added:
                 more = more and added > 0
                 break
             if market == "US":
+                # KEYB is a consumed-row offset in current KIS responses and
+                # only takes effect together with the tr_cont=N header.
+                if not next_key and (not key or key.isdigit()) and raw_rows:
+                    next_key = str(int(key or "0") + len(raw_rows))
                 if not next_key or next_key == key or len(next_key) > 256:
                     break
                 key = next_key
             continued = True
         return {"rows": rows, "asOf": as_of, "providerHasMore": more}
 
-    cache_key = f"market:rankings:v1:{market}:{metric}:{exchange}"
+    cache_key = f"market:rankings:v2:{market}:{metric}:{exchange}"
 
     async def resilient_fetch() -> dict:
         try:

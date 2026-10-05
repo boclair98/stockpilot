@@ -58,6 +58,8 @@ def test_missing_prices_are_not_fabricated(value):
 
 
 def test_market_request_filters_and_real_daily_us_rank_endpoint():
+    assert rankings.request_spec("US", "CAP", "NAS")[2]["CURR_GB"] == "0"
+    assert rankings.request_spec("KR", "UP", "ALL")[2]["FID_INPUT_CNT_1"] == "0"
     assert rankings.request_spec("KR", "CAP", "KOSDAQ")[2]["FID_INPUT_ISCD"] == "1001"
     path, tr, params = rankings.request_spec("US", "DOWN", "NYS")
     assert path.endswith("updown-rate") and tr == "HHDFS76290000"
@@ -89,7 +91,7 @@ def test_sort_and_dedup_can_contain_more_than_ten_companies():
 async def test_shared_cache_coalesces_users_and_reads_provider_pagination(monkeypatch):
     await traffic_store.close()
     await traffic_store.delete(
-        "market:rankings:v1:KR:CAP:ALL", "market:rankings:v1:KR:CAP:ALL:last"
+        "market:rankings:v2:KR:CAP:ALL", "market:rankings:v2:KR:CAP:ALL:last"
     )
     calls = []
 
@@ -145,7 +147,7 @@ async def test_shared_cache_coalesces_users_and_reads_provider_pagination(monkey
 async def test_provider_failure_is_cached_without_fake_rows(monkeypatch):
     await traffic_store.close()
     await traffic_store.delete(
-        "market:rankings:v1:US:CAP:AMS", "market:rankings:v1:US:CAP:AMS:last"
+        "market:rankings:v2:US:CAP:AMS", "market:rankings:v2:US:CAP:AMS:last"
     )
 
     class MissingProvider:
@@ -154,3 +156,74 @@ async def test_provider_failure_is_cached_without_fake_rows(monkeypatch):
     monkeypatch.setattr(rankings, "kis_market", MissingProvider())
     result = await rankings.provider_exchange("US", "CAP", "AMS")
     assert result["failed"] and result["rows"] == [] and result["asOf"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("currency", ["USD", "EUR"])
+async def test_us_currency_and_offset_continuation_are_verified(monkeypatch, currency):
+    await traffic_store.close()
+    await traffic_store.delete(
+        "market:rankings:v2:US:CAP:NAS", "market:rankings:v2:US:CAP:NAS:last"
+    )
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        offset = int(request.url.params.get("KEYB") or 0)
+        assert request.url.params["CURR_GB"] == "0"
+        if offset:
+            assert request.headers["tr_cont"] == "N"
+        return httpx.Response(
+            200,
+            headers={"tr_cont": "F"},
+            json={
+                "rt_cd": "0",
+                "output1": {"curr": currency, "nrec": "100", "trec": "1000"},
+                "output2": [
+                    {
+                        "symb": f"ABC{i}",
+                        "name": "fixture",
+                        "excd": "NAS",
+                        "last": "200",
+                        "shar": "1000000000",
+                        "tomv": "200000000000",
+                    }
+                    for i in range(offset, offset + 100)
+                ],
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+    class Provider:
+        configured = True
+        rest_base = "https://provider.test"
+
+        @asynccontextmanager
+        async def _rest_slot(self):
+            yield
+
+        async def _rate_limit_rest(self):
+            pass
+
+        async def _token(self):
+            return "mock"
+
+        def _headers(self, token, tr):
+            return {"tr_id": tr}
+
+        def _client(self):
+            return client
+
+    monkeypatch.setattr(rankings, "kis_market", Provider())
+    result = await rankings.provider_exchange("US", "CAP", "NAS")
+    if currency == "USD":
+        assert (
+            len(result["rows"]) == 300
+            and result["providerHasMore"]
+            and not result["failed"]
+        )
+        assert [r.url.params["KEYB"] for r in calls] == ["", "100", "200"]
+    else:
+        assert result["failed"] and result["rows"] == []
+    await client.aclose()
