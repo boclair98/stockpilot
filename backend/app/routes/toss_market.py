@@ -7,6 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.services.instrument_catalog import instrument_catalog
+from app.services.market_browse import SnapshotExpired, browse_snapshot
 from app.services.market_rankings import ranking_snapshot
 
 router = APIRouter(prefix="/api/toss-market", tags=["toss-market"])
@@ -91,4 +92,55 @@ async def instruments(
         "providerHasMore": False,
         "refreshSeconds": 300,
         "source": "KIS 종목 마스터",
+    }
+
+
+@router.get("/browse-rankings")
+async def browse_rankings(
+    response: Response,
+    market: Literal["KR", "US"] = "KR",
+    metric: Literal["CAP", "VOLUME", "UP", "DOWN"] = "CAP",
+    exchange: Literal["ALL", "KOSPI", "KOSDAQ", "NAS", "NYS", "AMS"] = "ALL",
+    offset: int = Query(default=0, ge=0, le=49900),
+    limit: int = Query(default=50, ge=1, le=100),
+    requested_snapshot: str | None = Query(
+        default=None, max_length=64, alias="snapshot"
+    ),
+) -> dict:
+    if (market == "KR" and exchange not in {"ALL", "KOSPI", "KOSDAQ"}) or (
+        market == "US" and exchange not in {"ALL", "NAS", "NYS", "AMS"}
+    ):
+        raise HTTPException(422, "시장과 거래소 선택을 확인해 주세요.")
+    try:
+        data = await asyncio.wait_for(
+            browse_snapshot(
+                market, metric, exchange, offset + limit, requested_snapshot
+            ),
+            timeout=15,
+        )
+    except SnapshotExpired:
+        raise HTTPException(
+            409, "조회 시간이 지났어요. 새로고침한 뒤 계속 살펴보세요."
+        ) from None
+    except TimeoutError:
+        raise HTTPException(
+            503, "다음 자료 조회가 지연돼요. 잠시 후 다시 시도해 주세요."
+        ) from None
+    rows = data.pop("items")
+    items = rows[offset : offset + limit]
+    if not items and data["providerHasMore"]:
+        raise HTTPException(
+            503,
+            "다음 자료를 준비하고 있어요. 다시 시도해 주세요.",
+            headers={"Retry-After": "15"},
+        )
+    more = offset + len(items) < len(rows) or data["providerHasMore"]
+    response.headers["Cache-Control"] = "public, max-age=5, s-maxage=10"
+    return {
+        **data,
+        "items": items,
+        "total": len(rows),
+        "offset": offset,
+        "hasMore": more,
+        "nextOffset": offset + len(items) if more else None,
     }

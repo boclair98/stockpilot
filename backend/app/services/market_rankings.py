@@ -135,7 +135,9 @@ def normalize_row(raw: dict, market: str, exchange: str, as_of: str) -> dict | N
     }
 
 
-def ordered_rows(rows: list[dict], market: str, metric: str) -> list[dict]:
+def ordered_rows(
+    rows: list[dict], market: str, metric: str, max_rows: int = MAX_ROWS
+) -> list[dict]:
     key = "marketCapEok" if market == "KR" else "marketCapUsd"
     if metric == "VOLUME":
         key = "volume"
@@ -154,7 +156,7 @@ def ordered_rows(rows: list[dict], market: str, metric: str) -> list[dict]:
     return sorted(
         unique.values(),
         key=lambda r: (r[key] if metric == "DOWN" else -r[key], r["symbol"]),
-    )[:MAX_ROWS]
+    )[:max_rows]
 
 
 async def provider_exchange(market: str, metric: str, exchange: str) -> dict:
