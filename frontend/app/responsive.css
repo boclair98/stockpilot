@@ -3,15 +3,15 @@
  * Layout follows available space and input capability instead of device brands.
  */
 html {
-  min-width: 320px;
-  overflow-x: clip;
+  min-width: 0;
+  overflow-x: visible;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
-  min-width: 320px;
-  overflow-x: clip;
+  min-width: 0;
+  overflow-x: visible;
 }
 
 img,
@@ -403,4 +403,3 @@ button {
     scroll-behavior: auto !important;
   }
 }
-

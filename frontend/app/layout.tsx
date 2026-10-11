@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import AdSenseScript from "@/components/AdSenseScript";
 import MobileServiceNav from "@/components/MobileServiceNav";
 import PwaRuntime from "@/components/PwaRuntime";
+import GlobalDisplayControls from "@/components/GlobalDisplayControls";
 import { adsenseClient } from "@/lib/ads";
 import "./globals.css";
 import "./market.css";
@@ -37,6 +38,8 @@ import "./monetization.css";
 import "./ads.css";
 import "./pwa.css";
 import "./app-polish.css";
+import "./workspace.css";
+import "./consumer.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
@@ -79,14 +82,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#11151c",
-  colorScheme: "light",
+  themeColor: "#18C899",
+  colorScheme: "light dark",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="ko"><body>{children}<AdSenseScript client={adsenseClient} /><PwaRuntime /><MobileServiceNav /></body></html>;
+  return <html lang="ko"><body>{children}<AdSenseScript client={adsenseClient} /><PwaRuntime /><MobileServiceNav /><GlobalDisplayControls/></body></html>;
 }
 

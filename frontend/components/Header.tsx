@@ -14,7 +14,7 @@ export function Header() {
         href="/"
         className="text-[15px] font-semibold tracking-tight transition-colors hover:text-muted-foreground"
       >
-        template-coders
+        StockPilot
       </Link>
       <nav className="flex items-center gap-4">
         {me === undefined ? (
