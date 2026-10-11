@@ -1399,16 +1399,16 @@ export default function TradingTerminal() {
       <section className="workspace-intro" id="market-content" tabIndex={-1}>
         <div>
           <span className="workspace-eyebrow">
-            STOCKPILOT / INVESTING PRACTICE
+            STOCKPILOT · 투자 연습
           </span>
           <h1>
             {
               {
-                MARKET: "시장",
-                DETAIL: "종목 살펴보기",
+                MARKET: "시장 홈",
+                DETAIL: "종목 상세",
                 WATCH: "관심종목",
-                ASSETS: "내 모의투자 자산",
-                RECORDS: "나의 투자 기록",
+                ASSETS: "내 자산",
+                RECORDS: "투자 기록",
               }[workspaceView]
             }
           </h1>
@@ -1444,13 +1444,13 @@ export default function TradingTerminal() {
           </strong>
           <div className="balance-detail">
             <span>
-              원화 현금{" "}
+              원화 주문 가능{" "}
               <b className="private-value">
                 {money(portfolio.cash.KRW, "KRW")}
               </b>
             </span>
             <span>
-              달러 현금{" "}
+              달러 주문 가능{" "}
               <b className="private-value">
                 {money(portfolio.cash.USD, "USD")}
               </b>
@@ -1862,7 +1862,7 @@ export default function TradingTerminal() {
               onRemove={(item) => toggleFavorite({ ...item, englishName: "" })}
             />
             <section className="continue-section">
-              <span className="workspace-eyebrow">CONTINUE YOUR PRACTICE</span>
+              <span className="workspace-eyebrow">투자 연습 이어하기</span>
               <h2>관찰에서 판단으로</h2>
               <p>가격을 확인하고, 나만의 이유를 남겨보세요.</p>
               {quote ? (
@@ -1892,7 +1892,7 @@ export default function TradingTerminal() {
             <section className="practice-discovery">
               <div>
                 <GraduationCap size={22} />
-                <span>STEP BY STEP</span>
+                <span>처음이라면</span>
               </div>
               <h2>처음이라도 괜찮아요</h2>
               <p>기초를 배우고 연습으로 확인해요.</p>

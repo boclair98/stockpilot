@@ -8,7 +8,8 @@ const base=process.env.STOCKPILOT_VERIFY_URL||'http://127.0.0.1:5190';
 assert.match(base,/^http:\/\/(127\.0\.0\.1|localhost):\d+$/);
 const output=process.env.STOCKPILOT_VERIFY_OUTPUT||'artifacts/workspace';
 await mkdir(output,{recursive:true});
-const browser=await pw[process.env.STOCKPILOT_UI_BROWSER||'chromium'].launch();
+const launchOptions=process.env.STOCKPILOT_BROWSER_EXECUTABLE?{executablePath:process.env.STOCKPILOT_BROWSER_EXECUTABLE}:{};
+const browser=await pw[process.env.STOCKPILOT_UI_BROWSER||'chromium'].launch(launchOptions);
 const report=[];let checks=0;
 const quotes=[['005930','삼성전자','KR','KRX',72000],['000660','에스케이하이닉스','KR','KRX',175000],['AAPL','애플','US','NAS',220],['NVDA','엔비디아','US','NAS',135]].map(([symbol,name,market,exchange,price],i)=>({id:`${market}:${exchange}:${symbol}`,symbol,name,market,exchange,price,currency:market==='KR'?'KRW':'USD',change:100,changePercent:i%2?-1.25:1.38,isTop:true,asOf:new Date().toISOString(),source:'격리된 UI 검증 자료',marketState:'OPEN',venue:exchange}));
 const points=Array.from({length:60},(_,i)=>({date:new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10),open:70000+i*20,high:70500+i*20,low:69700+i*20,close:70000+i*20+Math.sin(i)*100,volume:1000000+i*1000}));
@@ -16,12 +17,12 @@ const kospi={name:'KOSPI',value:2800,change:20,changePercent:.7,asOf:new Date().
 try{
 for(const width of [320,360,390,430,768,1024,1440,1920]){
   const page=await browser.newPage({viewport:{width,height:width<500?844:900},serviceWorkers:'block'});
-  const errors=[];let orders=[];let positions=[];let writes=0;let authenticated=true;
+  const errors=[];const intercepted=[];let orders=[];let positions=[];let writes=0;let authenticated=true;
   page.on('pageerror',e=>errors.push(e.message));
   await page.routeWebSocket('**/api/trading/ws',ws=>{ws.send(JSON.stringify({type:'quotes',data:quotes,status:{configured:true,connected:true,quoteCount:quotes.length}}));});
   await page.addInitScript(()=>localStorage.setItem('stockpilot_onboarding_v2','done'));
   await page.route('**/api/**',async route=>{
-    const u=new URL(route.request().url());const path=u.pathname;let data={};
+    const u=new URL(route.request().url());const path=u.pathname;intercepted.push(`${route.request().method()} ${path}`);let data={};
     const method=route.request().method();
     if(path==='/api/trading/bootstrap')data={quotes,status:{configured:true,connected:true,quoteCount:quotes.length},kospi};
     else if(path==='/api/trading/kospi')data=kospi;
@@ -49,7 +50,8 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
   });
   const started=performance.now();await page.goto(base,{waitUntil:'domcontentloaded'});
-  await page.locator('.ranked-list li').nth(19).waitFor();
+  try{await page.locator('.ranked-list li').nth(19).waitFor({timeout:12000});}
+  catch(error){await page.screenshot({path:`${output}/initial-failure-${width}.png`});console.log(JSON.stringify({width,pageErrors:errors,intercepted,text:(await page.locator('body').innerText()).slice(0,2400)}));throw error;}
   await page.evaluate(()=>document.fonts.ready);
   assert.equal(await page.evaluate(()=>document.fonts.check('14px "StockPilot Pretendard"')),true);checks++;
   if(width>=768){await page.locator('.ranked-metric-tabs').getByRole('button',{name:'거래량',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.ranked-metric-tabs button[aria-pressed="true"]')?.textContent==='거래량');await page.locator('.ranked-metric-tabs').getByRole('button',{name:'시가총액',exact:true}).click();}

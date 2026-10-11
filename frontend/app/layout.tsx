@@ -40,6 +40,7 @@ import "./pwa.css";
 import "./app-polish.css";
 import "./workspace.css";
 import "./consumer.css";
+import "./stockpilot-design.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
@@ -82,7 +83,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#18C899",
+  themeColor: "#2463EB",
   colorScheme: "light dark",
   width: "device-width",
   initialScale: 1,
