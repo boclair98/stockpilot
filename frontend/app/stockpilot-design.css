@@ -2382,3 +2382,327 @@ html[data-theme="dark"] .mobile-menu-grid > a.active {
     transition-duration: .01ms !important;
   }
 }
+
+/* Company profile, financial summary, and filing cards share paired theme
+   surfaces so foreground and background never drift apart in dark mode. */
+:root {
+  --ci-surface: #fff;
+  --ci-raised: #fff;
+  --ci-subtle: #f6f8fb;
+  --ci-text: #202c3a;
+  --ci-muted: #5f6e80;
+  --ci-border: #e2e8ef;
+  --ci-link: #245fd6;
+  --ci-date: #eef2f7;
+  --ci-hover: #f7f9fc;
+  --ci-profile: linear-gradient(135deg, #f3f7ff, #fff 58%, #fff7f6);
+}
+
+html[data-theme="dark"] {
+  --ci-surface: #141b26;
+  --ci-raised: #1b2532;
+  --ci-subtle: #202c3a;
+  --ci-text: #edf3fa;
+  --ci-muted: #b4c0cf;
+  --ci-border: #354252;
+  --ci-link: #a7c3ff;
+  --ci-date: #263242;
+  --ci-hover: #202c3b;
+  --ci-profile: linear-gradient(135deg, #1b2939, #18232f 58%, #2b242b);
+}
+
+.consumer-app .company-insight {
+  border: 1px solid var(--ci-border);
+  background: var(--ci-surface);
+  color: var(--ci-text);
+}
+
+.consumer-app .company-insight .section-head h2,
+.consumer-app .company-insight .company-profile h3,
+.consumer-app .company-insight .company-facts b,
+.consumer-app .company-insight .financial-title b,
+.consumer-app .company-insight .financial-grid strong,
+.consumer-app .company-insight .disclosure-copy b,
+.consumer-app .company-insight .disclosure-date b,
+.consumer-app .company-insight .company-state b {
+  color: var(--ci-text);
+}
+
+.consumer-app .company-insight .section-head h2 {
+  font-size: 20px;
+}
+
+.consumer-app .company-insight .company-profile p {
+  font-size: 12px;
+}
+
+.consumer-app .company-insight .company-facts small,
+.consumer-app .company-insight .financial-title small,
+.consumer-app .company-insight .financial-title .data-period,
+.consumer-app .company-insight .company-address,
+.consumer-app .company-insight .company-profile p,
+.consumer-app .company-insight .disclosure-copy small,
+.consumer-app .company-insight .dart-note,
+.consumer-app .company-insight .company-state small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.consumer-app .company-insight .company-facts b {
+  font-size: 13px;
+}
+
+.consumer-app .company-insight .section-head p,
+.consumer-app .company-insight .company-profile p,
+.consumer-app .company-insight .company-address,
+.consumer-app .company-insight .financial-title small,
+.consumer-app .company-insight .financial-title .data-period,
+.consumer-app .company-insight .financial-grid small,
+.consumer-app .company-insight .financial-grid article > span,
+.consumer-app .company-insight .company-facts small,
+.consumer-app .company-insight .disclosure-copy small,
+.consumer-app .company-insight .disclosure-date small,
+.consumer-app .company-insight .no-disclosure,
+.consumer-app .company-insight .dart-note,
+.consumer-app .company-insight .company-state small {
+  color: var(--ci-muted);
+}
+
+.consumer-app .company-insight .financial-grid small {
+  font-size: 12px;
+}
+
+.consumer-app .company-insight .financial-grid strong {
+  font-size: clamp(16px, 1.25vw, 20px);
+  line-height: 1.35;
+}
+
+.consumer-app .company-insight .financial-grid article > span {
+  font-size: 11px;
+}
+
+.consumer-app .company-insight .dart-source,
+.consumer-app .company-insight .company-homepage {
+  border-color: var(--ci-border);
+  background: var(--ci-subtle);
+  color: var(--ci-link);
+}
+
+.consumer-app .company-insight .dart-source {
+  font-size: 11px;
+}
+
+.consumer-app .company-insight .company-profile {
+  border: 1px solid var(--ci-border);
+  background: var(--ci-profile);
+}
+
+.consumer-app .company-insight .company-profile h3 {
+  font-size: 18px;
+}
+
+.consumer-app .company-insight .company-building,
+.consumer-app .company-insight .company-facts article > span,
+.consumer-app .company-insight .company-state-icon {
+  border: 1px solid var(--ci-border);
+  background: var(--ci-raised);
+  color: var(--ci-link);
+  box-shadow: none;
+}
+
+.consumer-app .company-insight .company-facts article,
+.consumer-app .company-insight .financial-grid article,
+.consumer-app .company-insight .company-loading,
+.consumer-app .company-insight .company-state {
+  border-color: var(--ci-border);
+  background: var(--ci-subtle);
+}
+
+.consumer-app .company-insight .financial-title .data-period {
+  background: var(--ci-date);
+}
+
+.consumer-app .company-insight .financial-grid article::after {
+  background: color-mix(in srgb, var(--ci-link) 9%, transparent);
+}
+
+.consumer-app .company-insight .financial-grid article[data-tone="1"]::after {
+  background: color-mix(in srgb, #28a879 10%, transparent);
+}
+
+.consumer-app .company-insight .financial-grid article[data-tone="2"]::after {
+  background: color-mix(in srgb, #dc5967 9%, transparent);
+}
+
+.consumer-app .company-insight .disclosure-list a {
+  min-width: 0;
+  border-color: var(--ci-border);
+  background: var(--ci-raised);
+}
+
+.consumer-app .company-insight .disclosure-list a:hover {
+  border-color: color-mix(in srgb, var(--ci-link) 44%, var(--ci-border));
+  background: var(--ci-hover);
+  box-shadow: none;
+}
+
+.consumer-app .company-insight .disclosure-date,
+.consumer-app .company-insight .disclosure-open,
+.consumer-app .company-insight .dart-note {
+  background: var(--ci-date);
+  color: var(--ci-muted);
+}
+
+.consumer-app .company-insight .disclosure-copy em {
+  color: #a94724;
+  background: #fff0e8;
+  font-size: 10px;
+}
+
+.consumer-app .company-insight .disclosure-date b {
+  font-size: 15px;
+}
+
+.consumer-app .company-insight .disclosure-date small {
+  font-size: 11px;
+}
+
+.consumer-app .company-insight .disclosure-copy b {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.consumer-app .company-insight .disclosure-copy small {
+  font-size: 11px;
+}
+
+.consumer-app .company-insight .disclosure-open {
+  font-size: 11px;
+}
+
+.consumer-app .company-insight .company-loading {
+  color: var(--ci-muted);
+}
+
+html[data-theme="dark"] .consumer-app .company-insight .disclosure-copy em {
+  color: #ffb493;
+  background: #422e2a;
+}
+
+.consumer-app .company-insight .company-state button {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+.consumer-app .company-insight :is(a, button):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ci-link) 55%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 960px) {
+  .consumer-app .company-insight .company-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .consumer-app .company-insight .company-homepage {
+    grid-column: 1 / -1;
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 620px) {
+  .consumer-app .company-insight {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .consumer-app .company-insight .section-head {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .consumer-app .company-insight .section-head h2 {
+    font-size: 20px;
+  }
+
+  .consumer-app .company-insight .section-head p {
+    max-width: 36ch;
+    line-height: 1.55;
+  }
+
+  .consumer-app .company-insight .financial-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .consumer-app .company-insight .financial-title .data-period {
+    max-width: 100%;
+    padding: 0;
+    background: transparent;
+    text-align: left;
+    line-height: 1.45;
+  }
+
+  .consumer-app .company-insight .financial-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .consumer-app .company-insight .financial-grid article {
+    min-width: 0;
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  .consumer-app .company-insight .financial-grid strong {
+    font-size: clamp(14px, 3.8vw, 17px);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .consumer-app .company-insight .disclosure-list a {
+    grid-template-columns: 46px minmax(0, 1fr);
+    min-height: 76px;
+    padding: 10px;
+  }
+
+  .consumer-app .company-insight .disclosure-copy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .consumer-app .company-insight .disclosure-copy b {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .consumer-app .company-insight .disclosure-copy small {
+    grid-column: 1;
+  }
+
+  .consumer-app .company-insight .disclosure-open {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .consumer-app .company-insight {
+    padding: 13px;
+  }
+
+  .consumer-app .company-insight .company-facts article {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .consumer-app .company-insight .company-facts article > span {
+    width: 28px;
+    height: 28px;
+  }
+}
