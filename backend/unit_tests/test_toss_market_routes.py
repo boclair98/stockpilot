@@ -9,6 +9,7 @@ from fastapi import FastAPI
 async def test_page_can_browse_all_catalog_and_filter_listing_market():
     catalog = InstrumentCatalog()
     catalog._loaded = True
+    catalog._loaded_exchanges = {"KOSPI", "KOSDAQ", "NAS", "NYS", "AMS"}
     for i in range(60):
         catalog._add(
             Instrument(
@@ -28,6 +29,32 @@ async def test_page_can_browse_all_catalog_and_filter_listing_market():
         r["symbol"] for r in second["items"]
     }
     assert (await catalog.page("KR", "KOSDAQ", 0, 100))["total"] == 30
+
+
+@pytest.mark.asyncio
+async def test_partial_catalog_never_claims_to_be_complete_or_paginated(monkeypatch):
+    catalog = InstrumentCatalog()
+    catalog._loaded_exchanges = {"KOSPI"}
+    async def no_network_load():
+        return None
+
+    monkeypatch.setattr(catalog, "ensure_loaded", no_network_load)
+    for i in range(25):
+        catalog._add(
+            Instrument(
+                f"{910000 + i}", "종목", "KR", "KRW", "KRX", str(i),
+                listing_market="KOSPI",
+            )
+        )
+
+    partial = await catalog.page("KR", "ALL", 0, 20)
+    assert partial["partial"] is True
+    assert partial["hasMore"] is False and partial["nextOffset"] is None
+
+    catalog._loaded_exchanges.add("KOSDAQ")
+    complete = await catalog.page("KR", "ALL", 0, 20)
+    assert complete["partial"] is False and complete["hasMore"] is True
+    assert complete["nextOffset"] == 20
 
 
 @pytest.mark.asyncio
@@ -75,3 +102,32 @@ async def test_provider_failure_is_503_not_a_fake_empty_market(monkeypatch):
     ) as client:
         result = await client.get("/api/toss-market/rankings")
         assert result.status_code == 503 and result.headers["retry-after"] == "120"
+
+
+@pytest.mark.asyncio
+async def test_instrument_endpoint_exposes_real_paginated_catalog(monkeypatch):
+    async def page(market, exchange, offset, limit):
+        assert (market, exchange, offset, limit) == ("US", "NYS", 20, 20)
+        return {
+            "items": [
+                Instrument("ACME", "Acme Corp", "US", "USD", "NYS", "DACME").public()
+            ],
+            "total": 41,
+            "partial": False,
+            "hasMore": True,
+            "nextOffset": 40,
+        }
+
+    monkeypatch.setattr(toss_market.instrument_catalog, "page", page)
+    app = FastAPI()
+    app.include_router(toss_market.router)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        result = await client.get(
+            "/api/toss-market/instruments?market=US&exchange=NYS&offset=20&limit=20"
+        )
+    assert result.status_code == 200
+    payload = result.json()
+    assert payload["total"] == 41 and payload["hasMore"] is True
+    assert payload["nextOffset"] == 40 and payload["items"][0]["exchange"] == "NYS"

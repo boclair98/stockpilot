@@ -44,6 +44,7 @@ import CommandSearch from "./CommandSearch";
 import DecisionNotebook from "./DecisionNotebook";
 import OrderTimeline from "./OrderTimeline";
 import RankedMarketBrowser from "./RankedMarketBrowser";
+import FullMarketCatalog from "./FullMarketCatalog";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
@@ -1611,7 +1612,7 @@ export default function TradingTerminal() {
           <div className="section-head representative-heading">
             <div>
               <h2>주요 종목</h2>
-              <p>대표 종목 · 전체 종목은 검색</p>
+              <p>대표 종목 · 거래소 전체 종목도 확인할 수 있어요</p>
             </div>
             <span className={`source market-freshness ${quoteFreshness.state}`}>
               <i aria-hidden="true" />
@@ -1688,6 +1689,12 @@ export default function TradingTerminal() {
             selectedId={selected}
             onSelect={chooseSearchResult}
             savedIds={favoriteIds}
+            onSave={toggleFavorite}
+          />
+          <FullMarketCatalog
+            selectedId={selected}
+            savedIds={favoriteIds}
+            onSelect={chooseSearchResult}
             onSave={toggleFavorite}
           />
           <div

@@ -63,6 +63,8 @@ class Instrument:
             "market": self.market,
             "currency": self.currency,
             "exchange": self.exchange,
+            "listingMarket": self.listing_market
+            or ("KOSPI" if self.is_top and self.market == "KR" else ""),
             "isTop": self.is_top,
             "logoUrl": logo_url,
         }
@@ -134,6 +136,8 @@ class InstrumentCatalog:
         # tens of thousands of KRX/NXT/US rows.
         self._by_key: dict[tuple[str, str, str], Instrument] = {}
         self._search_rows: dict[str, tuple[Instrument, str, str, str]] = {}
+        self._page_rows: dict[tuple[str, str], list[Instrument]] = {}
+        self._loaded_exchanges: set[str] = set()
         for item in TOP_INSTRUMENTS:
             self._add(item)
         self._loaded = False
@@ -155,25 +159,31 @@ class InstrumentCatalog:
             item.name.casefold(),
             item.english_name.casefold(),
         )
+        self._page_rows.clear()
 
     @property
     def count(self) -> int:
         return len(self._items)
 
     async def ensure_loaded(self) -> None:
-        if self._loaded:
+        if self._loaded_exchanges == set(MASTER_URLS):
             return
         async with self._lock:
-            if self._loaded:
+            missing = [
+                exchange
+                for exchange in MASTER_URLS
+                if exchange not in self._loaded_exchanges
+            ]
+            if not missing:
                 return
             try:
                 timeout = httpx.Timeout(25, connect=10)
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     responses = await asyncio.gather(
-                        *(client.get(url) for url in MASTER_URLS.values()),
+                        *(client.get(MASTER_URLS[exchange]) for exchange in missing),
                         return_exceptions=True,
                     )
-                for exchange, response in zip(MASTER_URLS, responses, strict=True):
+                for exchange, response in zip(missing, responses, strict=True):
                     if isinstance(response, Exception):
                         logger.warning(
                             "KIS master download failed (%s): %s", exchange, response
@@ -186,11 +196,17 @@ class InstrumentCatalog:
                         if exchange in {"KOSPI", "KOSDAQ"}
                         else self._parse_us(raw, exchange)
                     )
+                    if not parsed:
+                        logger.warning("KIS master contained no instruments (%s)", exchange)
+                        continue
                     for item in parsed:
                         self._add(item)
-                self._loaded = len(self._items) > len(TOP_INSTRUMENTS)
+                    self._loaded_exchanges.add(exchange)
+                self._loaded = self._loaded_exchanges == set(MASTER_URLS)
                 if not self._loaded:
-                    self.last_error = "KIS 종목 마스터를 불러오지 못했습니다."
+                    self.last_error = "일부 KIS 종목 마스터를 불러오지 못했습니다."
+                else:
+                    self.last_error = None
             except Exception as exc:
                 self.last_error = str(exc)[:240]
                 logger.warning("KIS master load failed: %s", self.last_error)
@@ -253,28 +269,43 @@ class InstrumentCatalog:
     async def page(self, market: str, exchange: str, offset: int, limit: int) -> dict:
         """Paginate the official catalog without fetching thousands of quotes."""
         await self.ensure_loaded()
-        unique = {}
-        for item in self._items.values():
-            if item.market != market:
-                continue
-            if market == "KR" and item.exchange != "KRX":
-                continue
-            listing = item.listing_market or (
-                "KOSPI" if item.is_top and market == "KR" else ""
-            )
-            if (
-                exchange != "ALL"
-                and (listing if market == "KR" else item.exchange) != exchange
-            ):
-                continue
-            unique.setdefault((item.exchange, item.symbol), item)
-        rows = sorted(unique.values(), key=lambda item: (item.symbol, item.exchange))
+        cache_key = (market, exchange)
+        rows = self._page_rows.get(cache_key)
+        if rows is None:
+            unique = {}
+            for item in self._items.values():
+                if item.market != market:
+                    continue
+                if market == "KR" and item.exchange != "KRX":
+                    continue
+                listing = item.listing_market or (
+                    "KOSPI" if item.is_top and market == "KR" else ""
+                )
+                if (
+                    exchange != "ALL"
+                    and (listing if market == "KR" else item.exchange) != exchange
+                ):
+                    continue
+                unique.setdefault((item.exchange, item.symbol), item)
+            rows = sorted(unique.values(), key=lambda item: (item.symbol, item.exchange))
+            self._page_rows[cache_key] = rows
+        required = (
+            {"KOSPI", "KOSDAQ"}
+            if market == "KR" and exchange == "ALL"
+            else {exchange}
+            if market == "KR"
+            else {"NAS", "NYS", "AMS"}
+            if exchange == "ALL"
+            else {exchange}
+        )
+        partial = not required.issubset(self._loaded_exchanges)
+        has_more = not partial and offset + limit < len(rows)
         return {
             "items": [item.public() for item in rows[offset : offset + limit]],
             "total": len(rows),
-            "partial": not self._loaded,
-            "hasMore": offset + limit < len(rows),
-            "nextOffset": offset + limit if offset + limit < len(rows) else None,
+            "partial": partial,
+            "hasMore": has_more,
+            "nextOffset": offset + limit if has_more else None,
         }
 
     async def search(

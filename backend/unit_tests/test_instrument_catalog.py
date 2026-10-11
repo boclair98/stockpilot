@@ -1,11 +1,12 @@
 import pytest
-from app.services.instrument_catalog import Instrument, InstrumentCatalog
+from app.services.instrument_catalog import MASTER_URLS, Instrument, InstrumentCatalog
 
 
 @pytest.mark.asyncio
 async def test_exact_lookup_normalizes_market_and_exchange_without_scan() -> None:
     catalog = InstrumentCatalog()
     catalog._loaded = True
+    catalog._loaded_exchanges = set(MASTER_URLS)
     item = Instrument(
         "AcMe",
         "Acme Corp",
@@ -25,6 +26,7 @@ async def test_exact_lookup_normalizes_market_and_exchange_without_scan() -> Non
 async def test_curated_top_instrument_is_not_replaced_by_master_duplicate() -> None:
     catalog = InstrumentCatalog()
     catalog._loaded = True
+    catalog._loaded_exchanges = set(MASTER_URLS)
     curated = catalog.get_cached("005930", market="KR", exchange="KRX")
     assert curated is not None
 
@@ -39,6 +41,7 @@ async def test_curated_top_instrument_is_not_replaced_by_master_duplicate() -> N
 async def test_search_uses_normalized_index_and_keeps_exact_match_first() -> None:
     catalog = InstrumentCatalog()
     catalog._loaded = True
+    catalog._loaded_exchanges = set(MASTER_URLS)
     exact = Instrument("ACME", "에이씨미", "US", "USD", "NAS", "DNASACME")
     prefix = Instrument("ACME2", "Acme Holdings", "US", "USD", "NAS", "DNASACME2")
     catalog._add(prefix)

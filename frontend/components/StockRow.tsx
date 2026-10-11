@@ -7,6 +7,7 @@ export type RowInstrument = {
   symbol: string;
   name: string;
   exchange: string;
+  listingMarket?: string;
   currency: "KRW" | "USD";
   price?: number;
   changePercent?: number | null;
@@ -57,7 +58,7 @@ export default function StockRow({
         <span className="rank-identity">
           <b>{stock.name}</b>
           <small>
-            {stock.symbol} · {stock.exchange}
+            {stock.symbol} · {stock.listingMarket || stock.exchange}
           </small>
         </span>
         <span className="rank-price">
@@ -68,7 +69,7 @@ export default function StockRow({
                   currency: stock.currency,
                   maximumFractionDigits: stock.currency === "KRW" ? 0 : 2,
                 }).format(stock.price!)
-              : "시세 보기"}
+              : "—"}
           </b>
           <small
             className={
@@ -77,7 +78,7 @@ export default function StockRow({
           >
             {typeof change === "number" && Number.isFinite(change)
               ? `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`
-              : "등락 미제공"}
+              : "선택 후 조회"}
           </small>
         </span>
         {metric ? <span className="stock-row-metric">{metric}</span> : null}
