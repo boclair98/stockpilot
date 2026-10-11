@@ -34,7 +34,11 @@ const shortDate = (value: string) =>
     day: "numeric",
   }).format(new Date(`${value}T00:00:00+09:00`));
 
-export default function MarketIndexChart({ initialData = null }: { initialData?: IndexData | null }) {
+export default function MarketIndexChart({
+  initialData = null,
+}: {
+  initialData?: IndexData | null;
+}) {
   const [data, setData] = useState<IndexData | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,7 +48,10 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
     let controller: AbortController | null = null;
     let hydrateTimer: number | null = null;
     if (initialData?.points?.length) {
-      localStorage.setItem("stockpilot_kospi_snapshot", JSON.stringify(initialData));
+      localStorage.setItem(
+        "stockpilot_kospi_snapshot",
+        JSON.stringify(initialData),
+      );
       hydrateTimer = window.setTimeout(() => {
         if (active) {
           setData(initialData);
@@ -53,7 +60,9 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
       }, 0);
     } else {
       try {
-        const cached = JSON.parse(localStorage.getItem("stockpilot_kospi_snapshot") || "null");
+        const cached = JSON.parse(
+          localStorage.getItem("stockpilot_kospi_snapshot") || "null",
+        );
         if (cached?.points?.length) {
           hydrateTimer = window.setTimeout(() => {
             if (active) setData(cached);
@@ -79,7 +88,10 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
         if (active && !controller.signal.aborted) {
           setData(next);
           if (next.points?.length) {
-            localStorage.setItem("stockpilot_kospi_snapshot", JSON.stringify(next));
+            localStorage.setItem(
+              "stockpilot_kospi_snapshot",
+              JSON.stringify(next),
+            );
           }
         }
       } catch (reason) {
@@ -126,7 +138,10 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
       y: padY + ((max - point.close) / spread) * (height - padY * 2),
     }));
     const line = coords
-      .map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+      .map(
+        (point, index) =>
+          `${index ? "L" : "M"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`,
+      )
       .join(" ");
     const area = `${line} L ${coords.at(-1)?.x ?? width} ${height} L ${coords[0].x} ${height} Z`;
     return { width, height, line, area, min: rawMin, max: rawMax };
@@ -143,7 +158,9 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
   return (
     <section className="market-index-card" aria-labelledby="kospi-title">
       <div className="market-index-copy">
-        <span className="index-kicker"><Activity size={14} /> 국내 대표 지수</span>
+        <span className="index-kicker">
+          <Activity size={14} /> 국내 대표 지수
+        </span>
         <div className="index-title">
           <div>
             <h2 id="kospi-title">{data?.name || "KOSPI"}</h2>
@@ -151,14 +168,15 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
           </div>
           {data?.value ? (
             <span className={positive ? "up" : "down"}>
-              {positive ? "+" : ""}{number.format(data.change)} · {positive ? "+" : ""}
+              {positive ? "+" : ""}
+              {number.format(data.change)} · {positive ? "+" : ""}
               {data.changePercent.toFixed(2)}%
             </span>
           ) : null}
         </div>
         <p>최근 30거래일 일별 종가</p>
-        <small>
-          KIS Open API · 5분마다 갱신
+        <small title={data?.source || "KIS Open API"}>
+          5분마다 갱신
           {updated ? ` · ${updated}` : ""}
           {data?.stale ? " · 이전 데이터 표시 중" : ""}
         </small>
@@ -167,7 +185,8 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
       <div className="market-index-visual">
         {loading ? (
           <div className="index-state">
-            <RefreshCw className="spin" size={17} /> KOSPI 지수를 불러오고 있어요
+            <RefreshCw className="spin" size={17} /> KOSPI 지수를 불러오고
+            있어요
           </div>
         ) : chart && data?.points.length ? (
           <>
@@ -179,8 +198,16 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
             >
               <defs>
                 <linearGradient id="kospi-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={positive ? "#f04452" : "#3182f6"} stopOpacity=".22" />
-                  <stop offset="100%" stopColor={positive ? "#f04452" : "#3182f6"} stopOpacity="0" />
+                  <stop
+                    offset="0%"
+                    stopColor={positive ? "#f04452" : "#3182f6"}
+                    stopOpacity=".22"
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor={positive ? "#f04452" : "#3182f6"}
+                    stopOpacity="0"
+                  />
                 </linearGradient>
               </defs>
               {[0.2, 0.5, 0.8].map((ratio) => (
@@ -194,13 +221,20 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
                 />
               ))}
               <path d={chart.area} fill="url(#kospi-area)" />
-              <path d={chart.line} className={positive ? "index-line positive" : "index-line negative"} />
+              <path
+                d={chart.line}
+                className={
+                  positive ? "index-line positive" : "index-line negative"
+                }
+              />
             </svg>
             <div className="index-axis">
               <span>{shortDate(data.points[0].date)}</span>
               <span>최저 {number.format(chart.min)}</span>
               <span>최고 {number.format(chart.max)}</span>
-              <span>{shortDate(data.points.at(-1)?.date || data.points[0].date)}</span>
+              <span>
+                {shortDate(data.points.at(-1)?.date || data.points[0].date)}
+              </span>
             </div>
           </>
         ) : (
@@ -208,7 +242,9 @@ export default function MarketIndexChart({ initialData = null }: { initialData?:
             장 운영 시간 또는 KIS 연결 상태를 확인하고 있어요.
           </div>
         )}
-        {refreshing ? <RefreshCw className="index-refresh spin" size={14} /> : null}
+        {refreshing ? (
+          <RefreshCw className="index-refresh spin" size={14} />
+        ) : null}
       </div>
     </section>
   );

@@ -50,6 +50,13 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
   });
   const started=performance.now();await page.goto(base,{waitUntil:'domcontentloaded'});
   await page.locator('.ranked-list li').nth(19).waitFor();
+  await page.evaluate(()=>document.fonts.ready);
+  assert.equal(await page.evaluate(()=>document.fonts.check('14px "StockPilot Pretendard"')),true);checks++;
+  if(width>=768){await page.locator('.ranked-metric-tabs').getByRole('button',{name:'거래량',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.ranked-metric-tabs button[aria-pressed="true"]')?.textContent==='거래량');await page.locator('.ranked-metric-tabs').getByRole('button',{name:'시가총액',exact:true}).click();}
+  else {await page.getByLabel('종목 정렬 기준').selectOption('VOLUME');await page.getByLabel('종목 정렬 기준').selectOption('CAP');}
+  await page.locator('.ranked-list li').nth(19).waitFor();assert.ok((await page.locator('.stock-row-metric').first().textContent()).includes('50,000'));checks++;
+  await page.locator('.ranked-market-switch').getByRole('button',{name:'한국',exact:true}).click();assert.equal(await page.locator('.ranked-list li').count(),20);checks++;
+  await page.getByPlaceholder('회사명 · 종목코드 · 티커 검색').fill('삼성');await page.locator('.search-results button').first().waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.getByPlaceholder('회사명 · 종목코드 · 티커 검색').fill('');await page.getByPlaceholder('회사명 · 종목코드 · 티커 검색').blur();checks++;
   await page.screenshot({path:`${output}/after-${width}.png`});
   const readyMs=Math.round(performance.now()-started);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`overflow ${width}`);checks++;
@@ -59,28 +66,39 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
   await page.locator('.command-results button').first().waitFor();await page.keyboard.press('Enter');await page.locator('.command-dialog').waitFor({state:'hidden'});checks++;
   await page.waitForFunction(()=>document.querySelector('.instrument-identity h2')?.textContent==='삼성전자'&&document.querySelector('.analysis-column')?.getClientRects().length>0);
   await page.locator('.instrument-identity h2').waitFor({state:'visible'});assert.equal(await page.locator('.instrument-identity h2').innerText(),'삼성전자');checks++;
-  await page.locator('.analysis-column').scrollIntoViewIfNeeded();await page.locator('.stock-trend-chart svg').waitFor();await page.screenshot({path:`${output}/instrument-${width}.png`});
-  if(width<=1000)await page.getByRole('button',{name:/모의주문/}).last().click();
-  await page.getByRole('button',{name:'삼성전자 관심종목 추가',exact:true}).click();checks++;
+  await page.locator('.stock-trend-chart svg').waitFor();await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:`${output}/instrument-${width}.png`});
+  if(width<=1000){await page.getByRole('button',{name:/모의주문/}).last().click();await page.locator('.order-card').evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished.catch(()=>{}))));}
+  await page.getByRole('button',{name:'삼성전자 관심종목 추가',exact:true}).click();
+  try{await page.getByRole('button',{name:'삼성전자 관심종목 제거',exact:true}).waitFor();}
+  catch(error){await page.screenshot({path:`${output}/save-failure-${width}.png`});console.log(JSON.stringify({width,favorites:await page.evaluate(()=>localStorage.getItem('stockpilot_favorite_stocks_v1')),order:await page.locator('.order-card').innerText()}));throw error;}
+  checks++;
   await page.getByLabel('주문 수량',{exact:true}).fill('3');
-  await page.locator('.submit.buy').click();await page.getByRole('heading',{name:'주문 내용을 확인해 주세요'}).waitFor();
+  await page.getByLabel('주문 수량',{exact:true}).blur();
+  await page.locator('.submit.buy').click();
+  try{await page.getByRole('heading',{name:'주문 내용을 확인해 주세요'}).waitFor();}
+  catch(error){await page.screenshot({path:`${output}/order-failure-${width}.png`});console.log(JSON.stringify({width,order:await page.locator('.order-card').innerText(),inputs:await page.locator('.order-card input').evaluateAll(els=>els.map(e=>({value:e.value,valid:e.checkValidity(),message:e.validationMessage}))),dialog:await page.locator('.order-confirm').count()}));throw error;}
   for(const box of await page.locator('.confirm-check input:not([disabled])').all())await box.check();
   await page.locator('.confirm-actions button').last().click();await page.waitForFunction(()=>document.querySelector('.orders em.FILLED'));
   assert.equal(writes,1);checks++;
   if(width<=1000)await page.getByRole('button',{name:'모의주문 닫기',exact:true}).last().click();
+  if(width<=1023)await page.locator('.mobile-service-nav').getByRole('link',{name:'관심',exact:true}).click();else await page.locator('.workspace-primary').getByRole('link',{name:'관심종목',exact:true}).click();
+  await page.locator('.view-watch').waitFor();
+  try{await page.locator('.favorite-strip').getByRole('button',{name:'삼성전자 상세 보기',exact:true}).click();}
+  catch(error){await page.screenshot({path:`${output}/favorite-failure-${width}.png`});console.log(JSON.stringify({width,favorites:await page.evaluate(()=>localStorage.getItem('stockpilot_favorite_stocks_v1')),watchlist:await page.locator('.favorite-board').innerText()}));throw error;}
+  await page.locator('.view-detail').waitFor();checks++;
   await page.getByRole('button',{name:'판단 기록',exact:true}).click();await page.getByLabel('이 종목을 살펴본 이유').fill('격리된 UI 검증 메모');await page.getByRole('button',{name:'기록 저장'}).click();
   assert.equal(await page.getByLabel('이 종목을 살펴본 이유').inputValue(),'격리된 UI 검증 메모');assert.ok(await page.locator('.decision-events').innerText());checks++;
   await page.getByRole('button',{name:'다크 모드',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');checks++;
   await page.screenshot({path:`${output}/dark-${width}.png`});
   await page.getByRole('button',{name:'금액 가리기',exact:true}).click();assert.equal(await page.locator('html').getAttribute('data-private'),'true');checks++;
-  await page.goBack();await page.locator('.view-market').waitFor();await page.goForward();await page.locator('.view-detail').waitFor();checks++;
+  await page.goBack();await page.locator('.view-watch').waitFor();await page.goForward();await page.locator('.view-detail').waitFor();checks++;
   await page.getByRole('button',{name:'빠른 종목 검색',exact:true}).click();await page.getByRole('textbox',{name:'빠른 검색어'}).fill('empty');await page.getByText('일치하는 종목이 없어요.',{exact:true}).waitFor();checks++;
   await page.getByRole('textbox',{name:'빠른 검색어'}).fill('fail');await page.getByText('검색을 불러오지 못했어요. 검색어를 다시 입력해 주세요.',{exact:true}).waitFor();await page.keyboard.press('Escape');checks++;
   await page.locator('body').evaluate(el=>el.style.zoom='1.25');if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)){console.log(await page.locator('body *').evaluateAll(els=>els.filter(el=>el.getBoundingClientRect().right>innerWidth+1&&getComputedStyle(el).position!=='fixed').slice(0,12).map(el=>({tag:el.tagName,class:el.className,right:el.getBoundingClientRect().right}))));await page.screenshot({path:`${output}/zoom-overflow-${width}.png`});}assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`zoom overflow ${width}`);await page.locator('body').evaluate(el=>el.style.zoom='');checks++;
   if(width<768){await page.locator('.mobile-service-nav').getByRole('link',{name:'내 자산',exact:true}).click();await page.locator('.view-assets').waitFor();await page.locator('.mobile-service-nav').getByRole('link',{name:'투자 기록',exact:true}).click();await page.locator('.order-timeline').waitFor();await page.locator('.mobile-service-nav').getByRole('link',{name:'시장',exact:true}).click();await page.locator('.view-market').waitFor();await page.goBack();await page.locator('.view-records').waitFor();}
   authenticated=false;await page.reload({waitUntil:'domcontentloaded'});await page.locator('.login').waitFor();assert.equal(writes,1);checks++;
   assert.deepEqual(errors,[]);checks++;
-  report.push({width,readyMs,checks:16,pageErrors:errors.length,productionWrites:0});await page.close();
+  report.push({width,readyMs,checks:21,pageErrors:errors.length,productionWrites:0});await page.close();
 }
 }finally{await browser.close();}
 await writeFile(`${output}/report.json`,JSON.stringify(report,null,2));

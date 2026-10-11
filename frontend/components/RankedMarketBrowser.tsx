@@ -81,11 +81,28 @@ export default function RankedMarketBrowser({
     [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const request = useRef<AbortController | null>(null);
-  useEffect(()=>{
-    const sync=()=>{const desired=location.hash==="#us-top"?"US":location.hash==="#kr-top"?"KR":null;if(desired&&desired!==market){setData(null);setError("");setBusy(true);setMarket(desired);}};
-    const timer=setTimeout(sync,0);window.addEventListener("hashchange",sync);
-    return()=>{clearTimeout(timer);window.removeEventListener("hashchange",sync);};
-  },[market]);
+  useEffect(() => {
+    const sync = () => {
+      const desired =
+        location.hash === "#us-top"
+          ? "US"
+          : location.hash === "#kr-top"
+            ? "KR"
+            : null;
+      if (desired && desired !== market) {
+        setData(null);
+        setError("");
+        setBusy(true);
+        setMarket(desired);
+      }
+    };
+    const timer = setTimeout(sync, 0);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, [market]);
   useEffect(() => {
     const c = new AbortController();
     request.current?.abort();
@@ -146,6 +163,7 @@ export default function RankedMarketBrowser({
               key={v}
               aria-pressed={market === v}
               onClick={() => {
+                if (market === v) return;
                 setData(null);
                 setError("");
                 setBusy(true);
@@ -156,12 +174,41 @@ export default function RankedMarketBrowser({
             </button>
           ))}
         </div>
+        <div className="ranked-metric-tabs" aria-label="순위 기준">
+          {(
+            [
+              ["CAP", "시가총액"],
+              ["VOLUME", "거래량"],
+              ["UP", "상승률"],
+              ["DOWN", "하락률"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={metric === value}
+              onClick={() => {
+                if (metric === value) return;
+                setData(null);
+                setError("");
+                setBusy(true);
+                setMetric(value);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <button
           className="ranked-refresh"
           type="button"
           aria-label="순위 새로고침"
           disabled={busy}
-          onClick={() => setAttempt((v) => v + 1)}
+          onClick={() => {
+            setBusy(true);
+            setError("");
+            setAttempt((v) => v + 1);
+          }}
         >
           <RefreshCw size={16} />
         </button>
@@ -194,9 +241,16 @@ export default function RankedMarketBrowser({
               : "전일 대비 하락률 순서"}{" "}
         · 제공 자료 기준
       </p>
-      <div className="stock-list-heading">
+      <div
+        className={`stock-list-heading${metric === "CAP" || metric === "VOLUME" ? " with-metric" : ""}`}
+      >
         <span>종목</span>
         <span>현재가 · 전일 대비</span>
+        {metric === "CAP" || metric === "VOLUME" ? (
+          <span className="stock-metric-heading">
+            {metric === "CAP" ? "시가총액" : "거래량"}
+          </span>
+        ) : null}
       </div>
       <ol className="ranked-list">
         {data?.items.map((s, i) => (
@@ -207,7 +261,22 @@ export default function RankedMarketBrowser({
               metric={
                 metric === "VOLUME" && typeof s.volume === "number"
                   ? `${s.volume.toLocaleString("ko-KR")}주`
-                  : undefined
+                  : metric === "CAP"
+                    ? s.currency === "KRW" &&
+                      typeof s.marketCapEok === "number" &&
+                      Number.isFinite(s.marketCapEok)
+                      ? `${s.marketCapEok.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}억원`
+                      : s.currency === "USD" &&
+                          typeof s.marketCapUsd === "number" &&
+                          Number.isFinite(s.marketCapUsd)
+                        ? new Intl.NumberFormat("ko-KR", {
+                            style: "currency",
+                            currency: "USD",
+                            notation: "compact",
+                            maximumFractionDigits: 1,
+                          }).format(s.marketCapUsd)
+                        : "—"
+                    : undefined
               }
               active={selectedId === s.id}
               saved={savedIds.has(s.id)}

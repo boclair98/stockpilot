@@ -36,7 +36,9 @@ export default function StockRow({
     stock.price > 0;
   const change = stock.changePercent;
   return (
-    <div className={`consumer-stock-row${active ? " selected" : ""}`}>
+    <div
+      className={`consumer-stock-row${metric ? " with-metric" : ""}${active ? " selected" : ""}`}
+    >
       <button
         className="stock-row-open"
         type="button"
@@ -58,7 +60,6 @@ export default function StockRow({
             {stock.symbol} · {stock.exchange}
           </small>
         </span>
-        {metric ? <span className="stock-row-metric">{metric}</span> : null}
         <span className="rank-price">
           <b>
             {known
@@ -79,6 +80,7 @@ export default function StockRow({
               : "등락 미제공"}
           </small>
         </span>
+        {metric ? <span className="stock-row-metric">{metric}</span> : null}
       </button>
       <button
         className="stock-row-save"

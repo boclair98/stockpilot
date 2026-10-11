@@ -309,16 +309,30 @@ export default function TradingTerminal() {
             ? "RECORDS"
             : hash === "#favorite-board-title"
               ? "WATCH"
-              : ["#investor-tools","#news-panel","#order-ticket"].includes(hash)
+              : ["#investor-tools", "#news-panel", "#order-ticket"].includes(
+                    hash,
+                  )
                 ? "DETAIL"
-              : !["#market-rankings","#search-card","#kr-top","#us-top"].includes(hash) && params.get("view") === "detail"
-                ? "DETAIL"
-                : "MARKET",
+                : ![
+                      "#market-rankings",
+                      "#search-card",
+                      "#kr-top",
+                      "#us-top",
+                    ].includes(hash) && params.get("view") === "detail"
+                  ? "DETAIL"
+                  : "MARKET",
       );
       if (hash === "#decision-review") setDetailTab("REVIEW");
-      if(hash==="#investor-tools"){setDetailTab("TOOLS");setAlertFocusKey(value=>value+1);}
-      if(hash==="#news-panel")setDetailTab("RESEARCH");
-      if(hash==="#order-ticket"&&window.matchMedia("(max-width:1023px)").matches)setMobileOrderOpen(true);
+      if (hash === "#investor-tools") {
+        setDetailTab("TOOLS");
+        setAlertFocusKey((value) => value + 1);
+      }
+      if (hash === "#news-panel") setDetailTab("RESEARCH");
+      if (
+        hash === "#order-ticket" &&
+        window.matchMedia("(max-width:1023px)").matches
+      )
+        setMobileOrderOpen(true);
       if (params.get("symbol")) {
         setSelected(
           `${params.get("market") || "KR"}:${params.get("exchange") || "KRX"}:${params.get("symbol")}`,
@@ -527,10 +541,12 @@ export default function TradingTerminal() {
 
   const focusSearch = useCallback(() => {
     setWorkspaceView("MARKET");
-    window.setTimeout(
-      () => {document.getElementById("search-card")?.scrollIntoView({behavior:"smooth",block:"center"});searchInputRef.current?.focus({ preventScroll: true });},
-      180,
-    );
+    window.setTimeout(() => {
+      document
+        .getElementById("search-card")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      searchInputRef.current?.focus({ preventScroll: true });
+    }, 180);
   }, []);
 
   useEffect(() => {
@@ -1084,9 +1100,9 @@ export default function TradingTerminal() {
         exchange: data.exchange,
         logoUrl: data.logoUrl,
       });
-      document
-        .getElementById("instrument-workspace")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Open the quote from its beginning; a delayed smooth anchor scroll can
+      // slide the heading beneath the sticky header, especially in WebKit.
+      requestAnimationFrame(() => window.scrollTo(0, 0));
     } catch (error) {
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -1293,10 +1309,30 @@ export default function TradingTerminal() {
           StockPilot<small>투자 연습의 기록</small>
         </Link>
         <nav className="workspace-primary" aria-label="주요 메뉴">
-          <a href="#market-rankings">시장</a>
-          <a href="#favorite-board-title">관심종목</a>
-          <a href="#holdings">내 자산</a>
-          <a href="#decision-review">매매 기록</a>
+          <a
+            href="#market-rankings"
+            aria-current={workspaceView === "MARKET" ? "page" : undefined}
+          >
+            시장
+          </a>
+          <a
+            href="#favorite-board-title"
+            aria-current={workspaceView === "WATCH" ? "page" : undefined}
+          >
+            관심종목
+          </a>
+          <a
+            href="#holdings"
+            aria-current={workspaceView === "ASSETS" ? "page" : undefined}
+          >
+            내 자산
+          </a>
+          <a
+            href="#decision-review"
+            aria-current={workspaceView === "RECORDS" ? "page" : undefined}
+          >
+            매매 기록
+          </a>
           <a href="/practice">투자 연습</a>
         </nav>
         <div className="top-actions">
@@ -1326,7 +1362,11 @@ export default function TradingTerminal() {
             aria-label={
               unreadAlerts ? `읽지 않은 알림 ${unreadAlerts}개` : "알림"
             }
-            onClick={() => {setWorkspaceView("DETAIL");setDetailTab("TOOLS");setAlertFocusKey((value) => value + 1);}}
+            onClick={() => {
+              setWorkspaceView("DETAIL");
+              setDetailTab("TOOLS");
+              setAlertFocusKey((value) => value + 1);
+            }}
           >
             <Bell size={19} />
             {unreadAlerts > 0 && (
@@ -1364,9 +1404,9 @@ export default function TradingTerminal() {
           <h1>
             {
               {
-                MARKET: "오늘의 시장, 나의 다음 선택",
+                MARKET: "시장",
                 DETAIL: "종목 살펴보기",
-                WATCH: "다시 보고 싶은 종목들",
+                WATCH: "관심종목",
                 ASSETS: "내 모의투자 자산",
                 RECORDS: "나의 투자 기록",
               }[workspaceView]
@@ -1817,11 +1857,6 @@ export default function TradingTerminal() {
               selectedId={selected}
               colorFor={colorFor}
               onSelect={(item) => {
-                const liveQuote = quoteById.get(item.id);
-                if (liveQuote) {
-                  selectTopQuote(liveQuote);
-                  return;
-                }
                 void chooseSearchResult({ ...item, englishName: "" });
               }}
               onRemove={(item) => toggleFavorite({ ...item, englishName: "" })}
@@ -1905,7 +1940,37 @@ export default function TradingTerminal() {
                   : "조회 시간 확인 중"}
               </span>
             </div>
-            <div className="instrument-actions"><button type="button" disabled={!quote} aria-pressed={quote?favoriteIds.has(quote.id):false} onClick={()=>quote&&toggleFavorite({...quote,englishName:""})}><Star size={17} fill={quote&&favoriteIds.has(quote.id)?"currentColor":"none"}/>{quote&&favoriteIds.has(quote.id)?"관심종목 저장됨":"관심종목 저장"}</button><button type="button" disabled={!quote} onClick={()=>{setDetailTab("TOOLS");setAlertFocusKey(value=>value+1);}}><Bell size={17}/>가격 알림</button></div>
+            <div className="instrument-actions">
+              <button
+                type="button"
+                disabled={!quote}
+                aria-pressed={quote ? favoriteIds.has(quote.id) : false}
+                onClick={() =>
+                  quote && toggleFavorite({ ...quote, englishName: "" })
+                }
+              >
+                <Star
+                  size={17}
+                  fill={
+                    quote && favoriteIds.has(quote.id) ? "currentColor" : "none"
+                  }
+                />
+                {quote && favoriteIds.has(quote.id)
+                  ? "관심종목 저장됨"
+                  : "관심종목 저장"}
+              </button>
+              <button
+                type="button"
+                disabled={!quote}
+                onClick={() => {
+                  setDetailTab("TOOLS");
+                  setAlertFocusKey((value) => value + 1);
+                }}
+              >
+                <Bell size={17} />
+                가격 알림
+              </button>
+            </div>
           </header>
           <DeferredMount minHeight={390} rootMargin="420px 0px">
             <StockTrendPanel

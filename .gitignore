@@ -4,6 +4,14 @@ __pycache__
 .pytest_cache/
 .ruff_cache/
 *.log
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.p12
+*.pfx
+backend/uploads/
 *.pyc
 .venv
 .env
