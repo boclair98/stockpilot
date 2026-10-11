@@ -35,6 +35,10 @@ KRX·NXT·미국주식 시세를 바탕으로 검색, 분석, 가상주문, 포�
 - 자산·투자 기록은 기존 계좌와 실제 모의 주문 내역을 사용하며, 달러를 원화로 임의 환산하지 않습니다.
 - Pretendard Variable, 명확한 탭/포커스 상태, 모바일 하단 내비게이션, 작은 화면 주문 UI, 다크 모드, reduced-motion 동작을 유지합니다.
 
+### 2026-10-12 · 종목 로고 표시 보완
+
+종목 카탈로그에서 제공하는 티커 로고를 우선 표시하고, 로고가 등록되지 않은 경우에도 이미지 요청이 404로 끊기지 않도록 Logo.dev의 기본 대체 마크를 사용합니다. 등록된 회사별 마크를 다음 후보로 시도하고, 외부 이미지가 모두 실패하면 네트워크와 무관한 종목명 이니셜을 표시합니다. 이 순서는 SK하이닉스처럼 일부 로고가 빠지던 문제와 종목이 바뀐 뒤 이전 이미지 실패 상태가 남는 문제를 함께 막습니다. Logo.dev의 [주식 티커 로고 API](https://www.logo.dev/products/stock-ticker-logos)는 티커별 로고와 누락 시 모노그램 대체 표시를 지원합니다.
+
 [디자인 결정·참고 보드·검증 범위·한계](docs/design-20261011.md). 로컬 fixture 검사는 실제 운영 주문이나 개인 계좌의 검증을 뜻하지 않습니다. 기능 구현, 테스트, 배포 확인은 각각 구분해 완료 보고에 기록합니다.
 
 <p><img src="docs/images/stitch-market-desktop-20261011.png" width="680" alt="StockPilot 시장 홈 데스크톱 UI" /> <img src="docs/images/stitch-market-mobile-20261011.png" width="190" alt="StockPilot 시장 홈 모바일 UI" /></p>

@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type Brand = {
   src: string;
@@ -66,14 +66,24 @@ export default function StockLogo({
   large?: boolean;
 }) {
   const normalized = symbol.toUpperCase();
-  const brand = useMemo(() => brands[normalized], [normalized]);
-  const [failedSource, setFailedSource] = useState("");
-  // Prefer the known brand map so a stale/expired catalog URL cannot replace
-  // a stable company mark. Search-only symbols still use the catalog URL and
-  // always fall back to a local monogram when the provider is unavailable.
-  const source = brand?.src || logoUrl || "";
+  const brand = brands[normalized];
+  const sources = [
+    ...new Set(
+      [logoUrl, brand?.src].filter((source): source is string => Boolean(source)),
+    ),
+  ];
+  const logoKey = `${normalized}:${logoUrl ?? ""}`;
+  const [failureState, setFailureState] = useState<{
+    key: string;
+    sources: Set<string>;
+  }>({ key: "", sources: new Set() });
+  const failedSources = failureState.key === logoKey ? failureState.sources : new Set<string>();
+  // Prefer the catalog's full-universe company mark. Curated marks are a
+  // second attempt; every failed image advances to the next source, then to
+  // a local monogram that never depends on a network request.
+  const source = sources.find((candidate) => !failedSources.has(candidate)) ?? "";
 
-  const showImage = Boolean(source && failedSource !== source);
+  const showImage = Boolean(source);
 
   return (
     <span
@@ -86,7 +96,14 @@ export default function StockLogo({
           src={source}
           alt={`${name} 로고`}
           loading="lazy"
-          onError={() => setFailedSource(source)}
+          onError={() =>
+            setFailureState((current) => {
+              const nextSources =
+                current.key === logoKey ? new Set(current.sources) : new Set<string>();
+              nextSources.add(source);
+              return { key: logoKey, sources: nextSources };
+            })
+          }
         />
       ) : (
         name.trim().charAt(0) || normalized.charAt(0)

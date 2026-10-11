@@ -20,6 +20,7 @@ def test_logo_dev_uses_exchange_suffixes(monkeypatch) -> None:
     assert "/ticker/035720.KQ?" in kosdaq.public()["logoUrl"]
     assert "/ticker/AAPL?" in nasdaq.public()["logoUrl"]
     assert "token=pk_test" in nasdaq.public()["logoUrl"]
+    assert "fallback=404" not in nasdaq.public()["logoUrl"]
 
 
 def test_logo_url_is_optional(monkeypatch) -> None:

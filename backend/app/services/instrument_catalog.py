@@ -51,7 +51,9 @@ class Instrument:
             logo_url = (
                 f"https://img.logo.dev/ticker/{quote(ticker, safe='')}"
                 f"?token={quote(settings.logo_dev_publishable_key, safe='_-')}"
-                "&size=96&format=webp&retina=true&fallback=404"
+                # Let Logo.dev return its built-in monogram for an unmapped
+                # ticker instead of a 404/broken image in stock lists.
+                "&size=96&format=webp&retina=true"
             )
         return {
             "id": self.id,
