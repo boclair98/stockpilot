@@ -90,6 +90,43 @@ async def test_ranking_http_pagination_and_snapshot_change(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_browse_market_cap_pages_continue_after_first_30(monkeypatch):
+    async def snapshot(market, metric, exchange, target, requested=None):
+        assert (market, metric, exchange) == ("KR", "CAP", "ALL")
+        assert target <= 60
+        return {
+            "items": [{"symbol": f"{i:06d}"} for i in range(60)],
+            "providerHasMore": False,
+            "partial": False,
+            "asOf": "2026-10-11T00:00:00Z",
+        }
+
+    monkeypatch.setattr(toss_market, "browse_snapshot", snapshot)
+    app = FastAPI()
+    app.include_router(toss_market.router)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await client.get("/api/toss-market/browse-rankings?offset=0&limit=20")
+        second = await client.get(
+            "/api/toss-market/browse-rankings?offset=20&limit=20&snapshot=2026-10-11T00:00:00Z"
+        )
+        third = await client.get(
+            "/api/toss-market/browse-rankings?offset=40&limit=20&snapshot=2026-10-11T00:00:00Z"
+        )
+
+    assert [first.status_code, second.status_code, third.status_code] == [200] * 3
+    assert [len(r.json()["items"]) for r in (first, second, third)] == [20] * 3
+    assert [r.json()["items"][0]["symbol"] for r in (first, second, third)] == [
+        "000000",
+        "000020",
+        "000040",
+    ]
+    assert [r.json()["hasMore"] for r in (first, second, third)] == [True, True, False]
+    assert third.json()["nextOffset"] is None
+
+
+@pytest.mark.asyncio
 async def test_provider_failure_is_503_not_a_fake_empty_market(monkeypatch):
     async def snapshot(*args):
         return {"items": [], "partial": True}

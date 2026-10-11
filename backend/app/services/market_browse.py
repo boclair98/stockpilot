@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 from datetime import UTC, datetime
 
 from app.core.traffic import traffic_store
@@ -11,6 +12,7 @@ from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.market_rankings import normalize_row, ordered_rows, request_spec
 
+logger = logging.getLogger(__name__)
 SNAPSHOT_TTL = 900
 MAX_READ = 50000
 
@@ -24,8 +26,6 @@ async def extend_exchange(
 ) -> dict:
     digest = hashlib.sha256(epoch.encode()).hexdigest()[:24]
     state_key = f"market:browse:v1:{market}:{metric}:{exchange}:{digest}"
-    window_key = f"{state_key}:window:{(target + 99) // 100}"
-
     async def extend() -> bool:
         lease = await traffic_store.acquire_lock(state_key, ttl_seconds=30)
         if not lease:
@@ -133,7 +133,11 @@ async def extend_exchange(
                         state["more"] = False
                     state["failed"] = False
                     await traffic_store.set_json(state_key, state, SNAPSHOT_TTL)
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Market browse provider continuation failed (%s)",
+                    type(exc).__name__,
+                )
                 state["failed"] = True
                 state["retryAt"] = datetime.now(UTC).timestamp() + 15
                 await traffic_store.set_json(state_key, state, SNAPSHOT_TTL)
@@ -149,8 +153,12 @@ async def extend_exchange(
         or not state["more"]
     ):
         return state
-    # Cache the coordination marker, not repeated copies of the entire prefix.
-    await traffic_store.get_or_set(window_key, 10, extend)
+    # The per-exchange lease is the single-flight guard. Caching the result of
+    # this extension by a coarse 100-row window caused the first page request
+    # to suppress later requests in that same window (notably around rows 30–40).
+    # Run the extension again for each requested prefix; it exits immediately
+    # when the shared state already contains enough rows.
+    await extend()
     return await traffic_store.get_json(state_key) or {
         "rows": [],
         "more": True,
@@ -170,7 +178,11 @@ async def browse_snapshot(
     current = await traffic_store.get_or_set(base, 120, new_epoch)
     epoch = requested or current
     exchanges = (
-        ["NAS", "NYS", "AMS"] if market == "US" and exchange == "ALL" else [exchange]
+        ["NAS", "NYS", "AMS"]
+        if market == "US" and exchange == "ALL"
+        else ["KOSPI", "KOSDAQ"]
+        if market == "KR" and exchange == "ALL"
+        else [exchange]
     )
     if requested and requested != current:
         digest = hashlib.sha256(epoch.encode()).hexdigest()[:24]
@@ -216,7 +228,7 @@ async def browse_snapshot(
         "providerHasMore": any(p["more"] for p in parts),
         "partial": any(p["failed"] for p in parts),
         "stale": False,
-        "scope": "KRX 순위 조회"
+        "scope": "코스피·코스닥 통합 순위"
         if market == "KR"
         else " · ".join(exchanges) + " 순위 조회 통합",
         "source": "한국투자증권 순위 API",

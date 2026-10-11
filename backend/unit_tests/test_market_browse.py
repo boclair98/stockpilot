@@ -81,6 +81,155 @@ async def test_browsing_continues_beyond_600_with_shared_provider_prefixes(monke
 
 
 @pytest.mark.asyncio
+async def test_domestic_market_cap_can_continue_past_first_30_rows(monkeypatch):
+    await traffic_store.close()
+    traffic_store._memory.clear()
+    calls = []
+    leases = set()
+
+    async def acquire_lock(key, ttl_seconds=60):
+        if key in leases:
+            return None
+        leases.add(key)
+        return key
+
+    async def release_lock(key, token):
+        leases.discard(key)
+        return True
+
+    monkeypatch.setattr(traffic_store, "acquire_lock", acquire_lock)
+    monkeypatch.setattr(traffic_store, "release_lock", release_lock)
+
+    def respond(request):
+        page = len(calls)
+        calls.append(request)
+        start = page * 10
+        rows = [
+            {
+                "mksc_shrn_iscd": f"{i:06d}",
+                "hts_kor_isnm": f"국내 종목 {i}",
+                "stck_prpr": "100000",
+                "lstn_stcn": "1000000000",
+                "stck_avls": "1000000",
+                "prdy_ctrt": "1.2",
+                "acml_vol": "10000",
+            }
+            for i in range(start, start + 10)
+        ]
+        return httpx.Response(
+            200,
+            headers={"tr_cont": "M" if start + 10 < 60 else "D"},
+            json={"rt_cd": "0", "output": rows},
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+    class Provider:
+        configured = True
+        rest_base = "https://provider.test"
+
+        @asynccontextmanager
+        async def _rest_slot(self):
+            yield
+
+        async def _rate_limit_rest(self):
+            pass
+
+        async def _token(self):
+            return "mock"
+
+        def _headers(self, token, tr):
+            return {"tr_id": tr}
+
+        def _client(self):
+            return client
+
+    monkeypatch.setattr(browse, "kis_market", Provider())
+    first = await browse.browse_snapshot("KR", "CAP", "KOSPI", 20)
+    epoch = first["asOf"]
+    second = await browse.browse_snapshot("KR", "CAP", "KOSPI", 40, epoch)
+    third = await browse.browse_snapshot("KR", "CAP", "KOSPI", 70, epoch)
+    await client.aclose()
+
+    assert len(first["items"]) >= 20
+    assert len(second["items"]) >= 40
+    assert len(third["items"]) == 60
+    assert len({row["symbol"] for row in third["items"]}) == 60
+    assert third["providerHasMore"] is False
+    assert len(calls) == 6
+    assert calls[0].headers.get("tr_cont") is None
+    assert all(call.headers["tr_cont"] == "N" for call in calls[1:])
+
+
+@pytest.mark.asyncio
+async def test_all_korean_rankings_merge_kospi_and_kosdaq_top_rows(monkeypatch):
+    await traffic_store.close()
+    traffic_store._memory.clear()
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        market_code = request.url.params["FID_INPUT_ISCD"]
+        start = 1 if market_code == "0001" else 101
+        rows = [
+            {
+                "mksc_shrn_iscd": f"{i:06d}",
+                "hts_kor_isnm": f"국내 종목 {i}",
+                "stck_prpr": "100000",
+                "lstn_stcn": "1000000000",
+                "stck_avls": "1000000",
+                "prdy_ctrt": "1.2",
+                "acml_vol": "10000",
+            }
+            for i in range(start, start + 30)
+        ]
+        return httpx.Response(
+            200,
+            headers={"tr_cont": "D"},
+            json={"rt_cd": "0", "output": rows},
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+    class Provider:
+        configured = True
+        rest_base = "https://provider.test"
+
+        @asynccontextmanager
+        async def _rest_slot(self):
+            yield
+
+        async def _rate_limit_rest(self):
+            pass
+
+        async def _token(self):
+            return "mock"
+
+        def _headers(self, token, tr):
+            return {"tr_id": tr}
+
+        def _client(self):
+            return client
+
+    monkeypatch.setattr(browse, "kis_market", Provider())
+    first = await browse.browse_snapshot("KR", "CAP", "ALL", 20)
+    epoch = first["asOf"]
+    second = await browse.browse_snapshot("KR", "CAP", "ALL", 40, epoch)
+    third = await browse.browse_snapshot("KR", "CAP", "ALL", 60, epoch)
+    await client.aclose()
+
+    # browse_snapshot keeps a shared, cached prefix; the HTTP route slices it
+    # to the requested page. Assert prefix growth here, not page-sized output.
+    assert len(first["items"]) >= 20
+    assert len(second["items"]) >= 40
+    assert len(third["items"]) == 60
+    assert len({row["symbol"] for row in third["items"]}) == 60
+    assert third["providerHasMore"] is False
+    assert {call.url.params["FID_INPUT_ISCD"] for call in calls} == {"0001", "1001"}
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
 async def test_unknown_snapshot_is_rejected_without_creating_provider_work():
     await traffic_store.close()
     traffic_store._memory.clear()

@@ -35,7 +35,7 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
     else if(path==='/api/trading/quote')data=quotes.find(q=>q.symbol===u.searchParams.get('symbol'))||quotes[0];
     else if(path==='/api/toss-market/browse-rankings'){
       const market=u.searchParams.get('market'),offset=Number(u.searchParams.get('offset'));
-      data={market,metric:u.searchParams.get('metric'),asOf:'2026-10-11T00:00:00Z',items:Array.from({length:20},(_,i)=>({...quotes.find(q=>q.market===market),id:`${market}:TEST:${offset+i}`,symbol:String(900000+offset+i),name:i===1?'아주긴한국어종목이름과영문CompanyHolding':`검증 종목 ${offset+i+1}`,englishName:'Fixture',marketCapEok:50000-i,marketCapUsd:100000000000-i})),total:offset+20,hasMore:offset<40,nextOffset:offset<40?offset+20:null,partial:false};
+      data={market,metric:u.searchParams.get('metric'),asOf:'2026-10-11T00:00:00Z',items:Array.from({length:20},(_,i)=>({...quotes.find(q=>q.market===market),id:`${market}:TEST:${offset+i}`,symbol:String(900000+offset+i),name:i===1?'아주긴한국어종목이름과영문CompanyHolding':`검증 종목 ${offset+i+1}`,englishName:'Fixture',marketCapEok:50000-i,marketCapUsd:100000000000-i})),total:80,hasMore:offset<60,nextOffset:offset<60?offset+20:null,partial:false};
     }
     else if(path==='/api/toss-market/instruments'){
       const market=u.searchParams.get('market'),exchange=u.searchParams.get('exchange'),offset=Number(u.searchParams.get('offset')),total=market==='KR'?45:27;
@@ -72,6 +72,8 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
   const readyMs=Math.round(performance.now()-started);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`overflow ${width}`);checks++;
   await page.getByRole('button',{name:/20개 더 보기/}).click();await page.locator('.ranked-list li').nth(39).waitFor();checks++;
+  await page.getByRole('button',{name:/20개 더 보기/}).click();await page.locator('.ranked-list li').nth(59).waitFor();checks++;
+  await page.getByRole('button',{name:/20개 더 보기/}).click();await page.waitForFunction(()=>document.querySelectorAll('.ranked-list li').length===80);assert.equal(await page.locator('.ranked-list li').count(),80);assert.equal(await page.getByRole('button',{name:/20개 더 보기/}).count(),0);checks++;
   const rank23=await page.locator('.rank-number').nth(22).evaluate(el=>({h:el.offsetHeight,line:parseFloat(getComputedStyle(el).lineHeight)}));assert.ok(rank23.h<=rank23.line+1);checks++;
   await page.getByRole('button',{name:'빠른 종목 검색',exact:true}).click();await page.getByRole('textbox',{name:'빠른 검색어'}).fill('삼성');
   await page.locator('.command-results button').first().waitFor();await page.keyboard.press('Enter');await page.locator('.command-dialog').waitFor({state:'hidden'});checks++;
