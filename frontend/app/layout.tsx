@@ -41,6 +41,7 @@ import "./app-polish.css";
 import "./workspace.css";
 import "./consumer.css";
 import "./stockpilot-design.css";
+import "./theme-contrast.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),

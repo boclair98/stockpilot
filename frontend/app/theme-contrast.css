@@ -1,0 +1,393 @@
+/* Pair older page components with the active theme. This prevents dark-theme
+   foreground tokens from leaking onto fixed white cards, which caused the
+   league names and supporting labels to disappear. */
+html[data-theme="dark"]
+  :is(.league-app, .growth-app, .practice-app, .lounge-app, .pricing-page, .service-page) {
+  background-color: var(--ws-canvas);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"]
+  :is(.league-topbar, .growth-topbar, .practice-topbar, .lounge-topbar, .pricing-topbar, .service-topbar) {
+  border-color: var(--ws-line);
+  background: var(--ws-canvas);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"]
+  :is(.league-app, .growth-app, .practice-app, .lounge-app, .pricing-page, .service-page)
+  :is(h1, h2, h3, h4) {
+  color: var(--ws-ink);
+}
+
+/* League: keep podium, ranked rows, stats, and private-room cards readable. */
+html[data-theme="dark"] .league-app
+  :is(
+    .league-stats > div,
+    .podium-card,
+    .ranking-list,
+    .league-loading,
+    .league-empty,
+    .privacy-card,
+    .league-rules article,
+    .private-login,
+    .join-card.joined,
+    .room-list > article,
+    .room-maker,
+    .room-empty,
+    .league-section-head button
+  ) {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: var(--ws-shadow);
+}
+
+html[data-theme="dark"] .league-app .podium-card.place-1 {
+  background: linear-gradient(155deg, color-mix(in srgb, var(--ws-apricot) 55%, var(--ws-surface)), var(--ws-surface));
+}
+
+html[data-theme="dark"] .league-app .podium-card.mine,
+html[data-theme="dark"] .league-app .ranking-list article.mine {
+  border-color: color-mix(in srgb, var(--ws-brand-solid) 45%, var(--ws-line));
+  background: var(--ws-tint);
+}
+
+html[data-theme="dark"] .league-app .ranking-list article {
+  border-color: var(--ws-line);
+}
+
+html[data-theme="dark"] .league-app
+  :is(.league-stats small, .podium-card > small, .ranking-note, .privacy-card small, .privacy-card > p, .league-rules article p, .room-head small, .room-list > article > p) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app
+  :is(.podium-card > b, .ranking-list .rank-number, .rank-name > b, .room-head b, .room-ranking strong, .room-empty b) {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app .join-card.joined > p,
+html[data-theme="dark"] .league-app .joined .leave-button,
+html[data-theme="dark"] .league-app .private-login small,
+html[data-theme="dark"] .league-app .private-login > span {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app .private-login > span b {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app :is(.league-avatar, .room-ranking > div, .room-head button, .room-tabs, .room-maker input, .room-maker select) {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app .room-ranking > div.mine,
+html[data-theme="dark"] .league-app .room-tabs button.active {
+  background: var(--ws-tint);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app :is(.room-ranking > div > b, .room-maker label, .room-empty, .league-loading, .league-empty) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app :is(.room-maker input, .room-maker select) {
+  color-scheme: dark;
+}
+
+/* Main workspace cards that still use legacy fixed-white surfaces. */
+html[data-theme="dark"] .consumer-app
+  :is(.market-index-card, .kospi-benchmark-card, .stock-trend-panel, .investor-tools, .stock-news, .mission-grid article, .kospi-benchmark-compare) {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: var(--ws-shadow);
+}
+
+html[data-theme="dark"] .consumer-app
+  :is(.index-title strong, .kospi-benchmark-price strong, .kospi-window-metrics b, .kospi-compare-values b, .kospi-compare-label > span, .stock-trend-head h2, .investor-tools h2, .stock-news-head > span, .mission-grid b) {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .consumer-app
+  :is(.index-kicker, .market-index-copy p, .market-index-copy small, .index-axis, .index-state, .kospi-benchmark-heading p, .kospi-benchmark-price span, .kospi-window-metrics small, .kospi-regime small, .kospi-compare-values small, .kospi-benchmark-axis, .kospi-benchmark-empty, .kospi-benchmark-loading, .kospi-benchmark-footnote, .stock-trend-head p, .trend-axis, .stock-news-head small, .news-list small, .news-note, .mission-grid p) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .consumer-app :is(.trend-periods, .trend-summary > span, .trade-report span, .alert-list article, .allocation-report > div, .mission-grid article > i) {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .consumer-app
+  :is(.trend-summary small, .trade-report small, .trade-report b em, .alert-list small, .allocation-report small, .order-help) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .consumer-app :is(.trend-periods button.active, .private-leagues .room-ranking > div.mine) {
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .consumer-app :is(.positive, .up) {
+  color: var(--ws-up) !important;
+}
+
+html[data-theme="dark"] .consumer-app :is(.negative, .down) {
+  color: var(--ws-down) !important;
+}
+
+/* Growth, practice, community, and information pages use the same paired
+   surfaces instead of mixing a dark canvas with unreadable light text. */
+html[data-theme="dark"] .growth-app,
+html[data-theme="dark"] .practice-app,
+html[data-theme="dark"] .lounge-app {
+  background: var(--ws-canvas);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.financial-safety, .daily-challenge, .skill-card, .weekly-section, .journal-section, .duel-cta, .portfolio-analytics, .analytics-overview, .analytics-metrics article, .journal-form, .journal-list > article, .journal-empty, .challenge-result),
+html[data-theme="dark"] .practice-app
+  :is(.practice-presets button, .practice-loading, .replay-market, .replay-account, .replay-budget, .replay-horizon, .replay-strategy-grid > button, .replay-result, .replay-secondary),
+html[data-theme="dark"] .lounge-app
+  :is(.lounge-main, .lounge-sidebar section, .lounge-login-card, .lounge-post, .lounge-composer) {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: var(--ws-shadow);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.safety-indicators article, .safety-next, .safety-policy, .challenge-chart, .journal-form input, .journal-form select, .journal-form textarea, .journal-list form select, .journal-list form textarea, .journal-list article > div span, .journal-list blockquote, .analytics-metrics article span),
+html[data-theme="dark"] .practice-app
+  :is(.replay-chart, .replay-chart svg, .replay-result-foot button, .next-day),
+html[data-theme="dark"] .lounge-app
+  :is(.lounge-composer textarea, .lounge-post-avatar, .lounge-notice, .lounge-empty) {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.growth-hero > div > small, .safety-heading small, .safety-indicators strong small, .safety-next > span, .safety-next p, .safety-guardrails small, .safety-policy ul, .safety-disclaimer, .challenge-chart > span, .challenge-actions small, .challenge-result > p, .skill-bars > div > span, .skill-card > p, .skill-score small, .analytics-heading > small, .analytics-return small, .analytics-quality small, .analytics-note, .journal-form > p, .journal-form label, .journal-list article header small, .journal-list article > p, .journal-empty, .journal-empty p, .journal-login small),
+html[data-theme="dark"] .practice-app
+  :is(.practice-loading, .replay-market small, .replay-account small, .replay-strategy-grid small, .replay-result small),
+html[data-theme="dark"] .lounge-app
+  :is(.lounge-hero > div > p:last-child, .lounge-author small, .composer-actions span, .lounge-feed-head span, .lounge-post-meta span, .lounge-post-content p, .lounge-empty, .lounge-sidebar ul, .lounge-notice p) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.safety-indicators strong, .safety-guardrails b, .journal-list article header b, .journal-list article > div span, .journal-empty b, .journal-login b, .analytics-quality b, .analytics-metrics article b, .analytics-metrics article span),
+html[data-theme="dark"] .lounge-app
+  :is(.lounge-post-meta b, .lounge-post-content p, .lounge-sidebar h2, .lounge-empty b) {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.safety-heading p, .safety-indicators strong, .analytics-return.positive strong, .analytics-return.negative strong, .analytics-login b, .journal-login b) {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .growth-app :is(.analytics-return span, .analytics-quality span, .analytics-login small, .journal-login small) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .growth-app .analytics-return.positive strong {
+  color: var(--ws-up);
+}
+
+html[data-theme="dark"] .growth-app .analytics-return.negative strong {
+  color: var(--ws-down);
+}
+
+html[data-theme="dark"] .growth-app
+  :is(.challenge-actions button, .review-open, .analytics-login),
+html[data-theme="dark"] .lounge-app
+  :is(.lounge-login-card, .lounge-notice) {
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .growth-app :is(.journal-form input, .journal-form select, .journal-form textarea, .journal-list form select, .journal-list form textarea),
+html[data-theme="dark"] .lounge-app .lounge-composer textarea {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] .growth-app .journal-login {
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .practice-app .next-day {
+  border-color: transparent;
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+html[data-theme="dark"] .practice-app .replay-strategy-grid > button,
+html[data-theme="dark"] .practice-app .replay-result-foot button {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"]
+  :is(.pricing-page, .service-page)
+  :is(.pricing-section, .pricing-card, .pricing-compare, .pricing-value-grid article, .pricing-trust, .service-document, .guide-step, .service-callout, .service-faq details, .route-state-card) {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: var(--ws-shadow);
+}
+
+html[data-theme="dark"]
+  :is(.pricing-page, .service-page)
+  :is(.pricing-description, .pricing-card li, .pricing-value-grid p, .pricing-section-head > span, .pricing-table-wrap th, .pricing-table-wrap td, .pricing-trust p, .service-document p, .service-faq details p, .route-state-card p) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"]
+  :is(.pricing-page, .service-page)
+  :is(.pricing-card h3, .pricing-highlight, .pricing-table-wrap tbody th, .service-document h2, .service-document h3, .service-faq summary, .route-state-card h1) {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .service-page .route-state {
+  background: var(--ws-canvas);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"]
+  :is(.pricing-page, .service-page)
+  :is(.pricing-hero > p, .pricing-price small, .pricing-prelaunch, .pricing-footnote, .pricing-trust b, .service-callout b) {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .service-page .service-callout p {
+  color: var(--ws-muted);
+}
+
+/* Keep every legacy hero in the dark palette; the old pastel gradients made
+   the inherited light-theme foregrounds disappear after theme switching. */
+html[data-theme="dark"] .league-app .league-hero,
+html[data-theme="dark"] .practice-app .practice-hero,
+html[data-theme="dark"] .pricing-page .pricing-hero,
+html[data-theme="dark"] .service-page .service-page-hero,
+html[data-theme="dark"] .lounge-app .lounge-hero {
+  border: 1px solid var(--ws-line);
+  background: linear-gradient(135deg, #17243a, #1b2c49 58%, #252b37);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app .league-hero > div > p:last-child,
+html[data-theme="dark"] .lounge-app .lounge-hero > div > p:last-child,
+html[data-theme="dark"] .pricing-page .pricing-hero span,
+html[data-theme="dark"] .service-page .service-page-hero span,
+html[data-theme="dark"] .practice-app .practice-hero span {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app .league-topbar nav a,
+html[data-theme="dark"] .league-app .league-topbar nav > span,
+html[data-theme="dark"] .growth-app .growth-topbar nav a,
+html[data-theme="dark"] .practice-app .practice-topbar nav a,
+html[data-theme="dark"] .lounge-app .lounge-topbar nav a,
+html[data-theme="dark"] .pricing-page .service-back,
+html[data-theme="dark"] .service-page .service-back {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app .league-topbar nav .active,
+html[data-theme="dark"] .growth-app .growth-topbar nav b,
+html[data-theme="dark"] .practice-app .practice-topbar nav b {
+  border-color: var(--ws-line);
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .league-app .league-hero .hero-trophy {
+  border: 1px solid var(--ws-line);
+  background: color-mix(in srgb, var(--ws-surface) 82%, transparent);
+}
+
+html[data-theme="dark"] .league-app .league-hero .trophy-orbit {
+  border-color: color-mix(in srgb, var(--ws-apricot) 60%, transparent);
+}
+
+html[data-theme="dark"] .league-app .my-nickname,
+html[data-theme="dark"] .lounge-app .lounge-stat,
+html[data-theme="dark"] .pricing-page .pricing-hero-proof {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .league-app .privacy-card li,
+html[data-theme="dark"] .growth-app .growth-hero > div > small,
+html[data-theme="dark"] .growth-app .growth-topbar nav a,
+html[data-theme="dark"] .practice-app .replay-head small,
+html[data-theme="dark"] .practice-app .replay-account > label,
+html[data-theme="dark"] .practice-app .ohlc span,
+html[data-theme="dark"] .lounge-app .lounge-stat small,
+html[data-theme="dark"] .pricing-page .pricing-hero-proof small {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .league-app :is(.positive, .up-rank) {
+  color: var(--ws-up) !important;
+}
+
+html[data-theme="dark"] .league-app :is(.negative, .down-rank) {
+  color: var(--ws-down) !important;
+}
+
+html[data-theme="dark"] .practice-app .replay-balance {
+  background: var(--ws-line);
+}
+
+html[data-theme="dark"] .practice-app .replay-balance > span {
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .practice-app .replay-balance small,
+html[data-theme="dark"] .practice-app .replay-trades small {
+  color: var(--ws-muted);
+}
+
+html[data-theme="dark"] .practice-app .replay-balance b,
+html[data-theme="dark"] .practice-app .replay-head b,
+html[data-theme="dark"] .lounge-app .lounge-stat b,
+html[data-theme="dark"] .pricing-page .pricing-hero-proof b {
+  color: var(--ws-ink);
+}
+
+html[data-theme="dark"] .practice-app .ohlc span {
+  background: var(--ws-soft);
+}
+
+html[data-theme="dark"] .pricing-page .pricing-hero > p,
+html[data-theme="dark"] .pricing-page .pricing-section-head p {
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .pricing-page .pricing-notice {
+  border-color: var(--ws-line);
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+html[data-theme="dark"] .service-page .service-page-hero > p {
+  color: var(--ws-up);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="dark"] :is(.league-app, .growth-app, .practice-app, .lounge-app, .pricing-page, .service-page) * {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+  }
+}
