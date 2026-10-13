@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import StockRow from "./StockRow";
 
@@ -95,6 +95,7 @@ export default function FullMarketCatalog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const activeRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => activeRequest.current?.abort(), []);
 
   const fetchFirst = useCallback(
     async (nextMarket: Market, nextExchange: string) => {

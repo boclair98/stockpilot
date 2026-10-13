@@ -1026,6 +1026,10 @@ export default function TradingTerminal() {
   const toggleFavorite = useCallback(
     (item: SearchItem) => {
       const exists = favoriteStocks.some((entry) => entry.id === item.id);
+      if (!exists && favoriteStocks.length >= 12) {
+        notify("관심종목은 최대 12개까지 저장할 수 있어요. 기존 종목을 해제한 뒤 추가해 주세요.");
+        return;
+      }
       const next = exists
         ? favoriteStocks.filter((entry) => entry.id !== item.id)
         : [item, ...favoriteStocks].slice(0, 12);

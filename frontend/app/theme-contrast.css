@@ -1,3 +1,8 @@
+.record-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.record-filters label { display: grid; gap: 6px; min-width: 0; flex: 1 1 140px; color: var(--ws-ink); font-size: 14px; }
+.record-filters :is(input, select, button) { min-height: 44px; max-width: 100%; min-width: 0; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-canvas); color: var(--ws-ink); padding: 10px 12px; font: inherit; font-size: 16px; }
+.record-filters :is(input, select, button):focus-visible { outline: 2px solid #6785ff; outline-offset: 2px; }
+.record-filters small { align-self: center; }
 /* Pair older page components with the active theme. This prevents dark-theme
    foreground tokens from leaking onto fixed white cards, which caused the
    league names and supporting labels to disappear. */
