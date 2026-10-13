@@ -2624,6 +2624,7 @@ export default function TradingTerminal() {
           />
         </details>
         <nav aria-label="더 많은 투자 기능">
+          <a href="/compare"><BarChart3 size={17} />종목 비교</a>
           <a href="/league">
             <Trophy size={17} />
             수익률 리그

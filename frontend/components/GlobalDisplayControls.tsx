@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import WorkspaceControls from "./WorkspaceControls";
 export default function GlobalDisplayControls() {
   const path = usePathname();
-  return path === "/" ? null : (
+  return path === "/" || path === "/compare" ? null : (
     <div className="global-display-controls">
       <WorkspaceControls />
     </div>

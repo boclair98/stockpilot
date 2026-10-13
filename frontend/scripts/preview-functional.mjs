@@ -26,7 +26,11 @@ http.createServer(async(req,res) => {
       const q = quotes.find(q=>q.market===market);
       data = {asOf:'2026-10-13T01:00:00Z',items:Array.from({length:20},(_,i)=>({...q,id:`${market}:${exchange}:${offset+i}`,symbol:`${offset+i+100000}`,name:`${exchange} 검증 종목 ${offset+i+1}`,marketCapEok:1000,marketCapUsd:1000000,volume:1000})),hasMore:offset===0,nextOffset:offset===0?20:null,partial:false};
     }
-    else if (p === '/api/features/history') data = {items:[]};
+    else if (p === '/api/features/history') {
+      const symbol=url.searchParams.get('symbol');
+      const base=symbol==='AAPL'?200:symbol==='000660'?150000:70000;
+      data = {items:Array.from({length:65},(_,i)=>({date:new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10),close:Math.round(base*(1+(symbol==='000660'?-.001:.002)*i)),open:base,high:base*1.2,low:base*.8,volume:1000}))};
+    }
     else if (p.includes('company')) data = {available:false,configured:false};
     else if (p.includes('news')) data = {items:[]};
     else if (p === '/api/features/dashboard') data = {authenticated:true,watchlist:[],alerts:[],unreadAlerts:0,push:{configured:false},missions:[],report:{returnRate:{combined:0,KRW:0,USD:0},tradeCount:0,allocation:[]}};

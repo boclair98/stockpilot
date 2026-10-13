@@ -179,6 +179,7 @@ export default function CommandSearch({
                     { href: "#holdings", label: "내 자산" },
                     { href: "#decision-review", label: "매매 기록" },
                     { href: "/practice", label: "투자 연습" },
+                    { href: "/compare", label: "종목 비교" },
                     { href: "/league", label: "수익률 리그" },
                   ].map((item) => (
                     <a key={item.href} href={item.href} onClick={close}>

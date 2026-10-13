@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  BarChart3,
   BadgeCheck,
   BrainCircuit,
   Gauge,
@@ -35,6 +36,7 @@ const primaryItems = [
 ];
 
 const moreItems = [
+  { href:"/compare",label:"종목 비교",description:"같은 기간의 가격 변화와 하락폭",icon:BarChart3 },
   {
     href: "/practice",
     label: "투자 연습",

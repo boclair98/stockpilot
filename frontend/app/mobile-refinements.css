@@ -1,0 +1,11 @@
+/* Preserve the current visual system while enlarging mobile controls. */
+@media(max-width:767px) {
+  .consumer-app .ranked-market-switch button,
+  .consumer-app .ranked-metric-tabs button,
+  .consumer-app .ranked-refresh,
+  .consumer-app .trend-periods button { min-height:44px; }
+  .consumer-app .ranked-sort select,
+  .consumer-app .catalog-controls select { min-height:44px; font-size:16px; }
+  .consumer-app .order-card :is(input,select) { font-size:16px; }
+  .consumer-app .consumer-stock-row .stock-row-save { min-width:44px; width:44px; min-height:44px; }
+}

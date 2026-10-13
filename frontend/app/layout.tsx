@@ -42,6 +42,8 @@ import "./workspace.css";
 import "./consumer.css";
 import "./stockpilot-design.css";
 import "./theme-contrast.css";
+import "./comparison.css";
+import "./mobile-refinements.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),
