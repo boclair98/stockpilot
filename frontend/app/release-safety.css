@@ -1,0 +1,18 @@
+.release-account-status,.release-order-result{margin:16px 0;padding:16px 20px;border:1px solid var(--ws-line,#e4eaf0);border-radius:16px;background:var(--ws-surface,#fff);color:var(--ws-ink,#172333);word-break:keep-all;overflow-wrap:anywhere}
+.release-account-status{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.release-account-status p,.release-order-result p{margin:6px 0;color:var(--ws-muted,#647184);font-size:14px;line-height:1.65}
+.release-account-status small,.release-order-result small{color:var(--ws-muted,#647184);font-size:13px}
+.release-account-status button,.release-order-result button,.release-order-result a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid var(--ws-line,#e4eaf0);border-radius:12px;background:var(--ws-surface,#fff);color:var(--ws-ink,#172333);font:inherit;font-size:14px;font-weight:650;text-decoration:none;cursor:pointer}
+.release-account-status button:disabled,.release-order-result button:disabled{opacity:.6;cursor:wait}
+.release-order-result>div:first-child{display:flex;align-items:flex-start;gap:12px}
+.release-order-result svg{flex-shrink:0;margin-top:2px}
+.release-order-result .release-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.release-order-result details{margin-top:12px;border-top:1px solid var(--ws-line,#e4eaf0);padding-top:12px}
+.release-order-result summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:14px}
+.release-order-result.is-uncertain,.release-account-status.is-error{border-left:4px solid #c88a34}
+.release-order-result.is-error{border-left:4px solid #d23e57}
+.release-order-result.is-success{border-left:4px solid #18a46b}
+.consumer-app .order-confirm .confirm-check-copy b{color:var(--ws-ink,#172333)}
+.consumer-app .order-confirm .confirm-check-copy small{color:var(--ws-muted,#647184)}
+.release-actions :focus-visible,.release-account-status button:focus-visible,.release-order-result summary:focus-visible{outline:3px solid var(--ws-brand,#596ce7);outline-offset:3px}
+@media(max-width:479px){.release-account-status{align-items:stretch;flex-direction:column;padding:16px}.release-order-result{padding:16px}.release-order-result .release-actions>*{flex:1 0 auto}}

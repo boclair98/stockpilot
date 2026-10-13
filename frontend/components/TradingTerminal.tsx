@@ -51,6 +51,9 @@ import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
 import AdSlot from "./AdSlot";
+import OrderResult, { type OrderResultState } from "./OrderResult";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
+import { isOrderReceipt, isValidPortfolio, isValidQuote, type OrderReceipt } from "@/lib/trading-validation";
 
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => (
@@ -192,6 +195,7 @@ type SearchItem = {
   logoUrl?: string | null;
 };
 type Me = {
+  coders_id: string;
   display_name: string;
   email: string | null;
   picture: string | null;
@@ -253,6 +257,17 @@ export default function TradingTerminal() {
   const [triggerPrice, setTriggerPrice] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [accountState, setAccountState] = useState<"loading" | "ready" | "error">("loading");
+  const [accountUpdatedAt, setAccountUpdatedAt] = useState<number | null>(null);
+  const [accountRefreshing, setAccountRefreshing] = useState(false);
+  const [orderResult, setOrderResult] = useState<OrderResultState | null>(null);
+  const [checkingOrder, setCheckingOrder] = useState(false);
+  const [pendingRetryAvailable, setPendingRetryAvailable] = useState(false);
+  const accountRequest = useRef<Promise<void> | null>(null);
+  const accountLastSuccess = useRef(0);
+  const orderLock = useRef(false);
+  const accountActionLock = useRef(false);
+  const pendingOrder = useRef<{ key: string; body: string; name: string; owner: string | null } | null>(null);
   const [toast, setToast] = useState("");
   const [me, setMe] = useState<Me | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -362,16 +377,34 @@ export default function TradingTerminal() {
     toastTimer.current = window.setTimeout(() => setToast(""), 3500);
   }, []);
 
-  const refreshPortfolio = useCallback(async () => {
-    const response = await fetch("/api/trading/portfolio", {
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (response.ok) {
-      const data = await response.json();
-      setPortfolio(data);
-    }
+  const refreshPortfolio = useCallback((): Promise<void> => {
+    if (accountRequest.current) return accountRequest.current;
+    setAccountRefreshing(true);
+    const request = requestJson<Portfolio>("/api/trading/portfolio", {credentials:"include",cache:"no-store"})
+      .then(data => {
+        if (!isValidPortfolio(data)) throw new Error("계좌 응답 확인 실패");
+        setPortfolio(data);
+        accountLastSuccess.current = Date.now();
+        setAccountUpdatedAt(accountLastSuccess.current);
+        setAccountState("ready");
+      }).catch(() => { setAccountState("error"); })
+      .finally(() => { accountRequest.current = null; setAccountRefreshing(false); });
+    accountRequest.current = request;
+    return request;
   }, []);
+
+  // Keep only the request key across a reload. No balances, credentials or
+  // order draft are persisted. Restored requests are queried, never resent.
+  useEffect(() => {
+    if (!me?.coders_id || pendingOrder.current) return;
+    try {
+      const stored = JSON.parse(sessionStorage.getItem("stockpilot_pending_order_v1") || "null");
+      if (stored?.owner === me.coders_id && typeof stored.key === "string" && /^[a-zA-Z0-9._:-]{8,128}$/.test(stored.key)) {
+        pendingOrder.current = {key:stored.key,owner:me.coders_id,body:"",name:"이전 주문"};
+        setOrderResult({kind:"uncertain",message:"이전에 보낸 주문의 응답을 확인하지 못했어요. 처리 결과를 조회해 주세요."});
+      }
+    } catch { /* Private browsing can block session storage. */ }
+  }, [me?.coders_id]);
 
   useEffect(() => {
     if (!portfolio.authenticated) return;
@@ -403,7 +436,7 @@ export default function TradingTerminal() {
       const now = Date.now();
       if (now - lastSnapshotSaved < 5000) return;
       lastSnapshotSaved = now;
-      localStorage.setItem("stockpilot_quote_snapshot", JSON.stringify(rows));
+      try { localStorage.setItem("stockpilot_quote_snapshot", JSON.stringify(rows)); } catch { /* Storage is optional. */ }
     };
     try {
       const saved = JSON.parse(
@@ -411,22 +444,22 @@ export default function TradingTerminal() {
       );
       if (Array.isArray(saved) && saved.length) {
         window.setTimeout(() => {
-          if (!stopped) setQuotes(saved);
+          if (!stopped) setQuotes(saved.filter((item:Quote) => isValidQuote(item) && Date.now() - Date.parse(item.asOf) < 7 * 86400_000).map((item:Quote) => ({...item,marketState:"CACHED"})));
         }, 0);
       }
     } catch {
-      localStorage.removeItem("stockpilot_quote_snapshot");
+      try { localStorage.removeItem("stockpilot_quote_snapshot"); } catch { /* Storage is optional. */ }
     }
-    void fetch("/api/trading/bootstrap", {
+    void requestJson<{quotes:Quote[];status:MarketStatus;kospi?:IndexData}>("/api/trading/bootstrap", {
       cache: "default",
       signal: bootstrapController.signal,
     })
-      .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!data || stopped) return;
         if (Array.isArray(data.quotes) && data.quotes.length) {
-          setQuotes(data.quotes);
-          saveSnapshot(data.quotes);
+          const valid = data.quotes.filter(isValidQuote);
+          setQuotes(valid);
+          saveSnapshot(valid);
         }
         if (data.status) setStatus(data.status);
         if (data.kospi?.points?.length) setBootstrapKospi(data.kospi);
@@ -456,18 +489,19 @@ export default function TradingTerminal() {
       nextSocket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === "quotes") {
+          if (message.type === "quotes" && Array.isArray(message.data)) {
+            const incoming: Quote[] = message.data.filter(isValidQuote);
             startTransition(() => {
               setQuotes((current) => [
-                ...message.data,
+                ...incoming,
                 ...current.filter(
                   (item) =>
-                    !message.data.some((next: Quote) => next.id === item.id),
+                    !incoming.some((next: Quote) => next.id === item.id),
                 ),
               ]);
               setStatus(message.status);
             });
-            saveSnapshot(message.data);
+            saveSnapshot(incoming);
           }
         } catch {
           // Ignore a malformed frame; the next snapshot can still recover.
@@ -575,14 +609,13 @@ export default function TradingTerminal() {
         const saved = JSON.parse(
           localStorage.getItem("stockpilot_recent_stocks") || "[]",
         );
-        if (Array.isArray(saved)) setRecentStocks(saved.slice(0, 6));
+        if (Array.isArray(saved)) setRecentStocks(saved.filter(isInstrument).slice(0, 6).map(item => ({...item,englishName:""})));
         const favorites = JSON.parse(
           localStorage.getItem("stockpilot_favorite_stocks_v1") || "[]",
         );
-        if (Array.isArray(favorites)) setFavoriteStocks(favorites.slice(0, 12));
+        if (Array.isArray(favorites)) setFavoriteStocks(favorites.filter(isInstrument).slice(0, 12).map(item => ({...item,englishName:""})));
       } catch {
-        localStorage.removeItem("stockpilot_recent_stocks");
-        localStorage.removeItem("stockpilot_favorite_stocks_v1");
+        try { localStorage.removeItem("stockpilot_recent_stocks"); localStorage.removeItem("stockpilot_favorite_stocks_v1"); } catch { /* Storage is optional. */ }
       }
     }, 0);
     return () => window.clearTimeout(timer);
@@ -949,7 +982,7 @@ export default function TradingTerminal() {
             ),
         ),
       ].slice(0, 6);
-      localStorage.setItem("stockpilot_recent_stocks", JSON.stringify(next));
+      try { localStorage.setItem("stockpilot_recent_stocks", JSON.stringify(next)); } catch { /* Recent items still work in memory. */ }
       return next;
     });
   }, []);
@@ -959,14 +992,13 @@ export default function TradingTerminal() {
     const cached = quoteRequestCache.current.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.request;
     quoteRequestCache.current.delete(key);
-    const request = fetch(
+    const request = requestJson<Quote>(
       `/api/trading/quote?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}&exchange=${item.exchange}`,
       { cache: "no-store" },
     )
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok)
-          throw new Error(data.detail || "시세를 불러오지 못했어요.");
+      .then((data) => {
+        if (!isValidQuote(data) || data.symbol !== item.symbol || data.market !== item.market || data.exchange !== item.exchange)
+          throw new Error("선택한 종목의 시세를 확인하지 못했어요.");
         return data as Quote;
       })
       .catch((error) => {
@@ -1120,27 +1152,30 @@ export default function TradingTerminal() {
   }
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    location.href = "/";
+    try {
+      await requestJson("/api/auth/logout", { method: "POST", credentials: "include" });
+      location.href = "/";
+    } catch { notify("로그아웃을 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요."); }
   }
 
   async function cancelOrder(orderId: string) {
+    if (accountActionLock.current || orderLock.current) return;
+    accountActionLock.current = true;
     setBusy(true);
     try {
-      const response = await fetch(`/api/trading/orders/${orderId}`, {
+      await requestJson(`/api/trading/orders/${orderId}`, {
         method: "DELETE",
         credentials: "include",
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.detail || "주문을 취소하지 못했어요.");
       notify("대기 중인 지정가 가상주문을 취소했어요.");
       await refreshPortfolio();
     } catch (error) {
+      if (!pendingOrder.current) setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "취소 응답을 확인하지 못했어요. 매매 기록에서 실제 주문 상태를 확인해 주세요." : error instanceof Error ? error.message : "주문 상태를 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       );
     } finally {
+      accountActionLock.current = false;
       setBusy(false);
     }
   }
@@ -1148,10 +1183,12 @@ export default function TradingTerminal() {
   async function createProtection(event: FormEvent) {
     event.preventDefault();
     if (!portfolio.authenticated || !quote || !activePosition) return;
+    if (accountActionLock.current || orderLock.current || pendingOrder.current) return;
+    if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 보호 주문을 설정해 주세요."); void refreshPortfolio(); return; }
     const takeProfit = Number(takeProfitPrice);
     const stopLoss = Number(stopLossPrice);
     const protectedQuantity = Number(protectionQuantity);
-    if (!Number.isFinite(protectedQuantity) || protectedQuantity <= 0) {
+    if (![protectedQuantity,takeProfit,stopLoss].every(Number.isFinite) || protectedQuantity <= 0 || takeProfit <= 0 || stopLoss <= 0) {
       notify("보호할 수량을 입력해 주세요.");
       return;
     }
@@ -1163,9 +1200,10 @@ export default function TradingTerminal() {
       notify("익절은 현재가보다 높게, 손절은 현재가보다 낮게 입력해 주세요.");
       return;
     }
+    accountActionLock.current = true;
     setBusy(true);
     try {
-      const response = await fetch("/api/trading/protections", {
+      await requestJson("/api/trading/protections", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -1178,9 +1216,6 @@ export default function TradingTerminal() {
           stopLossPrice: stopLoss,
         }),
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.detail || "보호 주문을 등록하지 못했어요.");
       notify(
         `${selectedName} ${protectedQuantity}주에 익절·손절 보호를 설정했어요.`,
       );
@@ -1188,31 +1223,34 @@ export default function TradingTerminal() {
       setStopLossPrice("");
       await refreshPortfolio();
     } catch (error) {
+      setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "보호 설정 응답을 확인하지 못했어요. 해당 종목의 익절·손절 목록을 먼저 확인해 주세요. 자동으로 다시 등록하지 않아요." : error instanceof Error ? error.message : "보호 설정을 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       );
     } finally {
+      accountActionLock.current = false;
       setBusy(false);
     }
   }
 
   async function cancelProtection(planId: string) {
+    if (accountActionLock.current || orderLock.current) return;
+    accountActionLock.current = true;
     setBusy(true);
     try {
-      const response = await fetch(`/api/trading/protections/${planId}`, {
+      await requestJson(`/api/trading/protections/${planId}`, {
         method: "DELETE",
         credentials: "include",
       });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.detail || "보호 설정을 취소하지 못했어요.");
       notify("익절·손절 보호 설정을 취소했어요.");
       await refreshPortfolio();
     } catch (error) {
+      if (!pendingOrder.current) setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "보호 설정 취소 응답을 확인하지 못했어요. 해당 종목의 익절·손절 목록에서 상태를 확인해 주세요." : error instanceof Error ? error.message : "보호 설정을 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
       );
     } finally {
+      accountActionLock.current = false;
       setBusy(false);
     }
   }
@@ -1233,6 +1271,8 @@ export default function TradingTerminal() {
       location.href = `/api/auth/google/login?return_to=${encodeURIComponent(location.pathname + location.search)}`;
       return;
     }
+    if (pendingOrder.current) { notify("이전 주문의 처리 결과를 먼저 확인해 주세요."); return; }
+    if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 주문해 주세요."); void refreshPortfolio(); return; }
     if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
       notify("주문 수량을 1주 이상 입력해 주세요.");
       return;
@@ -1250,54 +1290,87 @@ export default function TradingTerminal() {
     setConfirmingOrder(true);
   }
 
-  async function placeOrder() {
-    if (!orderSafetyReady) {
+  function clearPendingOrder() {
+    pendingOrder.current = null;
+    setPendingRetryAvailable(false);
+    try { sessionStorage.removeItem("stockpilot_pending_order_v1"); } catch { /* Storage is optional. */ }
+  }
+
+  function showReceipt(data: OrderReceipt, name: string) {
+    const message = data.status === "FILLED"
+      ? `${name} 모의주문이 ${money(data.fillPrice!,data.currency)}에 체결됐어요.`
+      : data.status === "OPEN" ? `${name} 모의주문을 접수했어요. 아직 체결되지 않은 대기 주문이에요.`
+      : data.status === "REJECTED" ? data.detail || "주문이 거절됐어요. 매매 기록에서 사유를 확인해 주세요."
+      : "주문이 취소됐어요.";
+    clearPendingOrder();
+    setOrderResult({kind:data.status === "REJECTED" ? "error" : "success",message,id:data.id});
+    notify(message);
+    void refreshPortfolio();
+  }
+
+  async function checkPendingOrder() {
+    const pending = pendingOrder.current;
+    if (!pending || orderLock.current) return;
+    orderLock.current = true;
+    setCheckingOrder(true);
+    try {
+      const data = await requestJson<unknown>(`/api/trading/orders/request/${encodeURIComponent(pending.key)}`,{credentials:"include",cache:"no-store"});
+      if (!isOrderReceipt(data)) throw new Error("처리 결과 형식 확인 실패");
+      showReceipt(data,pending.name);
+    } catch (error) {
+      setOrderResult({kind:"uncertain",message:error instanceof ApiRequestError && error.status === 404
+        ? "아직 저장된 결과가 없어요. 처리 중일 수 있으니 잠시 후 다시 조회해 주세요."
+        : "주문 결과를 확인하지 못했어요. 연결을 확인하고 다시 조회해 주세요. 새 주문은 자동으로 보내지 않아요."});
+    } finally { orderLock.current = false; setCheckingOrder(false); }
+  }
+
+  async function placeOrder(retry = false) {
+    if (orderLock.current || accountActionLock.current) return;
+    if (!portfolio.authenticated) { notify("로그인을 확인한 뒤 주문해 주세요."); return; }
+    if (!retry && !orderSafetyReady) {
       notify("주문 전 확인 항목을 모두 체크해 주세요.");
       return;
     }
+    if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 주문해 주세요."); void refreshPortfolio(); return; }
+    if (retry && (!pendingOrder.current?.body || pendingOrder.current.owner && pendingOrder.current.owner !== me?.coders_id)) return;
+    if (!retry && (pendingOrder.current || !quote)) return;
+    const attempt = retry ? pendingOrder.current! : {
+      key:crypto.randomUUID(),name:selectedName,owner:me?.coders_id || null,
+      body:JSON.stringify({symbol:activeSymbol,market:quote!.market,exchange:quote!.exchange,side,orderType:kind,quantity:Number(quantity),limitPrice:["LIMIT","STOP_LIMIT"].includes(kind)?Number(limitPrice):null,triggerPrice:["STOP","STOP_LIMIT"].includes(kind)?Number(triggerPrice):null}),
+    };
+    pendingOrder.current = attempt;
+    setPendingRetryAvailable(true);
+    try { if (attempt.owner) sessionStorage.setItem("stockpilot_pending_order_v1",JSON.stringify({key:attempt.key,owner:attempt.owner})); } catch { /* Query recovery remains available in this tab. */ }
+    orderLock.current = true;
     setBusy(true);
+    setCheckingOrder(true);
     try {
-      // Keep one key for this confirmed submission. Browser/network retries
-      // can no longer create a second simulated fill for the same click.
-      const idempotencyKey = crypto.randomUUID();
-      const response = await fetch("/api/trading/orders", {
+      // A manual retry uses the original frozen payload AND the original key.
+      // Reconnection and background polling only read; they never resend.
+      const data = await requestJson<unknown>("/api/trading/orders", {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": idempotencyKey,
+          "Idempotency-Key": attempt.key,
         },
-        body: JSON.stringify({
-          symbol: activeSymbol,
-          market: quote?.market,
-          exchange: quote?.exchange,
-          side,
-          orderType: kind,
-          quantity: Number(quantity),
-          limitPrice: ["LIMIT", "STOP_LIMIT"].includes(kind)
-            ? Number(limitPrice)
-            : null,
-          triggerPrice: ["STOP", "STOP_LIMIT"].includes(kind)
-            ? Number(triggerPrice)
-            : null,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.detail || "주문을 접수하지 못했어요.");
-      notify(
-        data.status === "FILLED"
-          ? `${selectedName} 가상주문이 ${money(data.fillPrice, data.currency)}에 체결됐어요${data.executionQuality?.slippageBps != null ? ` · 체결비용 ${Number(data.executionQuality.slippageBps).toFixed(1)}bp` : ""}.`
-          : `${selectedName} 지정가 가상주문을 접수했어요.`,
-      );
-      await refreshPortfolio();
+        body: attempt.body,
+      },20_000);
+      if (!isOrderReceipt(data)) throw new ApiRequestError("주문 응답을 확인하지 못했어요.",200,true);
+      showReceipt(data,attempt.name);
     } catch (error) {
-      notify(
-        error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-      );
+      if (error instanceof ApiRequestError && isOrderReceipt(error.payload)) showReceipt(error.payload,attempt.name);
+      else if (error instanceof ApiRequestError && !error.uncertain) {
+        clearPendingOrder();
+        setOrderResult({kind:"error",message:error.message});
+      } else setOrderResult({kind:"uncertain",message:"주문 응답을 확인하지 못했어요. 접수됐을 수도 있으니 처리 결과를 먼저 조회해 주세요. 같은 주문을 자동으로 다시 보내지 않아요."});
     } finally {
+      orderLock.current = false;
       setBusy(false);
+      setCheckingOrder(false);
       setConfirmingOrder(false);
+      setMobileOrderOpen(false);
+      requestAnimationFrame(() => window.scrollTo({top:0,behavior:"auto"}));
     }
   }
 
@@ -1429,6 +1502,13 @@ export default function TradingTerminal() {
           </small>
         </div>
       </section>
+      {accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
+        <div><b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b><p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>{accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}</div>
+        <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} className={accountRefreshing ? "spin" : ""}/>{accountRefreshing ? "확인 중" : "잔고 다시 확인"}</button>
+      </section> : null}
+      {orderResult ? <OrderResult result={orderResult} checking={checkingOrder} onCheck={() => void checkPendingOrder()} onRetry={() => void placeOrder(true)} retryAvailable={pendingRetryAvailable} onDismiss={() => {
+        if (window.confirm("결과가 확인되지 않은 주문은 취소되지 않아요. 매매 기록을 확인했으며 새 주문을 준비할까요?")) { clearPendingOrder(); setOrderResult(null); }
+      }}/> : null}
       {workspaceView === "DETAIL" ? (
         <button type="button" className="back-to-market" onClick={showMarket}>
           ← 시장으로 돌아가기
@@ -2429,7 +2509,7 @@ export default function TradingTerminal() {
             </small>
             <button
               className={`submit ${side.toLowerCase()}`}
-              disabled={busy || !quote || Boolean(sellIssue)}
+              disabled={busy || !quote || Boolean(sellIssue) || portfolio.authenticated && (accountState !== "ready" || orderResult?.kind === "uncertain")}
             >
               {busy ? (
                 <>

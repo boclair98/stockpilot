@@ -854,6 +854,29 @@ async def portfolio(
     }
 
 
+@router.get("/orders/request/{request_key}")
+async def lookup_order_request(
+    request_key: str,
+    response: Response,
+    owner: UUID = Depends(require_practice_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Read an uncertain submission without placing or replaying an order."""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        key = normalize_idempotency_key(request_key)
+    except ValueError as error:
+        raise HTTPException(400, "주문 요청 번호가 올바르지 않아요.", headers={"Cache-Control": "no-store"}) from error
+    row = (await session.execute(sa.select(TradeOrder).where(
+        TradeOrder.owner_id == owner, TradeOrder.idempotency_key == key
+    ))).scalar_one_or_none()
+    if row is None:
+        # A 404 is not proof that an in-flight transaction will never commit.
+        raise HTTPException(404, "아직 저장된 주문 결과를 확인하지 못했어요. 잠시 후 다시 조회해 주세요.", headers={"Cache-Control": "no-store"})
+    currency = "KRW" if row.exchange in {"KRX", "NXT"} else "USD"
+    return order_receipt(row, currency, replayed=True)
+
+
 @router.post("/orders", status_code=201, response_model=None)
 async def order(
     payload: OrderIn,

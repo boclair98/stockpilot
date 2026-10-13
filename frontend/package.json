@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify:pwa": "node scripts/verify-pwa.mjs"
+    "verify:pwa": "node scripts/verify-pwa.mjs",
+    "verify:safety": "node scripts/verify-release-safety.cjs && node scripts/verify-comparison.cjs && node scripts/verify-market-responses.cjs && node scripts/verify-record-filters.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
