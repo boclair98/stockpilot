@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, X, ArrowUpRight } from "lucide-react";
 import { useDialogFocus } from "@/lib/dialog-focus";
+import { isInstrument } from "@/lib/instrument-identity";
 type Instrument = {
   id: string;
   symbol: string;
@@ -23,6 +24,7 @@ export default function CommandSearch({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
     [active, setActive] = useState(0);
+  const [attempt, setAttempt] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDialogFocus(open, ".command-dialog", close);
@@ -50,7 +52,7 @@ export default function CommandSearch({
         if (!response.ok) throw new Error();
         const data = await response.json();
         if (!controller.signal.aborted)
-          setItems(Array.isArray(data.items) ? data.items : []);
+          setItems(Array.isArray(data.items) ? data.items.filter(isInstrument) : []);
       } catch {
         if (!controller.signal.aborted) {
           setItems([]);
@@ -64,7 +66,10 @@ export default function CommandSearch({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, open]);
+  }, [query, open, attempt]);
+  useEffect(() => {
+    if (open) document.getElementById(`command-result-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, items, open]);
   async function choose(item: Instrument) {
     close();
     await onChoose(item);
@@ -101,6 +106,11 @@ export default function CommandSearch({
                 ref={input}
                 autoFocus
                 aria-label="빠른 검색어"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={items.length > 0 && !busy && !error}
+                aria-controls={!busy && !error && items.length ? "command-stock-results" : undefined}
+                aria-activedescendant={!busy && !error && items[active] ? `command-result-${active}` : undefined}
                 placeholder="회사명, 종목코드 또는 티커"
                 value={query}
                 onChange={(e) => {
@@ -113,7 +123,7 @@ export default function CommandSearch({
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    setActive((v) => Math.min(v + 1, items.length - 1));
+                    setActive((v) => Math.max(0, Math.min(v + 1, items.length - 1)));
                   }
                   if (e.key === "ArrowUp") {
                     e.preventDefault();
@@ -129,19 +139,23 @@ export default function CommandSearch({
                 <X size={20} />
               </button>
             </div>
-            <div className="command-results" aria-busy={busy}>
+            <div className="command-results" aria-busy={busy} id="command-stock-results" role={items.length && !busy && !error ? "listbox" : undefined} aria-label="종목 검색 결과">
               {query.trim() ? (
                 busy ? (
                   <p role="status">종목을 찾고 있어요…</p>
                 ) : error ? (
-                  <p role="alert">
-                    검색을 불러오지 못했어요. 검색어를 다시 입력해 주세요.
-                  </p>
+                  <div role="alert">
+                    <p>검색을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>
+                    <button type="button" onClick={() => { setBusy(true); setError(false); setAttempt(value => value + 1); }}>다시 검색</button>
+                  </div>
                 ) : items.length ? (
                   items.map((item, i) => (
                     <button
                       type="button"
                       key={item.id}
+                      id={`command-result-${i}`}
+                      role="option"
+                      aria-selected={i === active}
                       className={i === active ? "active" : ""}
                       onFocus={() => setActive(i)}
                       onClick={() => void choose(item)}

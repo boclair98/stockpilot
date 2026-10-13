@@ -46,6 +46,7 @@ import OrderTimeline from "./OrderTimeline";
 import RankedMarketBrowser from "./RankedMarketBrowser";
 import FullMarketCatalog from "./FullMarketCatalog";
 import { useDialogFocus } from "@/lib/dialog-focus";
+import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
@@ -619,7 +620,8 @@ export default function TradingTerminal() {
         const data = await response.json();
         if (!controller.signal.aborted) {
           setSearchFailed(false);
-          startTransition(() => setSearchResults(data.items));
+          if (!Array.isArray(data.items)) throw new Error("search unavailable");
+          startTransition(() => setSearchResults(data.items.filter(isInstrument)));
         }
       } catch {
         if (!controller.signal.aborted) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import StockRow from "./StockRow";
+import { isInstrument } from "@/lib/instrument-identity";
 
 type Market = "KR" | "US";
 type Instrument = {
@@ -43,19 +44,14 @@ async function getPage(
     throw new Error("종목 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
   const payload = await response.json();
   if (
-    !Array.isArray(payload.items) ||
+    !payload || !Array.isArray(payload.items) ||
     !Number.isInteger(payload.total) ||
     payload.total < 0
   )
     throw new Error("종목 목록을 확인할 수 없어요.");
   const items = payload.items.filter(
     (item: Instrument) =>
-      item.market === market &&
-      item.currency === (market === "KR" ? "KRW" : "USD") &&
-      typeof item.id === "string" &&
-      typeof item.symbol === "string" &&
-      typeof item.name === "string" &&
-      typeof item.exchange === "string",
+      isInstrument(item) && item.market === market,
   );
   const nextOffset = payload.nextOffset;
   const canContinue =

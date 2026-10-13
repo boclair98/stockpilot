@@ -3,6 +3,8 @@
 .record-filters :is(input, select, button) { min-height: 44px; max-width: 100%; min-width: 0; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-canvas); color: var(--ws-ink); padding: 10px 12px; font: inherit; font-size: 16px; }
 .record-filters :is(input, select, button):focus-visible { outline: 2px solid #6785ff; outline-offset: 2px; }
 .record-filters small { align-self: center; }
+.ranking-exchange-filter { max-width: min(280px, calc(100% - 32px)); margin: 12px 16px; }
+.command-results [role="alert"] button { min-height: 44px; padding: 10px 16px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-soft); color: var(--ws-ink); font: inherit; cursor: pointer; }
 /* Pair older page components with the active theme. This prevents dark-theme
    foreground tokens from leaking onto fixed white cards, which caused the
    league names and supporting labels to disappear. */

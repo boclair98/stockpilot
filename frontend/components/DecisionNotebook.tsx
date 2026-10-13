@@ -23,11 +23,7 @@ export default function DecisionNotebook({
   symbol,
   exchange,
   orders,
-}: {
-  symbol: string;
-  exchange: string;
-  orders: Entry[];
-}) {
+}: { symbol: string; exchange: string; orders: Entry[] }) {
   const key = `stockpilot:decision:v1:${exchange}:${symbol}`;
   const [draft, setDraft] = useState(() => {
     try {
@@ -39,6 +35,7 @@ export default function DecisionNotebook({
     }
   });
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const events = orders.filter(
     (o) => o.symbol === symbol && o.exchange === exchange,
   );
@@ -46,8 +43,10 @@ export default function DecisionNotebook({
     try {
       localStorage.setItem(key, draft);
       setSaved(true);
+      setError("");
     } catch {
       setSaved(false);
+      setError("기록을 저장하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.");
     }
   }
   return (
@@ -61,7 +60,7 @@ export default function DecisionNotebook({
         </div>
         <small>이 브라우저에만 저장</small>
       </header>
-      <label htmlFor="decision-note">이 종목을 살펴본 이유</label>
+      <label htmlFor="decision-note">이 종목을 살펴본 이유 <small>{symbol} · {exchange}</small></label>
       <textarea
         id="decision-note"
         value={draft}
@@ -86,6 +85,7 @@ export default function DecisionNotebook({
           )}
         </button>
       </div>
+      {error ? <p role="alert">{error}</p> : null}
       <ol className="decision-events">
         {events.length ? (
           events.slice(0, 20).map((o) => (

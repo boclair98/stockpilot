@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, ChevronDown } from "lucide-react";
 import StockRow from "./StockRow";
+import { isInstrument } from "@/lib/instrument-identity";
 type Stock = {
   id: string;
   symbol: string;
@@ -27,6 +28,7 @@ type Page = {
 async function load(
   market: "KR" | "US",
   metric: string,
+  exchange: string,
   offset: number,
   snapshot: string | undefined,
   signal: AbortSignal,
@@ -34,7 +36,7 @@ async function load(
   const params = new URLSearchParams({
     market,
     metric,
-    exchange: "ALL",
+    exchange,
     limit: "20",
     offset: String(offset),
   });
@@ -49,18 +51,17 @@ async function load(
         : "목록을 불러오지 못했어요. 다시 시도해 주세요.",
     );
   const p = await response.json();
-  if (!Array.isArray(p.items) || !Number.isFinite(Date.parse(p.asOf)))
+  if (!p || !Array.isArray(p.items) || typeof p.asOf !== "string" || !Number.isFinite(Date.parse(p.asOf)))
     throw new Error("확인 가능한 목록이 없어요.");
+  const items = p.items.filter(
+    (s: Stock) => isInstrument(s) && s.market === market && Number.isFinite(s.price) && s.price > 0,
+  );
+  const hasMore = p.hasMore === true && items.length > 0 && Number.isInteger(p.nextOffset) && p.nextOffset > offset;
   return {
     ...p,
-    items: p.items.filter(
-      (s: Stock) =>
-        s.market === market &&
-        s.currency === (market === "KR" ? "KRW" : "USD") &&
-        typeof s.symbol === "string" &&
-        Number.isFinite(s.price) &&
-        s.price > 0,
-    ),
+    items,
+    hasMore,
+    nextOffset: hasMore ? p.nextOffset : null,
   };
 }
 export default function RankedMarketBrowser({
@@ -80,6 +81,7 @@ export default function RankedMarketBrowser({
     [busy, setBusy] = useState(true),
     [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [exchange, setExchange] = useState("ALL");
   const request = useRef<AbortController | null>(null);
   useEffect(() => {
     const sync = () => {
@@ -94,6 +96,7 @@ export default function RankedMarketBrowser({
         setError("");
         setBusy(true);
         setMarket(desired);
+        setExchange("ALL");
       }
     };
     const timer = setTimeout(sync, 0);
@@ -107,7 +110,9 @@ export default function RankedMarketBrowser({
     const c = new AbortController();
     request.current?.abort();
     request.current = c;
-    void load(market, metric, 0, undefined, c.signal)
+    setBusy(true);
+    setError("");
+    void load(market, metric, exchange, 0, undefined, c.signal)
       .then((d) => {
         if (!c.signal.aborted) setData(d);
       })
@@ -120,8 +125,8 @@ export default function RankedMarketBrowser({
           setBusy(false);
         }
       });
-    return () => c.abort();
-  }, [market, metric, attempt]);
+    return () => request.current?.abort();
+  }, [market, metric, exchange, attempt]);
   async function more() {
     if (!data?.hasMore || data.nextOffset === null || request.current) return;
     const c = new AbortController();
@@ -132,6 +137,7 @@ export default function RankedMarketBrowser({
       const next = await load(
         market,
         metric,
+        exchange,
         data.nextOffset,
         data.asOf,
         c.signal,
@@ -168,6 +174,7 @@ export default function RankedMarketBrowser({
                 setError("");
                 setBusy(true);
                 setMarket(v);
+                setExchange("ALL");
               }}
             >
               {v === "KR" ? "한국" : "미국"}
@@ -213,6 +220,12 @@ export default function RankedMarketBrowser({
           <RefreshCw size={16} />
         </button>
       </header>
+      <div className="record-filters ranking-exchange-filter">
+        <label>거래소<select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); setExchange(e.target.value); }}>
+          <option value="ALL">전체 거래소</option>
+          {market === "KR" ? <><option value="KOSPI">코스피</option><option value="KOSDAQ">코스닥</option></> : <><option value="NAS">나스닥</option><option value="NYS">뉴욕증권거래소</option><option value="AMS">아멕스</option></>}
+        </select></label>
+      </div>
       <label className="ranked-sort">
         정렬 기준
         <select
