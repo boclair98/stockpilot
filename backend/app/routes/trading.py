@@ -278,6 +278,7 @@ async def execute(
     order.processed_at = datetime.now(UTC)
     if await split_pending(session, order.owner_id, order.symbol, order.exchange):
         order.status = "REJECTED"
+        order.risk_code = "CORPORATE_ACTION_PENDING"
         order.reject_reason = "주식 분할 반영을 확인하고 있어요. 계좌 관리에서 상태를 확인해 주세요."
         return
     position = (
@@ -1057,12 +1058,12 @@ async def order(
     if should_execute:
         await execute(session, row, instrument, price, quote)
         if row.status == "REJECTED":
-            detail = (
-                row.reject_reason or "가상 예수금이 부족해 주문을 체결할 수 없습니다."
+            detail = row.reject_reason or (
+                "가상 예수금이 부족해 주문을 체결할 수 없습니다."
                 if side == "BUY"
                 else "보유 수량이 부족해 주문을 체결할 수 없습니다."
             )
-            row.risk_code = (
+            row.risk_code = row.risk_code or (
                 "INSUFFICIENT_CASH" if side == "BUY" else "INSUFFICIENT_POSITION"
             )
             row.reject_reason = detail
