@@ -28,6 +28,7 @@ from app.routes.engagement import _equity, combined_return_rate
 from app.services.benchmark import build_benchmark_report
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.personal_ledger import performance_equity
 from app.services.portfolio_analytics import (
     ExecutionPoint,
     SnapshotPoint,
@@ -644,7 +645,7 @@ async def _overview(session: AsyncSession, owner: UUID | None, day: date) -> dic
     )
     snapshots.reverse()
     equity_krw, equity_usd, _ = await _equity(session, owner)
-    combined = combined_return_rate(equity_krw, equity_usd)
+    combined = combined_return_rate(*(await performance_equity(session, owner, equity_krw, equity_usd)))
     scores = _skill_scores(combined, snapshots, len(orders), journal_rows)
     streak = _streak(attempt_days, day)
     user = await session.scalar(sa.select(User).where(User.coders_id == owner))

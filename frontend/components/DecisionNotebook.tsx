@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCloudSaved } from "@/lib/cloud-saved";
 import { BookOpen, Check, FileText } from "lucide-react";
 type Entry = {
   id: string;
@@ -23,8 +24,16 @@ export default function DecisionNotebook({
   symbol,
   exchange,
   orders,
-}: { symbol: string; exchange: string; orders: Entry[] }) {
+}: {
+  symbol: string;
+  exchange: string;
+  orders: Entry[];
+}) {
   const key = `stockpilot:decision:v1:${exchange}:${symbol}`;
+  const cloud = useCloudSaved<{ note: string }>("NOTE");
+  const cloudKey = `${exchange}:${symbol}`;
+  const [dirty, setDirty] = useState(false);
+  const [draftOwner, setDraftOwner] = useState<string | null>(null);
   const [draft, setDraft] = useState(() => {
     try {
       return typeof window !== "undefined"
@@ -36,17 +45,36 @@ export default function DecisionNotebook({
   });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const displayed =
+    cloud.authenticated === true
+      ? dirty && draftOwner === cloud.owner
+        ? draft
+        : cloud.items.find((row) => row.key === cloudKey && !row.deleted)?.data
+            .note || ""
+      : cloud.authenticated === false && draftOwner === null
+        ? draft
+        : "";
   const events = orders.filter(
     (o) => o.symbol === symbol && o.exchange === exchange,
   );
-  function save() {
+  async function save() {
+    if (cloud.authenticated !== false) {
+      if (await cloud.save(cloudKey, { note: displayed })) {
+        setSaved(true);
+        setDirty(false);
+        setError("");
+      }
+      return;
+    }
     try {
       localStorage.setItem(key, draft);
       setSaved(true);
       setError("");
     } catch {
       setSaved(false);
-      setError("기록을 저장하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.");
+      setError(
+        "기록을 저장하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.",
+      );
     }
   }
   return (
@@ -58,22 +86,39 @@ export default function DecisionNotebook({
             <BookOpen size={18} /> 나의 판단 기록
           </h2>
         </div>
-        <small>이 브라우저에만 저장</small>
+        <small>
+          {cloud.authenticated === true
+            ? "내 계정에 저장"
+            : cloud.authenticated === false
+              ? "이 브라우저에 저장"
+              : "계정 확인 중"}
+        </small>
       </header>
-      <label htmlFor="decision-note">이 종목을 살펴본 이유 <small>{symbol} · {exchange}</small></label>
+      <label htmlFor="decision-note">
+        이 종목을 살펴본 이유{" "}
+        <small>
+          {symbol} · {exchange}
+        </small>
+      </label>
       <textarea
         id="decision-note"
-        value={draft}
+        value={displayed}
         maxLength={1200}
         placeholder="어떤 점을 보고 판단했나요? 나중에 결과와 비교해 보세요."
         onChange={(e) => {
           setDraft(e.target.value);
           setSaved(false);
+          setDirty(true);
+          setDraftOwner(cloud.owner);
         }}
       />
       <div className="notebook-actions">
-        <small>{draft.length}/1,200자 · 개인 메모</small>
-        <button type="button" onClick={save}>
+        <small>{displayed.length}/1,200자 · 개인 메모</small>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={cloud.busy || cloud.authenticated === null}
+        >
           {saved ? (
             <>
               <Check size={15} /> 저장됨
@@ -86,6 +131,15 @@ export default function DecisionNotebook({
         </button>
       </div>
       {error ? <p role="alert">{error}</p> : null}
+      {cloud.error ? (
+        <div role="alert">
+          <p>{cloud.error} 입력한 메모는 그대로 있어요.</p>
+          <button type="button" onClick={cloud.refresh}>
+            새 기록 조회
+          </button>
+        </div>
+      ) : null}
+      {cloud.authenticated===true?<button type="button" disabled={cloud.busy} onClick={()=>{try{const local=localStorage.getItem(key);if(local){setDraft(local.slice(0,1200));setDraftOwner(cloud.owner);setDirty(true);setSaved(false);}else setError("이 브라우저에 저장된 메모가 없어요.");}catch{setError("브라우저 기록을 읽지 못했어요.");}}}>이 브라우저의 메모 가져오기</button>:null}
       <ol className="decision-events">
         {events.length ? (
           events.slice(0, 20).map((o) => (

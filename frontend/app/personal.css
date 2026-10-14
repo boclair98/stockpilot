@@ -1,0 +1,313 @@
+.personal-page .comparison-content {
+  max-width: 1120px;
+}
+.personal-panel {
+  margin-bottom: 24px;
+  color: var(--ws-ink);
+}
+.personal-panel h2 {
+  margin-bottom: 20px;
+}
+.personal-panel h3 {
+  margin: 24px 0 12px;
+}
+.personal-panel p {
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.personal-panel small {
+  color: var(--ws-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.personal-panel button,
+.personal-inline-actions button,
+.personal-inline-error button {
+  min-height: 44px;
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.personal-panel button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.personal-panel button:focus-visible,
+.personal-page a:focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 3px;
+}
+.personal-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.personal-tabs button {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-muted);
+  padding: 10px 18px;
+  font-weight: 600;
+}
+.personal-tabs button[aria-pressed="true"] {
+  color: var(--ws-ink);
+  border-color: var(--ws-brand);
+  background: var(--ws-tint);
+}
+.personal-form {
+  display: grid;
+  gap: 16px;
+}
+.personal-form label,
+.personal-picker > label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+}
+.personal-form input:not([type="checkbox"]),
+.personal-form select,
+.personal-form textarea,
+.personal-picker input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  padding: 12px;
+  font-size: 16px;
+}
+.personal-form textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+.personal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 16px;
+}
+.personal-form-grid p b {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+}
+.personal-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.personal-inline-error {
+  padding: 12px;
+  color: var(--ws-ink);
+}
+.personal-primary,
+.personal-panel button.personal-primary {
+  background: var(--ws-brand);
+  color: var(--ws-canvas);
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 12px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 600;
+}
+html[data-private="true"]
+  .personal-page
+  :is(.personal-rate b, .personal-receipt dd, .personal-form-grid p b) {
+  filter: blur(7px);
+  user-select: none;
+}
+.personal-list-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 4px;
+  border-bottom: 1px solid var(--ws-line);
+  text-decoration: none;
+  color: var(--ws-ink);
+  min-width: 0;
+}
+.personal-list-row > svg {
+  flex: 0 0 auto;
+  color: var(--ws-muted);
+}
+.personal-list-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.personal-list-row b {
+  font-size: 16px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.personal-list-row p {
+  margin: 6px 0;
+}
+.personal-list-row small {
+  display: block;
+}
+.personal-list-row > a,
+.personal-list-row > button {
+  flex-shrink: 0;
+}
+.personal-list-row.unread {
+  border-left: 3px solid var(--ws-brand);
+  padding-left: 14px;
+}
+.personal-feedback,
+.personal-simulation {
+  border: 1px solid var(--ws-line);
+  padding: 16px;
+  border-radius: 12px;
+  color: var(--ws-muted);
+  line-height: 1.7;
+}
+.personal-simulation {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.personal-simulation svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.personal-ticket {
+  border-bottom: 1px solid var(--ws-line);
+  padding: 18px 0;
+}
+.personal-ticket summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  font-weight: 600;
+}
+.personal-ticket summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.personal-ticket summary small {
+  flex-shrink: 0;
+}
+.personal-reply {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--ws-muted-surface, var(--ws-surface));
+  border: 1px solid var(--ws-line);
+  margin-top: 16px;
+}
+.personal-panel details:not(.personal-ticket) {
+  border-bottom: 1px solid var(--ws-line);
+  padding: 16px 0;
+}
+.personal-panel summary {
+  min-height: 44px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.personal-picker {
+  margin-bottom: 20px;
+}
+.personal-picker > button {
+  width: 100%;
+  justify-content: flex-start;
+  margin-top: 8px;
+  min-height: 64px;
+}
+.personal-picker button span {
+  flex: 1;
+  text-align: left;
+  min-width: 0;
+}
+.personal-picker small {
+  display: block;
+}
+.personal-rate b {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  display: block;
+}
+.personal-rate small {
+  display: block;
+}
+.personal-receipt {
+  margin-bottom: 24px;
+}
+.personal-receipt div {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--ws-line);
+}
+.personal-receipt dt {
+  color: var(--ws-muted);
+}
+.personal-receipt dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.personal-form .personal-check,
+.personal-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.7;
+  min-height: 44px;
+}
+.personal-check input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+@media (max-width: 479px) {
+  .personal-list-row {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .personal-list-row > div {
+    flex-basis: calc(100% - 36px);
+  }
+  .personal-list-row > a,
+  .personal-list-row > button {
+    margin-left: 28px;
+  }
+  .personal-tabs button {
+    flex: 1 0 auto;
+    padding: 10px 12px;
+  }
+  .personal-receipt div {
+    grid-template-columns: 1fr;
+  }
+  .personal-receipt dd {
+    text-align: left;
+  }
+  .personal-panel {
+    padding: 20px 16px;
+  }
+}

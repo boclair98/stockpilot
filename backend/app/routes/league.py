@@ -34,6 +34,7 @@ from app.models import (
 )
 from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.personal_ledger import fx_flows
 from app.services.risk_engine import load_control, quote_age_seconds
 
 router = APIRouter(prefix="/api/league", tags=["league"])
@@ -283,6 +284,10 @@ async def _owner_equity(
         price = prices.get(key) or Decimal(position.average_price)
         equity[position.owner_id][instrument.currency] += quantity * price
 
+    flows = await fx_flows(session, owner_ids)
+    for owner_id in owner_ids:
+        for currency in ("KRW", "USD"):
+            equity[owner_id][currency] -= flows[owner_id][currency]
     return equity
 
 

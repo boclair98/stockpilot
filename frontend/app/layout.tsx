@@ -45,6 +45,7 @@ import "./theme-contrast.css";
 import "./comparison.css";
 import "./mobile-refinements.css";
 import "./release-safety.css";
+import "./personal.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stockpilot.coders.kr"),

@@ -36,6 +36,9 @@ const primaryItems = [
 ];
 
 const moreItems = [
+  { href:"/notifications",label:"알림 모아보기",description:"주문·가격·공시와 문의 답변",icon:MessageCircle },
+  { href:"/account-tools",label:"계좌 관리",description:"정기 모의 매수·가상 환전·권리 일정",icon:Wallet },
+  { href:"/support",label:"고객지원",description:"문의와 서비스 공지 확인",icon:ShieldCheck },
   { href:"/compare",label:"종목 비교",description:"같은 기간의 가격 변화와 하락폭",icon:BarChart3 },
   {
     href: "/practice",

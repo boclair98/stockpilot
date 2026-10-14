@@ -51,6 +51,15 @@ from app.models import (
     UserBlock,
     WatchlistItem,
 )
+from app.personal_models import (
+    CorporateAction,
+    InboxRead,
+    MoneyEvent,
+    RecurringPlan,
+    RecurringRun,
+    SavedItem,
+    SupportTicket,
+)
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -176,6 +185,15 @@ async def export_my_data(
         "posts": _export_rows(posts, ("id", "body", "created_at")),
         "pushDevices": [],  # Tokens are intentionally never placed in downloads.
     }
+    for name, model, fields in (
+        ("personalSaved", SavedItem, ("kind", "key", "data", "version", "deleted", "updated_at")),
+        ("personalInboxRead", InboxRead, ("key", "read_at")),
+        ("supportTickets", SupportTicket, ("id", "category", "subject", "body", "reply", "status", "created_at", "updated_at")),
+        ("recurringPlans", RecurringPlan, ("id", "symbol", "exchange", "amount", "weekday", "local_time", "timezone", "active", "next_at")),
+        ("recurringRuns", RecurringRun, ("id", "plan_id", "due_at", "status", "reason", "order_id", "created_at")),
+        ("moneyEvents", MoneyEvent, ("id", "kind", "status", "data", "created_at")),
+    ):
+        tables[name] = _export_rows(await owner_rows(model), fields)
     for spec in specs:
         name, model, fields, *field_override = spec
         if field_override:
@@ -253,6 +271,9 @@ async def delete_my_account(
     no real-money account or broker credential is ever touched.
     """
     user = await session.scalar(select(User).where(User.coders_id == coders_id))
+    for model in (RecurringRun, RecurringPlan, MoneyEvent, InboxRead, SavedItem, SupportTicket):
+        await session.execute(delete(model).where(model.owner_id == coders_id))
+    await session.execute(update(CorporateAction).where(CorporateAction.verified_by == coders_id).values(verified_by=None))
     if user is None:
         response = JSONResponse({"status": "deleted"})
         response.delete_cookie(SESSION_COOKIE, path="/")

@@ -20,6 +20,7 @@ from app.core.database import AsyncSessionLocal, engine
 from app.core.traffic import traffic_store
 from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.personal_worker import personal_worker
 from app.services.price_alert_notifier import price_alert_notifier
 from app.services.protection_matcher import protection_matcher
 
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
     kis_market.start()
     price_alert_notifier.start()
     protection_matcher.start()
+    personal_worker.start()
 
     async def warm_instrument_catalog() -> None:
         # The worker already owns the market connection, so prepare the full
@@ -46,6 +48,7 @@ async def lifespan(app: FastAPI):
         catalog_task.cancel()
         await asyncio.gather(catalog_task, return_exceptions=True)
         await price_alert_notifier.stop()
+        await personal_worker.stop()
         await protection_matcher.stop()
         await kis_market.stop()
         await traffic_store.close()

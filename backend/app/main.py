@@ -29,11 +29,12 @@ from app.routes.engagement import router as engagement_router
 from app.routes.growth import router as growth_router
 from app.routes.league import router as league_router
 from app.routes.operations import router as operations_router
+from app.routes.personal import router as personal_router
 from app.routes.posts import router as posts_router
 from app.routes.practice import router as practice_router
 from app.routes.toss_game import router as toss_game_router
-from app.routes.trading import router as trading_router
 from app.routes.toss_market import router as toss_market_router
+from app.routes.trading import router as trading_router
 from app.routes.users import router as users_router
 from app.services.instrument_catalog import instrument_catalog
 from app.services.kis_market import kis_market
@@ -230,6 +231,7 @@ async def traffic_middleware(request: Request, call_next):
 
 
 app.include_router(users_router)
+app.include_router(personal_router)
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(company_router)

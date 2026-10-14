@@ -18,6 +18,11 @@ http.createServer(async(req,res) => {
   const scenario = /(?:^|; )release_fixture=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
   if (url.pathname === '/_fixture/status') return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({receiptWrites,receiptCount:fixtureReceipts.size}));
   if (url.pathname.startsWith('/api/')) {
+    if (process.env.PERSONAL_FIXTURE==='1' && (url.pathname.startsWith('/api/personal/') || url.pathname==='/api/trading/portfolio')) {
+      const chunks=[];for await(const chunk of req) chunks.push(chunk);
+      try {const reply=await fetch(`http://127.0.0.1:5234${url.pathname}${url.search}`,{method:req.method,headers:{'Content-Type':'application/json'},body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(chunks),signal:AbortSignal.timeout(15000)});res.writeHead(reply.status,{'Content-Type':'application/json'});return res.end(await reply.text());}
+      catch{return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리된 테스트 서버에 연결하지 못했어요."}');}
+    }
     if (req.method === 'POST' && url.pathname === '/api/trading/orders' && fixtureCases.has(scenario) && scenario !== 'portfolio-error') {
       for await (const chunk of req) { /* Consume local fixture draft; never save it. */ }
       const key = req.headers['idempotency-key'];

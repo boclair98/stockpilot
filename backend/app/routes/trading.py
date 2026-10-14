@@ -274,6 +274,12 @@ async def execute(
     quote: dict | None = None,
 ) -> None:
     wallet = await account(session, order.owner_id, lock=True)
+    from app.services.personal_ledger import split_pending
+    order.processed_at = datetime.now(UTC)
+    if await split_pending(session, order.owner_id, order.symbol, order.exchange):
+        order.status = "REJECTED"
+        order.reject_reason = "주식 분할 반영을 확인하고 있어요. 계좌 관리에서 상태를 확인해 주세요."
+        return
     position = (
         await session.execute(
             sa.select(Position)
@@ -1052,7 +1058,7 @@ async def order(
         await execute(session, row, instrument, price, quote)
         if row.status == "REJECTED":
             detail = (
-                "가상 예수금이 부족해 주문을 체결할 수 없습니다."
+                row.reject_reason or "가상 예수금이 부족해 주문을 체결할 수 없습니다."
                 if side == "BUY"
                 else "보유 수량이 부족해 주문을 체결할 수 없습니다."
             )
@@ -1196,6 +1202,7 @@ async def cancel_order(
     if row.status not in {"OPEN", "TRIGGERED"}:
         raise HTTPException(409, "대기 중인 주문만 취소할 수 있습니다.")
     row.status = "CANCELED"
+    row.processed_at = datetime.now(UTC)
     record_audit(
         session,
         actor_id=owner,

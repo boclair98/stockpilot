@@ -34,6 +34,7 @@ import {
   Star,
   Target,
   Trophy,
+  Wallet,
   X,
 } from "lucide-react";
 
@@ -50,6 +51,7 @@ import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
+import { useCloudSaved } from "@/lib/cloud-saved";
 import AdSlot from "./AdSlot";
 import OrderResult, { type OrderResultState } from "./OrderResult";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
@@ -278,7 +280,9 @@ export default function TradingTerminal() {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [alertFocusKey, setAlertFocusKey] = useState(0);
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
-  const [favoriteStocks, setFavoriteStocks] = useState<SearchItem[]>([]);
+  const [browserFavorites, setFavoriteStocks] = useState<SearchItem[]>([]);
+  const cloudFavorites = useCloudSaved<SearchItem>("FAVORITE");
+  const favoriteStocks=useMemo(()=>cloudFavorites.authenticated===true?cloudFavorites.items.filter(row=>!row.deleted&&isInstrument(row.data)).map(row=>({...row.data,englishName:row.data.englishName||""})):cloudFavorites.authenticated===false?browserFavorites:[],[cloudFavorites.items,cloudFavorites.authenticated,browserFavorites]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [orderSafetyChecks, setOrderSafetyChecks] = useState<OrderSafetyChecks>(
     {
@@ -1058,8 +1062,15 @@ export default function TradingTerminal() {
   }, [loadQuote, notify]);
 
   const toggleFavorite = useCallback(
-    (item: SearchItem) => {
+    async (item: SearchItem) => {
       const exists = favoriteStocks.some((entry) => entry.id === item.id);
+      if(cloudFavorites.authenticated!==false){
+        if(cloudFavorites.authenticated===null){notify("저장 계정을 확인하고 있어요. 잠시 후 다시 눌러 주세요.");return;}
+        const success=await cloudFavorites.save(item.id,exists?null:item);
+        if(success) notify(exists?`${item.name}을 관심종목에서 제거했어요.`:`${item.name}을 관심종목에 추가했어요.`);
+        else notify("저장 상태를 확인하지 못했어요. 관심종목의 다시 조회를 눌러 확인해 주세요.");
+        return;
+      }
       if (!exists && favoriteStocks.length >= 12) {
         notify("관심종목은 최대 12개까지 저장할 수 있어요. 기존 종목을 해제한 뒤 추가해 주세요.");
         return;
@@ -1082,7 +1093,7 @@ export default function TradingTerminal() {
           : `${item.name}을 관심종목에 추가했어요.`,
       );
     },
-    [favoriteStocks, notify],
+    [favoriteStocks, notify, cloudFavorites],
   );
 
   function selectTopQuote(item: Quote) {
@@ -1946,6 +1957,7 @@ export default function TradingTerminal() {
         {workspaceView === "MARKET" || workspaceView === "WATCH" ? (
           <aside className="consumer-personal">
             <MarketWatchlist
+              accountSaved={cloudFavorites.authenticated===true}
               items={favoriteItems}
               selectedId={selected}
               colorFor={colorFor}
@@ -1954,6 +1966,8 @@ export default function TradingTerminal() {
               }}
               onRemove={(item) => toggleFavorite({ ...item, englishName: "" })}
             />
+            {cloudFavorites.authenticated===true?<div className="personal-inline-actions"><button type="button" disabled={cloudFavorites.busy} onClick={async()=>{try{const raw=JSON.parse(localStorage.getItem("stockpilot_favorite_stocks_v1")||"[]");if(!Array.isArray(raw)) return;for(const entry of raw.filter(isInstrument).slice(0,12)) {if(!favoriteStocks.some(item=>item.id===entry.id)&&!(await cloudFavorites.save(entry.id,{...entry,englishName:""}))) break;}notify("브라우저 관심종목 가져오기를 마쳤어요. 목록을 확인해 주세요.");}catch{notify("브라우저 저장 기록을 확인하지 못했어요.");}}}>이 브라우저의 관심종목 가져오기</button><button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></div>:null}
+            {cloudFavorites.error?<p className="personal-inline-error" role="alert">{cloudFavorites.error}<button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></p>:null}
             <section className="continue-section">
               <span className="workspace-eyebrow">투자 연습 이어하기</span>
               <h2>관찰에서 판단으로</h2>
@@ -2705,6 +2719,9 @@ export default function TradingTerminal() {
         </details>
         <nav aria-label="더 많은 투자 기능">
           <a href="/compare"><BarChart3 size={17} />종목 비교</a>
+          <a href="/notifications"><Bell size={17} />알림 모아보기</a>
+          <a href="/account-tools"><Wallet size={17} />계좌 관리·정기 매수</a>
+          <a href="/support">고객지원·공지</a>
           <a href="/league">
             <Trophy size={17} />
             수익률 리그

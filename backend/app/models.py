@@ -288,6 +288,7 @@ class TradeOrder(Base):
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), index=True
     )
+    processed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
     __table_args__ = (
         sa.UniqueConstraint(
             "owner_id", "idempotency_key", name="uq_trade_orders_owner_idempotency"

@@ -180,6 +180,9 @@ export default function CommandSearch({
                     { href: "#decision-review", label: "매매 기록" },
                     { href: "/practice", label: "투자 연습" },
                     { href: "/compare", label: "종목 비교" },
+                    { href: "/notifications", label: "알림 모아보기" },
+                    { href: "/account-tools", label: "계좌 관리·정기 매수" },
+                    { href: "/support", label: "고객지원·공지" },
                     { href: "/league", label: "수익률 리그" },
                   ].map((item) => (
                     <a key={item.href} href={item.href} onClick={close}>

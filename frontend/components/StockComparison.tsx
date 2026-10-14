@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, BarChart3, Bookmark, Check, Copy, RefreshCw, Search, Trash2, X } from "lucide-react";
 import StockLogo from "./StockLogo";
 import WorkspaceControls from "./WorkspaceControls";
+import { useCloudSaved } from "@/lib/cloud-saved";
 import { isInstrument, type InstrumentIdentity } from "@/lib/instrument-identity";
 import { compareHistories, normalizeHistory, parseComparisonIds, practiceInvestment, type DailyClose } from "@/lib/stock-comparison";
 
@@ -44,7 +45,9 @@ export default function StockComparison() {
   const [loading,setLoading] = useState(false);
   const [attempt,setAttempt] = useState(0);
   const [days,setDays] = useState(20);
-  const [saved,setSaved] = useState<Saved[]>([]);
+  const [browserSaved,setSaved] = useState<Saved[]>([]);
+  const cloud=useCloudSaved<Saved>("COMPARE");
+  const saved=cloud.authenticated===true?cloud.items.filter(row=>!row.deleted).map(row=>row.data):cloud.authenticated===false?browserSaved:[];
   const [note,setNote] = useState('');
   const [notice,setNotice] = useState('');
   const [shareLink,setShareLink] = useState('');
@@ -59,8 +62,6 @@ export default function StockComparison() {
       if (Array.isArray(raw)) {
         const valid=raw.filter((entry:Saved)=>entry && typeof entry.id==='string' && typeof entry.name==='string' && typeof entry.note==='string' && entry.note.length<=1200 && Array.isArray(entry.instruments) && entry.instruments.length>=2 && entry.instruments.length<=3 && entry.instruments.every(isInstrument)).slice(0,10);
         setSaved(valid);
-        const current=valid.find((entry:Saved)=>entry.id===initial.map(item=>`${item.market}:${item.exchange}:${item.symbol}`).join(','));
-        if(current) setNote(current.note);
       }
     } catch { /* Saved sets are optional when browser storage is unavailable. */ }
     const controller = new AbortController();
@@ -134,12 +135,13 @@ export default function StockComparison() {
     try {localStorage.setItem(STORAGE,JSON.stringify(next));setSaved(next);return true;}
     catch {setNotice('비교 목록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');return false;}
   }
-  function save() {
+  async function save() {
     if(items.length<2) {setNotice('종목을 2개 이상 선택해 주세요.');return;}
     const entry:Saved = {id:ids,name:items.map(item=>item.name).join(' · '),instruments:items.map(({id,symbol,name,market,currency,exchange,logoUrl})=>({id,symbol,name,market,currency,exchange,logoUrl})),note};
     const remaining = saved.filter(value=>value.id!==ids);
     if(remaining.length>=10) {setNotice('비교 목록은 최대 10개까지 저장할 수 있어요. 기존 목록을 지운 뒤 저장해 주세요.');return;}
-    if(persist([entry,...remaining])) setNotice('비교 목록과 메모를 저장했어요.');
+    if(cloud.authenticated!==false){if(await cloud.save(entry.id,entry)) setNotice('비교 목록과 메모를 내 계정에 저장했어요.');}
+    else if(persist([entry,...remaining])) setNotice('비교 목록과 메모를 저장했어요.');
   }
   async function copyLink() {
     const url = new URL('/compare',location.origin);url.searchParams.set('items',ids);
@@ -168,7 +170,13 @@ export default function StockComparison() {
       <section className="comparison-panel" aria-labelledby="compare-chart-title"><header><h2 id="compare-chart-title">같은 기간, 다른 움직임</h2><div className="comparison-period" aria-label="비교 기간">{[[5,'1주'],[20,'1개월'],[60,'3개월']].map(([value,label])=><button key={value} type="button" aria-pressed={days===value} onClick={()=>setDays(Number(value))}>{label}</button>)}</div></header>
         {loading?<p role="status">시세와 과거 기록을 확인하고 있어요…</p>:comparison?<><ComparisonChart comparison={comparison} items={items}/><p className="comparison-basis">{comparison.dates[0]} ~ {comparison.dates.at(-1)} · 공통 날짜 {comparison.dates.length}개 · 첫 종가 대비 가격 변화</p><div className="comparison-table-wrap"><table><caption>같은 기간의 가격 변화와 최대 하락폭</caption><thead><tr><th scope="col">종목</th><th scope="col">가격 변화</th><th scope="col">최대 하락폭</th></tr></thead><tbody>{items.map((item,index)=><tr key={item.id}><th scope="row">{item.name}</th><td className={comparison.series[index].returnRate>=0?'up':'down'}>{signed(comparison.series[index].returnRate)}</td><td>{comparison.series[index].maxDrawdown.toFixed(2)}%</td></tr>)}</tbody></table></div><p className="comparison-basis">배당·환율·수수료는 포함하지 않아요. 시장별 종가 시점은 다르며, 공통 날짜만 비교합니다.</p></>:<div className="comparison-empty"><BarChart3 size={30}/><h3>{items.length<2?'종목을 2개 이상 골라주세요':'함께 비교할 과거 자료가 부족해요'}</h3><p>{items.length<2?'최대 3개까지 골라 같은 기간의 흐름을 살펴보세요.':'공통 날짜가 2개 이상 있어야 비교할 수 있어요. 다른 종목을 선택하거나 다시 조회해 주세요.'}</p></div>}
       </section>
-      <section className="comparison-panel" aria-labelledby="compare-save-title"><header><h2 id="compare-save-title"><Bookmark size={20}/> 다음에 이어보기</h2><span>이 브라우저에 저장</span></header><label className="comparison-note">비교하며 발견한 점<textarea value={note} maxLength={1200} onChange={e=>setNote(e.target.value)} placeholder="어떤 차이를 발견했나요?"/></label><div className="comparison-actions"><small>{note.length}/1,200자</small><button type="button" onClick={save} disabled={items.length<2}><Bookmark size={16}/> 비교 저장</button><button type="button" onClick={()=>void copyLink()} disabled={items.length<2}><Copy size={16}/> 종목 링크 복사</button></div><div className="comparison-saved">{saved.length?saved.map(entry=><div key={entry.id}><button type="button" onClick={()=>{setItems(entry.instruments);setNote(entry.note);setQuery('');setResults([]);setNotice('저장한 비교를 불러왔어요. 시세는 새로 조회합니다.');}}><b>{entry.name}</b><small>비교와 개인 메모 열기</small></button><button type="button" aria-label={`${entry.name} 저장 목록 삭제`} onClick={()=>persist(saved.filter(value=>value.id!==entry.id))}><Trash2 size={17}/></button></div>):<p>아직 저장한 비교가 없어요.</p>}</div></section>
+      <section className="comparison-panel" aria-labelledby="compare-save-title">
+        <header><h2 id="compare-save-title"><Bookmark size={20}/> 다음에 이어보기</h2><span>{cloud.authenticated===true?"내 계정에 저장":cloud.authenticated===false?"이 브라우저에 저장":"계정 확인 중"}</span></header>
+        <label className="comparison-note">비교하며 발견한 점<textarea value={note} maxLength={1200} onChange={e=>setNote(e.target.value)} placeholder="어떤 차이를 발견했나요?"/></label>
+        <div className="comparison-actions"><small>{note.length}/1,200자</small><button type="button" onClick={()=>void save()} disabled={items.length<2||cloud.busy||cloud.authenticated===null}><Bookmark size={16}/> 비교 저장</button><button type="button" onClick={()=>void copyLink()} disabled={items.length<2}><Copy size={16}/> 종목 링크 복사</button></div>
+        <div className="comparison-saved">{saved.length?saved.map(entry=><div key={entry.id}><button type="button" onClick={()=>{setItems(entry.instruments);setNote(entry.note);setQuery('');setResults([]);setNotice('저장한 비교를 불러왔어요. 시세는 새로 조회합니다.');}}><b>{entry.name}</b><small>비교와 개인 메모 열기</small></button><button type="button" disabled={cloud.busy} aria-label={`${entry.name} 저장 목록 삭제`} onClick={()=>{if(cloud.authenticated===true)void cloud.save(entry.id,null);else if(cloud.authenticated===false)persist(saved.filter(value=>value.id!==entry.id));}}><Trash2 size={17}/></button></div>):<p>아직 저장한 비교가 없어요.</p>}</div>
+        {cloud.error?<div role="alert"><p>{cloud.error}</p><button type="button" onClick={cloud.refresh}>계정 기록 다시 조회</button></div>:null}
+      </section>
       {shareLink?<label className="comparison-search comparison-panel">공유할 종목 링크<input type="url" readOnly value={shareLink} onFocus={e=>e.currentTarget.select()}/></label>:null}
       {comparison ? <InvestmentPractice comparison={comparison} items={items}/> : null}
     </div>

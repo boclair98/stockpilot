@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import PortfolioDailySnapshot
+from app.services.personal_ledger import performance_equity
 
 INITIAL_KRW = Decimal("100000000")
 INITIAL_USD = Decimal("100000")
@@ -35,7 +36,7 @@ async def record_daily_snapshot(
         "snapshot_date": datetime.now(SEOUL).date(),
         "equity_krw": equity_krw,
         "equity_usd": equity_usd,
-        "return_rate": combined_return_rate(equity_krw, equity_usd),
+        "return_rate": combined_return_rate(*(await performance_equity(session, owner, equity_krw, equity_usd))),
     }
     statement = pg_insert(PortfolioDailySnapshot).values(**values)
     await session.execute(

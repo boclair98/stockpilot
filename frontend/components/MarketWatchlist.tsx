@@ -23,9 +23,10 @@ type Props = {
   colorFor: (symbol: string) => string;
   onSelect: (item: WatchlistItem) => void;
   onRemove: (item: WatchlistItem) => void;
+  accountSaved?: boolean;
 };
 
-function MarketWatchlist({ items, selectedId, onSelect, onRemove }: Props) {
+function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }: Props) {
   const [market, setMarket] = useState("ALL");
   const [sort, setSort] = useState("saved");
   const visible = useMemo(() => {
@@ -46,7 +47,7 @@ function MarketWatchlist({ items, selectedId, onSelect, onRemove }: Props) {
           <span>MY WATCHLIST</span>
           <h2 id="favorite-board-title">내 관심종목</h2>
         </div>
-        <small>{items.length}/12 · 이 브라우저</small>
+        <small>{items.length}/{accountSaved?50:12} · {accountSaved?"내 계정":"이 브라우저"}</small>
       </div>
       {items.length > 0 && <div className="record-filters">
         <label>시장<select value={market} onChange={e => setMarket(e.target.value)}><option value="ALL">전체</option><option value="KR">한국</option><option value="US">미국</option></select></label>

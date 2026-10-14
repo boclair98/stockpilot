@@ -4,9 +4,38 @@
 
 # StockPilot
 
-### 개인 기능 확장 · 비파괴 스키마 준비
+## 2026-10-14 · 개인 투자 기능 확장
 
-`0018_personal_tools`는 계정 저장·알림 읽음·문의/공지·정기 모의투자·환전/기업권리 처리 기록을 위한 새 테이블 8개와 기존 주문의 nullable `processed_at`만 추가합니다. 기존 잔고·종목·주문은 수정하거나 소급 정산하지 않습니다. 스키마를 먼저 준비한 후 화면과 워커를 연결하는 2단계 배포를 사용합니다. `BOOTSTRAP_SCHEMA_REVISION=0018_personal_tools`는 0017 → 0018만 DB advisory lock 아래 실행하고, 이미 0018이면 건너뛰며 다른 revision은 중단합니다. 일반 부팅 마이그레이션은 계속 꺼두고, 기능 배포에서 이 임시 설정을 제거합니다. `/api/health/personal-tools`는 새 스키마 준비 여부만 반환하며 개인 데이터는 반환하지 않습니다.
+기존 시장 화면의 디자인·계좌·통합 시세는 유지하고, 전체 메뉴와 검색 메뉴에서 아래 개인 기능을 이용합니다. 앱인토스 비공개 소스나 별도 연습/친구 챌린지 원장은 변경하지 않습니다.
+
+| 기능 | 사용자 흐름 | 안전 기준 |
+|---|---|---|
+| 계정 저장 | 관심종목 최대 50개, 판단 메모, 비교 세트를 로그인 계정에 저장하고 다른 기기에서 조회 | owner별 분리, 메모/비교 버전 충돌 감지, 삭제 tombstone. 로그인 전 기록은 브라우저에 유지하며 관심종목 가져오기는 명시적으로 선택 |
+| [통합 알림](https://stockpilot.coders.kr/notifications) | 주문 상태·목표 가격·정기 매수·환전·권리 반영·문의 답변을 유형별 확인, 읽음 처리. 관심종목 DART/SEC 공시는 별도 탭 | 실제 기록만 표시, 페이지당 50개. 새 유형의 휴대폰 푸시를 약속하지 않으며 기존 FCM 가격 알림은 유지 |
+| [고객지원](https://stockpilot.coders.kr/support) | 문의 접수 → 내 진행 상태 → 운영자 답변, 공지와 FAQ | 개인 문의 비공개, 중복 접수 방지, 인증정보 입력 경고. 답변 처리 시간/24시간 상담은 보장하지 않음 |
+| [정기 모의 매수](https://stockpilot.coders.kr/account-tools) | 종목 검색 → 주간 예산·현지 요일/시간 → 등록 → 중지/재개 → 실행 기록 | 뉴욕 DST 자동 반영. 신선한 WebSocket 시세·현지 정규 시간·잔고·위험 한도를 확인. 불충족/30분 초과 지연 회차는 건너뛰며 소급 매수하지 않음. Redis lease + 회차 unique + 계좌 잠금 |
+| 가상 환전 | ECB 기준환율·현금 확인 → 금액 견적 → 확인 → 영수증·자금 기록 | 실제 외환 거래 없음. ECB 일별 EUR 교차환율, 기준일 표시, 7일 초과 자료 차단, 견적 120초. 수수료 0, 원화 1원/달러 1센트 미만 절사, Decimal 계산. 대기 매수 주문이 있으면 차단, 동일 견적 중복 확정은 재출금하지 않음 |
+| 배당·분할 | 종목별 KIS 참고 일정 → 공식 공시 검증 일정 → 모의 원장 반영 기록 | 불완전한 권리 기준일/지급일/분할 비율을 추정하지 않음. 운영자가 공식 자료로 검증한 미래 이벤트만 실행. 배당은 권리 시점 보유량 기준 세전 모의 지급, 단주·미처리 주문·기준 이후 매매가 있는 분할은 차단/문의. 과거 소급 지급 없음 |
+
+**수익률 기준:** 원화·달러 자산은 혼합하지 않습니다. 가상 환전의 통화별 순이동 금액을 현재 평가액에서 제외해 기존 최초 지급금 기준의 투자 수익률·리그·일별 복기를 계산합니다. 환전만으로 순위가 오르지 않습니다. 환전과 배당·분할은 감사 기록과 별도 자금 내역을 남깁니다.
+
+**운영 화면:** `/operations/personal`에서 기존 `OPERATOR_EMAILS` 허용 목록의 Google 계정만 문의 답변, 공지 게시/숨김, 미래 권리 검증·취소를 수행합니다. 자동 검증/지급으로 표시하지 않으며 새로운 운영자 권한을 부여하지 않습니다.
+
+**자료와 제한:** [ECB 공식 일별 기준환율](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html)은 정보용이며 은행 거래 환율이 아닙니다. 권리 일정은 기존 KIS 실전 시세 자격증명을 서버에서만 사용하고, 공시는 기존 DART/SEC 연동을 사용합니다. 공개 서비스 시세 이용 권한은 별도로 확보해야 합니다. 정기 처리에는 장기 실행 worker 가동이 필요하고, 휴장·시세 장애·워커 중단 시 체결을 보장하지 않습니다. 새 유료 외부 서비스나 자동 유료 플랜은 추가하지 않았습니다.
+
+**DB 배포:** `0018_personal_tools`는 새 테이블 8개와 기존 주문의 nullable `processed_at`만 추가합니다. 0017 → 0018만 DB advisory lock 아래 실행한 1차 스키마 배포의 `/api/health/personal-tools` ready 응답을 확인한 후 기능을 연결했습니다. 기능 릴리스에서는 임시 `BOOTSTRAP_SCHEMA_REVISION`을 제거하고 일반 `RUN_MIGRATIONS_ON_BOOT=false`를 유지합니다. 기존 잔고·투자 기록은 초기화하거나 과거 권리를 소급 적용하지 않습니다. 개인정보 내보내기·회원 탈퇴에도 새 개인 기록을 포함합니다.
+
+**검증:** backend의 `tests/test_personal_tools.py`는 운영 DB가 아닌 메모리 SQLite + ASGI로 계정 분리·버전 충돌·멱등 요청·환전 잔고/수익률·만료·정기 주문·잔액 부족·배당/분할·운영 권한을 확인합니다. PostgreSQL 동시성/실제 4만 명 부하 시험과 동일한 검증은 아닙니다. `PERSONAL_FIXTURE=1`로 켜는 `backend/scripts/preview_personal.py`(5234)와 `frontend/scripts/preview-functional.mjs`(5232)는 로컬 격리 UI 검증 전용이며 운영 연결이 없습니다.
+
+```powershell
+# backend: 운영 DB를 사용하지 않는 회귀 검사
+.venv/Scripts/python.exe -m pytest tests/test_personal_tools.py tests/test_order_integrity.py tests/test_risk_engine.py unit_tests/test_order_request_lookup.py unit_tests/test_order_validation.py -q -p no:cacheprovider
+# frontend: 기존 안전성 검사와 정적 빌드
+pnpm verify:safety
+pnpm build
+```
+
+배포는 기존 `boclair98/stockpilot` upstream push → 실제 `coders-kr/stockpilot` fork sync → full SHA 일치 확인 → 기존 Coders 프로젝트 재배포 순서를 따릅니다. 비공개 소스·인증정보·운영 사용자 문서는 포함하지 않습니다.
 
 ## 2026-10-14 · 출시 안정성 보완
 

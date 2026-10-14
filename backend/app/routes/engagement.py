@@ -25,6 +25,7 @@ from app.models import (
 from app.services.firebase_push import firebase_push
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
+from app.services.personal_ledger import performance_equity
 from app.services.portfolio_snapshots import (
     INITIAL_KRW,
     INITIAL_USD,
@@ -309,7 +310,8 @@ async def dashboard(
         total_costs[currency] += Decimal(order.fee) + Decimal(order.tax)
         if order.realized_pnl is not None:
             realized[currency] += Decimal(order.realized_pnl)
-    combined = combined_return_rate(equity_krw, equity_usd)
+    performance_krw, performance_usd = await performance_equity(session, owner, equity_krw, equity_usd)
+    combined = combined_return_rate(performance_krw, performance_usd)
     await record_daily_snapshot(session, owner, equity_krw, equity_usd)
     history = (
         (
@@ -369,8 +371,9 @@ async def dashboard(
         "report": {
             "equity": {"KRW": float(equity_krw), "USD": float(equity_usd)},
             "returnRate": {
-                "KRW": float(return_rate(equity_krw, INITIAL_KRW)),
-                "USD": float(return_rate(equity_usd, INITIAL_USD)),
+                "KRW": float(return_rate(performance_krw, INITIAL_KRW)),
+                "USD": float(return_rate(performance_usd, INITIAL_USD)),
+                "basis": "통화별 최초 지급 금액 기준 · 가상 환전의 통화 이동 금액 제외",
                 "combined": float(combined),
             },
             "tradeCount": len(filled),
@@ -472,6 +475,12 @@ async def add_watchlist(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     instrument = await _instrument(payload)
+    from app.personal_models import SavedItem
+    from app.routes.trading import account
+    await account(session, owner, lock=True)
+    saved = await session.get(SavedItem, (owner, "FAVORITE", instrument.id))
+    if saved:
+        saved.data, saved.deleted, saved.version, saved.updated_at = instrument.public(), False, saved.version + 1, datetime.now(UTC)
     existing = await session.scalar(
         sa.select(WatchlistItem).where(
             WatchlistItem.owner_id == owner,
@@ -484,8 +493,8 @@ async def add_watchlist(
     count = await session.scalar(
         sa.select(sa.func.count()).where(WatchlistItem.owner_id == owner)
     )
-    if (count or 0) >= 20:
-        raise HTTPException(409, "관심종목은 최대 20개까지 저장할 수 있습니다.")
+    if (count or 0) >= 50:
+        raise HTTPException(409, "관심종목은 최대 50개까지 저장할 수 있습니다.")
     row = WatchlistItem(
         owner_id=owner,
         symbol=instrument.symbol,
@@ -503,6 +512,9 @@ async def remove_watchlist(
     owner: UUID = Depends(require_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    from app.personal_models import SavedItem
+    from app.routes.trading import account
+    await account(session, owner, lock=True)
     row = await session.scalar(
         sa.select(WatchlistItem).where(
             WatchlistItem.id == item_id,
@@ -511,6 +523,11 @@ async def remove_watchlist(
     )
     if not row:
         raise HTTPException(404, "관심종목을 찾을 수 없습니다.")
+    instrument = await instrument_catalog.get(row.symbol, exchange=row.exchange)
+    if instrument:
+        saved = await session.get(SavedItem, (owner, "FAVORITE", instrument.id))
+        if saved:
+            saved.deleted, saved.version, saved.updated_at = True, saved.version + 1, datetime.now(UTC)
     await session.delete(row)
     return {"removed": True}
 
