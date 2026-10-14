@@ -80,7 +80,16 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
       } catch (cause) {
         if (cause instanceof ApiRequestError && cause.status === 401) {
           setItems([]);
+          setOwner(null);
           setAuthenticated(false);
+        }
+        if(cause instanceof ApiRequestError && cause.status===409){
+          const server=(cause.payload as {detail?:{current?:CloudItem<T>}}|null)?.detail?.current;
+          if(server?.key===key && Number.isInteger(server.version) && server.version>=0){
+            // Keep the user's draft, but retain the server revision even when
+            // an old tombstone is outside the bounded list. No automatic retry.
+            setItems(current=>[server,...current.filter(item=>item.key!==key)]);
+          }
         }
         setError(
           cause instanceof ApiRequestError && cause.status === 409
