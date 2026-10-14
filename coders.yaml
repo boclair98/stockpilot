@@ -50,6 +50,7 @@ services:
       MAX_REQUEST_BODY_BYTES: "64000"
       MARKET_DATA_REQUEST_TIMEOUT_SECONDS: "8"
       RUN_MIGRATIONS_ON_BOOT: "false"
+      BOOTSTRAP_SCHEMA_REVISION: "0018_personal_tools"
       RUN_BACKGROUND_WORKERS: "false"
       ENABLE_API_DOCS: "false"
       PAYMENT_PROVIDER: "none"

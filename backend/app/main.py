@@ -256,6 +256,16 @@ async def health() -> JSONResponse:
     return JSONResponse(content={"status": "ok"})
 
 
+@app.get("/api/health/personal-tools")
+async def personal_schema_readiness():
+    try:
+        async with AsyncSessionLocal() as session:
+            ready = await session.scalar(text("SELECT to_regclass('public.personal_saved_items') IS NOT NULL AND to_regclass('public.personal_inbox_reads') IS NOT NULL AND to_regclass('public.personal_support_tickets') IS NOT NULL AND to_regclass('public.personal_service_notices') IS NOT NULL AND to_regclass('public.personal_recurring_plans') IS NOT NULL AND to_regclass('public.personal_recurring_runs') IS NOT NULL AND to_regclass('public.personal_money_events') IS NOT NULL AND to_regclass('public.personal_corporate_actions') IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='trade_orders' AND column_name='processed_at')"))
+    except Exception:
+        ready = False
+    return JSONResponse({"ready": bool(ready)}, status_code=200 if ready else 503, headers={"Cache-Control":"no-store"})
+
+
 @app.get("/api/health/live")
 async def liveness() -> JSONResponse:
     """Liveness probe — answers the instant this process can serve a request,
