@@ -71,7 +71,13 @@ async def corporate_schedule(instrument):
                 payload = response.json()
                 if not isinstance(payload, dict) or payload.get("rt_cd") != "0":
                     raise ValueError("권리 일정을 조회하지 못했어요.")
-                rows = payload.get("output")
+                rows = (
+                    payload.get("output1")
+                    if instrument.market == "KR"
+                    else payload.get("output")
+                )
+                if isinstance(rows, dict):
+                    rows = [rows]
                 if not isinstance(rows, list):
                     raise ValueError("권리 일정 응답을 확인하지 못했어요.")
                 return rows[:100], response.headers.get("tr_cont") in {"M", "F"}
@@ -189,6 +195,6 @@ async def corporate_schedule(instrument):
         }
 
     return await asyncio.wait_for(
-        traffic_store.get_or_set(f"personal:corporate:v1:{instrument.id}", 3600, load),
+        traffic_store.get_or_set(f"personal:corporate:v2:{instrument.id}", 3600, load),
         timeout=10,
     )

@@ -776,3 +776,75 @@ async def test_corporate_guard_does_not_freeze_separate_practice_ledger(store):
     )
     await store.flush()
     assert await split_pending(store, owner, "AAPL", "NAS") is False
+
+
+async def test_domestic_provider_uses_official_output1(monkeypatch):
+    from contextlib import asynccontextmanager
+    from app.core.config import settings
+    from app.core.traffic import traffic_store
+    from app.services.kis_market import kis_market
+    from app.services.personal_data import corporate_schedule
+
+    monkeypatch.setattr(settings, "kis_app_key", "fixture-only")
+    monkeypatch.setattr(settings, "kis_app_secret", "fixture-only")
+
+    @asynccontextmanager
+    async def slot():
+        yield
+
+    async def rate_limit():
+        pass
+
+    async def token():
+        return "fixture-token"
+
+    async def cache(key, ttl, loader):
+        return await loader()
+
+    observed = datetime.now(UTC).strftime("%Y%m%d")
+
+    def response(request):
+        if request.url.path.endswith("dividend"):
+            return httpx.Response(
+                200,
+                json={
+                    "rt_cd": "0",
+                    "output1": [
+                        {
+                            "record_date": observed,
+                            "sht_cd": "005930",
+                            "per_sto_divi_amt": "350",
+                            "divi_pay_dt": observed,
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "rt_cd": "0",
+                "output1": [
+                    {
+                        "record_date": observed,
+                        "sht_cd": "005930",
+                        "inter_bf_face_amt": "1000",
+                        "inter_af_face_amt": "500",
+                        "list_dt": observed,
+                    }
+                ],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as client:
+        monkeypatch.setattr(kis_market, "_client", lambda: client)
+        monkeypatch.setattr(kis_market, "_rest_slot", slot)
+        monkeypatch.setattr(kis_market, "_rate_limit_rest", rate_limit)
+        monkeypatch.setattr(kis_market, "_token", token)
+        monkeypatch.setattr(traffic_store, "get_or_set", cache)
+        result = await corporate_schedule(
+            next(row for row in TOP_INSTRUMENTS if row.symbol == "005930")
+        )
+    assert result["partial"] is False and len(result["items"]) == 2
+    assert (
+        result["items"][0]["perShare"] == "350" and result["items"][1]["ratio"] == "2"
+    )
