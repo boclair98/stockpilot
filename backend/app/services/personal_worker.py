@@ -4,6 +4,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
@@ -230,6 +231,11 @@ class PersonalWorker:
             quote = kis_market.quote(plan.symbol, plan.market, plan.exchange)
             async with AsyncSessionLocal.begin() as session:
                 await run_plan(session, plan.id, item, quote, now)
+        cursor = await traffic_store.get_json("personal:corporate:cursor")
+        try:
+            after_id = UUID(cursor["after"]) if cursor else None
+        except (ValueError, KeyError, TypeError):
+            after_id = None
         async with AsyncSessionLocal() as session:
             actions = list(
                 (
@@ -238,8 +244,9 @@ class PersonalWorker:
                         .where(
                             CorporateAction.status == "VERIFIED",
                             CorporateAction.pay_at <= now,
+                            *([CorporateAction.id > after_id] if after_id else []),
                         )
-                        .order_by(CorporateAction.pay_at)
+                        .order_by(CorporateAction.id)
                         .limit(50)
                     )
                 ).all()
@@ -276,7 +283,16 @@ class PersonalWorker:
                     await apply_action(session, owner, action)
                 remaining -= 1
             if remaining <= 0:
+                await traffic_store.set_json(
+                    "personal:corporate:cursor", {"after": str(action.id)}, ttl=86400
+                )
                 break
+        else:
+            await traffic_store.set_json(
+                "personal:corporate:cursor",
+                {"after": str(actions[-1].id)} if actions else {},
+                ttl=86400,
+            )
 
 
 personal_worker = PersonalWorker()

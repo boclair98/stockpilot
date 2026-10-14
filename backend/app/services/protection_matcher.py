@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.traffic import traffic_store
 from app.models import Position, ProtectionPlan, TradeOrder
-from app.routes.trading import execute
+from app.routes.trading import account, execute
 from app.services.audit import record_audit
 from app.services.execution_quality import protection_trigger
 from app.services.instrument_catalog import Instrument, instrument_catalog
@@ -140,6 +140,7 @@ class ProtectionMatcher:
                 )
                 if not reason:
                     continue
+                await account(session, plan.owner_id, lock=True)
                 position = (
                     await session.execute(
                         sa.select(Position)

@@ -353,6 +353,8 @@ async def process_open_orders(session: AsyncSession, owner: UUID | None = None) 
     control = await load_control(session)
     if control.halted or settings.trading_mode.upper() != "SIMULATION":
         return
+    if owner is not None:
+        await account(session, owner, lock=True)
     query = sa.select(TradeOrder).where(TradeOrder.status.in_(("OPEN", "TRIGGERED")))
     if owner:
         query = query.where(TradeOrder.owner_id == owner)
@@ -941,17 +943,15 @@ async def order(
             receipt["detail"] = existing.reject_reason or "이 주문은 이미 거절 처리되었습니다."
             return JSONResponse(status_code=409, content=receipt)
         return JSONResponse(status_code=200, content=receipt)
-    if side == "SELL":
-        held, reserved = await sell_capacity(
-            session, owner, symbol, instrument.exchange
-        )
-        _, error = sell_quantity_error(held, reserved, payload.quantity)
-        if error:
-            raise HTTPException(409, error)
-
     quote = await kis_market.fetch_quote(instrument)
     if not quote:
         raise HTTPException(503, "KIS 시세를 아직 수신하지 못했습니다.")
+    await account(session, owner, lock=True)
+    if side == "SELL":
+        held, reserved = await sell_capacity(session, owner, symbol, instrument.exchange)
+        _, error = sell_quantity_error(held, reserved, payload.quantity)
+        if error:
+            raise HTTPException(409, error)
     price = Decimal(str(quote["price"]))
     limit_price = (
         Decimal(payload.limitPrice) if payload.limitPrice is not None else None
@@ -1115,6 +1115,7 @@ async def create_protection(
         raise HTTPException(422, "익절 가격은 현재가보다 높게 입력하세요.")
     if payload.stopLossPrice >= current:
         raise HTTPException(422, "손절 가격은 현재가보다 낮게 입력하세요.")
+    await account(session, owner, lock=True)
     held, reserved = await sell_capacity(
         session, owner, symbol, instrument.exchange
     )

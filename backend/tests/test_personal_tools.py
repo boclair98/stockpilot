@@ -18,6 +18,7 @@ from app.models import (
     TradeOrder,
     TradingAccount,
     TradingControl,
+    User,
     WatchlistItem,
 )
 from app.personal_models import (
@@ -84,6 +85,7 @@ def store():
         model.__table__
         for model in (
             TradingAccount,
+            User,
             PracticeRound,
             TradeOrder,
             Position,
@@ -780,6 +782,7 @@ async def test_corporate_guard_does_not_freeze_separate_practice_ledger(store):
 
 async def test_domestic_provider_uses_official_output1(monkeypatch):
     from contextlib import asynccontextmanager
+
     from app.core.config import settings
     from app.core.traffic import traffic_store
     from app.services.kis_market import kis_market
@@ -848,3 +851,61 @@ async def test_domestic_provider_uses_official_output1(monkeypatch):
     assert (
         result["items"][0]["perShare"] == "350" and result["items"][1]["ratio"] == "2"
     )
+
+
+async def test_worker_cycles_beyond_first_50_actions(store, monkeypatch):
+    import app.services.personal_worker as worker_module
+    from app.core.traffic import traffic_store
+
+    now = datetime.now(UTC) - timedelta(minutes=5)
+    for index in range(51):
+        store.add(
+            CorporateAction(
+                id=UUID(f"a0000000-0000-0000-0000-{index:012x}"),
+                source_key=f"cursor-action-test-{index}",
+                symbol="005930",
+                market="KR",
+                exchange="KRX",
+                currency="KRW",
+                kind="DIVIDEND",
+                per_share=350,
+                cutoff_at=now,
+                pay_at=now,
+                source_url="https://dart.fss.or.kr/",
+            )
+        )
+    await store.flush()
+    state = {}
+
+    async def get(key):
+        return state.get(key)
+
+    async def put(key, value, ttl):
+        state[key] = value
+
+    monkeypatch.setattr(traffic_store, "get_json", get)
+    monkeypatch.setattr(traffic_store, "set_json", put)
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def context():
+        yield store
+
+    class Factory:
+        def __call__(self):
+            return context()
+
+        def begin(self):
+            return context()
+
+    monkeypatch.setattr(worker_module, "AsyncSessionLocal", Factory())
+    worker = worker_module.PersonalWorker()
+    await worker.poll()
+    first = state["personal:corporate:cursor"]["after"]
+    await worker.poll()
+    second = state["personal:corporate:cursor"]["after"]
+    assert first != second and UUID(second) == UUID(
+        "a0000000-0000-0000-0000-000000000032"
+    )
+    await worker.poll()
+    assert state["personal:corporate:cursor"] == {}

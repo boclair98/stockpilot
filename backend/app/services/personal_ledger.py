@@ -308,23 +308,22 @@ async def apply_action(session, owner: UUID, action):
             )
             .limit(1)
         )
-        position = await session.scalar(
-            sa.select(Position)
-            .where(
-                Position.owner_id == owner,
-                Position.symbol == action.symbol,
-                Position.exchange == action.exchange,
-            )
-            .with_for_update()
-        )
         try:
-            if (
-                pending
-                or protection
-                or after
-                or not position
-                or Decimal(position.quantity) != quantity
-            ):
+            # Pending activity fails closed before waiting on a position lock.
+            if pending or protection or after:
+                raise ValueError(
+                    "대기 주문·보호 설정·권리 이후 매매를 확인해 주세요. 자동으로 수량을 바꾸지 않았어요."
+                )
+            position = await session.scalar(
+                sa.select(Position)
+                .where(
+                    Position.owner_id == owner,
+                    Position.symbol == action.symbol,
+                    Position.exchange == action.exchange,
+                )
+                .with_for_update()
+            )
+            if not position or Decimal(position.quantity) != quantity:
                 raise ValueError(
                     "대기 주문·보호 설정·권리 이후 매매를 확인해 주세요. 자동으로 수량을 바꾸지 않았어요."
                 )
