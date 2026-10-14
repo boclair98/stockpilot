@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.models import Position, ProtectionPlan, TradeOrder
+from app.models import Position, PracticeRound, ProtectionPlan, TradeOrder
 from app.personal_models import CorporateAction, MoneyEvent
 from app.services.audit import record_audit
 from app.services.personal_math import aware, split_values
@@ -197,6 +197,14 @@ async def split_pending(session, owner, symbol, exchange):
             )
         ).all()
     )
+    if actions and await session.scalar(
+        sa.select(PracticeRound.id)
+        .where(PracticeRound.ledger_owner_id == owner)
+        .limit(1)
+    ):
+        # Separate restart/practice ledgers are intentionally not corporate-action
+        # participants; do not freeze them on an original-account pending action.
+        return False
     for action in actions:
         event = await session.scalar(
             sa.select(MoneyEvent.status).where(

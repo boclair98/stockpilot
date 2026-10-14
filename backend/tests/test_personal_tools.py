@@ -12,6 +12,7 @@ from app.core.identity import require_identity
 from app.models import (
     AuditEvent,
     Position,
+    PracticeRound,
     PriceAlert,
     ProtectionPlan,
     TradeOrder,
@@ -83,6 +84,7 @@ def store():
         model.__table__
         for model in (
             TradingAccount,
+            PracticeRound,
             TradeOrder,
             Position,
             TradingControl,
@@ -737,3 +739,40 @@ async def test_operator_reply_notice_and_future_action(api, store):
         assert (
             await client.post("/api/personal/operations/corporate", json=action)
         ).status_code == 422
+
+
+async def test_corporate_guard_does_not_freeze_separate_practice_ledger(store):
+    from app.services.personal_ledger import split_pending
+
+    owner = wallet(store)
+    now = datetime.now(UTC)
+    store.add(PracticeRound(owner_id=uuid4(), ledger_owner_id=owner))
+    store.add(
+        TradeOrder(
+            owner_id=owner,
+            symbol="AAPL",
+            exchange="NAS",
+            side="BUY",
+            order_type="MARKET",
+            quantity=4,
+            status="FILLED",
+            fill_price=100,
+            processed_at=now - timedelta(days=2),
+        )
+    )
+    store.add(
+        CorporateAction(
+            source_key="split-private-scope-test",
+            symbol="AAPL",
+            market="US",
+            exchange="NAS",
+            currency="USD",
+            kind="SPLIT",
+            ratio=2,
+            cutoff_at=now - timedelta(minutes=1),
+            pay_at=now - timedelta(minutes=1),
+            source_url="https://www.sec.gov/Archives/test",
+        )
+    )
+    await store.flush()
+    assert await split_pending(store, owner, "AAPL", "NAS") is False
