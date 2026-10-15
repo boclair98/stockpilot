@@ -26,6 +26,12 @@ from app.personal_models import (
     SupportTicket,
 )
 from app.routes.trading import account, quantity_text
+from app.services.inbox_cursor import (
+    decode_cursor,
+    encode_cursor,
+    event_order,
+    page_boundary,
+)
 from app.services.instrument_catalog import instrument_catalog
 from app.services.personal_data import corporate_schedule, reference_fx
 from app.services.personal_ledger import book_fx, require_simulation
@@ -433,15 +439,17 @@ async def inbox(
     response: Response,
     category: Literal["ALL", "ORDER", "PRICE", "ACCOUNT", "SUPPORT"] = "ALL",
     before: datetime | None = None,
+    cursor: str | None = Query(None, max_length=512),
     owner=Depends(require_identity),
     session=Depends(get_session),
 ):
     private(response)
     events = []
+    position = decode_cursor(cursor)
     end = aware(before) if before else datetime.now(UTC) + timedelta(seconds=1)
 
     def add(key, kind, title, body, at, href):
-        if at and aware(at) < end:
+        if at:
             events.append(
                 {
                     "key": key,
@@ -459,8 +467,11 @@ async def inbox(
             (
                 await session.scalars(
                     sa.select(TradeOrder)
-                    .where(TradeOrder.owner_id == owner, date < end)
-                    .order_by(date.desc())
+                    .where(
+                        TradeOrder.owner_id == owner,
+                        page_boundary(date, TradeOrder.id, "order", end, position),
+                    )
+                    .order_by(date.desc(), TradeOrder.id.desc())
                     .limit(51)
                 )
             ).all()
@@ -490,9 +501,15 @@ async def inbox(
                     .where(
                         PriceAlert.owner_id == owner,
                         PriceAlert.status == "TRIGGERED",
-                        PriceAlert.triggered_at < end,
+                        page_boundary(
+                            PriceAlert.triggered_at,
+                            PriceAlert.id,
+                            "price",
+                            end,
+                            position,
+                        ),
                     )
-                    .order_by(PriceAlert.triggered_at.desc())
+                    .order_by(PriceAlert.triggered_at.desc(), PriceAlert.id.desc())
                     .limit(51)
                 )
             ).all()
@@ -514,9 +531,11 @@ async def inbox(
                     .where(
                         MoneyEvent.owner_id == owner,
                         MoneyEvent.status.notin_(["QUOTED", "NO_ENTITLEMENT"]),
-                        MoneyEvent.updated_at < end,
+                        page_boundary(
+                            MoneyEvent.updated_at, MoneyEvent.id, "money", end, position
+                        ),
                     )
-                    .order_by(MoneyEvent.updated_at.desc())
+                    .order_by(MoneyEvent.updated_at.desc(), MoneyEvent.id.desc())
                     .limit(51)
                 )
             ).all()
@@ -529,16 +548,23 @@ async def inbox(
                 ),
                 row.data.get("message", row.status),
                 row.updated_at,
-                "/account-tools",
+                "/account-tools?tab=HISTORY",
             )
         for row in list(
             (
                 await session.scalars(
                     sa.select(RecurringRun)
                     .where(
-                        RecurringRun.owner_id == owner, RecurringRun.created_at < end
+                        RecurringRun.owner_id == owner,
+                        page_boundary(
+                            RecurringRun.created_at,
+                            RecurringRun.id,
+                            "recurring",
+                            end,
+                            position,
+                        ),
                     )
-                    .order_by(RecurringRun.created_at.desc())
+                    .order_by(RecurringRun.created_at.desc(), RecurringRun.id.desc())
                     .limit(51)
                 )
             ).all()
@@ -549,7 +575,7 @@ async def inbox(
                 "정기 모의 매수 실행 기록",
                 row.reason,
                 row.created_at,
-                "/account-tools",
+                "/account-tools?tab=RECURRING",
             )
     if category in {"ALL", "SUPPORT"}:
         for row in list(
@@ -559,9 +585,15 @@ async def inbox(
                     .where(
                         SupportTicket.owner_id == owner,
                         SupportTicket.reply.is_not(None),
-                        SupportTicket.updated_at < end,
+                        page_boundary(
+                            SupportTicket.updated_at,
+                            SupportTicket.id,
+                            "support",
+                            end,
+                            position,
+                        ),
                     )
-                    .order_by(SupportTicket.updated_at.desc())
+                    .order_by(SupportTicket.updated_at.desc(), SupportTicket.id.desc())
                     .limit(51)
                 )
             ).all()
@@ -574,7 +606,7 @@ async def inbox(
                 row.updated_at,
                 "/support",
             )
-    events.sort(key=lambda item: (item["at"], item["key"]), reverse=True)
+    events.sort(key=event_order, reverse=True)
     selected = events[:50]
     read = set(
         (
@@ -592,6 +624,7 @@ async def inbox(
         "items": selected,
         "hasMore": len(events) > 50,
         "nextBefore": selected[-1]["at"] if len(events) > 50 else None,
+        "nextCursor": encode_cursor(selected[-1]) if len(events) > 50 else None,
     }
 
 

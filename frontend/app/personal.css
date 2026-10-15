@@ -11,6 +11,20 @@
 .personal-panel h3 {
   margin: 24px 0 12px;
 }
+.personal-inbox-day h3 {
+  font-size: 14px;
+  color: var(--ws-muted);
+  margin: 28px 0 4px;
+}
+.personal-history-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-left: 20px;
+}
+.personal-quote-confirmation button {
+  margin: 0 8px 8px 0;
+}
 .personal-panel p {
   line-height: 1.7;
   white-space: pre-wrap;
@@ -129,6 +143,12 @@
   text-decoration: none;
   font-weight: 600;
 }
+.personal-primary:hover,
+.personal-panel button.personal-primary:hover:not(:disabled) {
+  background: var(--ws-brand);
+  color: var(--ws-canvas);
+  filter: brightness(0.96);
+}
 html[data-private="true"]
   .personal-page
   :is(.personal-rate b, .personal-receipt dd, .personal-form-grid p b) {
@@ -168,6 +188,12 @@ html[data-private="true"]
 .personal-list-row > a,
 .personal-list-row > button {
   flex-shrink: 0;
+}
+.personal-list-row > a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
 }
 .personal-list-row.unread {
   border-left: 3px solid var(--ws-brand);
@@ -286,6 +312,13 @@ html[data-private="true"]
   margin-top: 3px;
 }
 @media (max-width: 479px) {
+  .personal-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .personal-notification-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .personal-list-row {
     gap: 10px;
     flex-wrap: wrap;

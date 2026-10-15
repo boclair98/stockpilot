@@ -518,6 +518,138 @@ async def test_inbox_read_only_own_events(api, store):
         ][0]["read"] is True
 
 
+async def test_inbox_cursor_keeps_all_same_timestamp_events(api, store):
+    from app.services.inbox_cursor import event_order
+
+    owner, other = wallet(store), wallet(store)
+    at = datetime.now(UTC) - timedelta(minutes=1)
+    expected = set()
+    for index in range(75):
+        for event in (
+            TradeOrder(
+                owner_id=owner,
+                symbol="005930",
+                exchange="KRX",
+                side="BUY",
+                order_type="MARKET",
+                quantity=1,
+                status="FILLED",
+                fill_price=100,
+                created_at=at,
+                processed_at=at,
+            ),
+            MoneyEvent(
+                owner_id=owner,
+                kind="FX",
+                request_key=str(index),
+                status="BOOKED",
+                data={"message": "환전 완료"},
+                created_at=at,
+                updated_at=at,
+            ),
+            SupportTicket(
+                owner_id=owner,
+                request_key=str(index),
+                fingerprint="test",
+                category="BUG",
+                subject="답변 검증",
+                body="내용",
+                reply="답변",
+                status="ANSWERED",
+                created_at=at,
+                updated_at=at,
+            ),
+        ):
+            store.add(event)
+            await store.flush()
+            expected.add(str(event.id))
+    store.add(
+        MoneyEvent(
+            owner_id=other,
+            kind="FX",
+            request_key="other",
+            status="BOOKED",
+            data={},
+            updated_at=at,
+        )
+    )
+    await store.flush()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=api), base_url="http://test"
+    ) as client:
+        headers = {"X-Test-Owner": str(owner)}
+        params = {}
+        collected = []
+        for _ in range(10):
+            response = await client.get(
+                "/api/personal/inbox", headers=headers, params=params
+            )
+            assert response.status_code == 200
+            page = response.json()
+            assert len(page["items"]) <= 50
+            collected.extend(page["items"])
+            if not page["hasMore"]:
+                assert page["nextCursor"] is None
+                break
+            assert page["nextCursor"]
+            params = {"cursor": page["nextCursor"]}
+        assert len(collected) == 225
+        assert len({item["key"] for item in collected}) == 225
+        assert {item["key"].split(":")[1] for item in collected} == expected
+        assert collected == sorted(collected, key=event_order, reverse=True)
+        assert all(
+            item["href"] == "/account-tools?tab=HISTORY"
+            for item in collected
+            if item["category"] == "ACCOUNT"
+        )
+        filtered = (
+            await client.get("/api/personal/inbox?category=ORDER", headers=headers)
+        ).json()
+        second = (
+            await client.get(
+                "/api/personal/inbox",
+                headers=headers,
+                params={"category": "ORDER", "cursor": filtered["nextCursor"]},
+            )
+        ).json()
+        assert len(filtered["items"]) == 50 and len(second["items"]) == 25
+        assert not second["hasMore"]
+        # Read acknowledgements on earlier pages do not change pagination order.
+        keys = [item["key"] for item in collected[:50]]
+        assert (
+            await client.post(
+                "/api/personal/inbox/read", json={"keys": keys}, headers=headers
+            )
+        ).status_code == 200
+        assert all(
+            item["read"]
+            for item in (
+                await client.get("/api/personal/inbox", headers=headers)
+            ).json()["items"]
+        )
+        legacy = await client.get(
+            "/api/personal/inbox", headers=headers, params={"before": at.isoformat()}
+        )
+        assert legacy.status_code == 200 and legacy.json()["items"] == []
+
+
+@pytest.mark.parametrize(
+    "cursor",
+    ["not-a-cursor", "W10=", "bnVsbA==", "WzEsbnVsbCwiYXNkIiwxXQ==", "x" * 513],
+)
+async def test_inbox_rejects_invalid_cursor(api, store, cursor):
+    owner = wallet(store)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=api), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/personal/inbox",
+            params={"cursor": cursor},
+            headers={"X-Test-Owner": str(owner)},
+        )
+        assert response.status_code == 422
+
+
 async def test_plan_api_duplicate_validation_and_owner(api, store):
     a, b = wallet(store), wallet(store)
     payload = {

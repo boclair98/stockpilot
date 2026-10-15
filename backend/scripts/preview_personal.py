@@ -3,6 +3,7 @@ import os
 import sys
 from pathlib import Path
 from uuid import UUID
+from datetime import UTC, datetime, timedelta
 
 if os.getenv("PERSONAL_FIXTURE") != "1":
     raise SystemExit("Set PERSONAL_FIXTURE=1 to run disposable verification fixtures.")
@@ -12,7 +13,7 @@ import uvicorn
 
 from app.core.database import get_session
 from app.core.identity import require_identity
-from app.models import TradingAccount
+from app.models import TradingAccount, TradeOrder
 from app.routes import personal
 from app.services import personal_data
 from app.services.instrument_catalog import TOP_INSTRUMENTS, instrument_catalog
@@ -22,6 +23,11 @@ OWNER = UUID("a0000000-0000-0000-0000-000000000123")
 generator = store_fixture.__wrapped__()
 store = next(generator)
 wallet(store, OWNER)
+if os.getenv("PERSONAL_INBOX_FIXTURE") == "1":
+    at = datetime.now(UTC) - timedelta(minutes=10)
+    for index in range(70):
+        store.add(TradeOrder(owner_id=OWNER, symbol="005930", exchange="KRX", side="BUY", order_type="MARKET", quantity=index + 1, status="REJECTED", reject_reason="격리된 화면 검증 기록 · 실제 주문 아님", created_at=at, processed_at=at))
+    store.session.flush()
 app = FastAPI()
 app.include_router(personal.router)
 

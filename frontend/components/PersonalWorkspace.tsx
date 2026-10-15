@@ -19,6 +19,7 @@ import {
 import WorkspaceControls from "./WorkspaceControls";
 import StockLogo from "./StockLogo";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
+import { usePersonalTab } from "@/lib/personal-navigation";
 import {
   isInstrument,
   type InstrumentIdentity,
@@ -287,6 +288,7 @@ function useLoad<T>(url: string) {
     revision: number;
     data: T | null;
     error: string;
+    unauthorized: boolean;
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((v) => v + 1), []);
@@ -295,20 +297,33 @@ function useLoad<T>(url: string) {
     void requestJson<T>(url, { signal: controller.signal }, 25000)
       .then((value) => {
         if (!controller.signal.aborted)
-          setResult({ url, revision, data: value, error: "" });
+          setResult({
+            url,
+            revision,
+            data: value,
+            error: "",
+            unauthorized: false,
+          });
       })
       .catch((e) => {
         if (!controller.signal.aborted)
           setResult((current) => ({
             url,
             revision,
-            data: current?.url === url ? current.data : null,
+            data:
+              e instanceof ApiRequestError && e.status === 401
+                ? null
+                : current?.url === url
+                  ? current.data
+                  : null,
             error: e.message,
+            unauthorized: e instanceof ApiRequestError && e.status === 401,
           }));
       });
     return () => controller.abort();
   }, [url, revision]);
   return {
+    unauthorized: result?.unauthorized === true,
     data: result?.url === url ? result.data : null,
     loading: result?.url !== url || result.revision !== revision,
     error:
@@ -320,14 +335,19 @@ function LoadState({
   loading,
   error,
   retry,
+  unauthorized,
 }: {
   loading: boolean;
   error: string;
   retry: () => void;
+  unauthorized?: boolean;
 }) {
   return error ? (
     <div className="personal-feedback" role="alert">
       <p>{error}</p>
+      {unauthorized ? (
+        <a href="/api/auth/google/login">Google로 다시 로그인</a>
+      ) : null}
       <button type="button" onClick={retry}>
         다시 조회
       </button>
@@ -410,21 +430,16 @@ function Notices() {
   );
 }
 function Inbox() {
-  const [tab, setTab] = useState("ALL"),
-    [before, setBefore] = useState("");
-  const [previous, setPrevious] = useState<Event[]>([]);
-  const state = useLoad<{
-    items: Event[];
-    hasMore: boolean;
-    nextBefore: string | null;
-  }>(
-    `/api/personal/inbox?category=${tab === "DISCLOSURE" ? "ALL" : tab}${before ? `&before=${encodeURIComponent(before)}` : ""}`,
+  const [tab, setTab] = usePersonalTab(
+    ["ALL", "ORDER", "PRICE", "ACCOUNT", "SUPPORT", "DISCLOSURE"],
+    "ALL",
   );
-  const writes = useWrite(state.refresh);
-  const all = [...previous, ...(state.data?.items || [])];
   return (
     <>
-      <div className="personal-tabs" aria-label="알림 유형">
+      <div
+        className="personal-tabs personal-notification-tabs"
+        aria-label="알림 유형"
+      >
         {[
           ["ALL", "전체"],
           ["ORDER", "주문"],
@@ -437,11 +452,7 @@ function Inbox() {
             type="button"
             key={id}
             aria-pressed={tab === id}
-            onClick={() => {
-              setTab(id);
-              setBefore("");
-              setPrevious([]);
-            }}
+            onClick={() => setTab(id)}
           >
             {label}
           </button>
@@ -450,37 +461,91 @@ function Inbox() {
       {tab === "DISCLOSURE" ? (
         <Disclosures />
       ) : (
-        <Panel title="최근 알림">
-          <div className="personal-inline-actions">
-            <button
-              type="button"
-              onClick={() => {
-                setBefore("");
-                setPrevious([]);
-                state.refresh();
-              }}
-            >
-              <RefreshCw size={16} />
-              다시 조회
-            </button>
-            <button
-              type="button"
-              disabled={writes.busy || !all.some((row) => !row.read)}
-              onClick={() =>
-                void writes.run("/api/personal/inbox/read", {
-                  keys: all
-                    .filter((row) => !row.read)
-                    .slice(0, 50)
-                    .map((row) => row.key),
-                })
-              }
-            >
-              표시한 알림 읽음
-            </button>
-          </div>
-          <LoadState {...state} retry={state.refresh} />
-          {writes.message ? <p role="alert">{writes.message}</p> : null}
-          {all.map((row) => (
+        <InboxFeed key={tab} category={tab} />
+      )}
+    </>
+  );
+}
+function InboxFeed({ category }: { category: string }) {
+  const [cursor, setCursor] = useState("");
+  const [previous, setPrevious] = useState<Event[]>([]);
+  const [readKeys, setReadKeys] = useState<Set<string>>(() => new Set());
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const state = useLoad<{
+    items: Event[];
+    hasMore: boolean;
+    nextCursor: string | null;
+  }>(
+    `/api/personal/inbox?category=${category}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+  );
+  const writes = useWrite(() => {});
+  const all = Array.from(
+    new Map(
+      (state.unauthorized
+        ? []
+        : [...previous, ...(state.data?.items || [])]
+      ).map((row) => [row.key, row]),
+    ).values(),
+  ).map((row) => ({ ...row, read: row.read || readKeys.has(row.key) }));
+  const unread = all.filter((row) => !row.read);
+  const visible = unreadOnly ? unread : all;
+  async function markRead(keys: string[]) {
+    if (await writes.run("/api/personal/inbox/read", { keys })) {
+      setReadKeys((current) => new Set([...current, ...keys]));
+    }
+  }
+  const grouped = new Map<string, Event[]>();
+  for (const row of visible) {
+    const day = new Date(row.at).toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    grouped.set(day, [...(grouped.get(day) || []), row]);
+  }
+  return (
+    <Panel title="최근 알림">
+      <div className="personal-inline-actions">
+        <button
+          type="button"
+          onClick={() => {
+            setCursor("");
+            setPrevious([]);
+            state.refresh();
+          }}
+        >
+          <RefreshCw size={16} />
+          다시 조회
+        </button>
+        <button
+          type="button"
+          disabled={writes.busy || !unread.length}
+          onClick={() =>
+            void markRead(unread.slice(0, 50).map((row) => row.key))
+          }
+        >
+          {writes.busy
+            ? "읽음 처리 중…"
+            : `안 읽은 ${Math.min(unread.length, 50)}개 읽음`}
+        </button>
+      </div>
+      <label className="personal-check">
+        <input
+          type="checkbox"
+          checked={unreadOnly}
+          onChange={(e) => setUnreadOnly(e.target.checked)}
+        />
+        불러온 알림 중 안 읽음만 보기
+      </label>
+      <p className="comparison-basis" role="status">
+        불러온 알림 {all.length}개 · 안 읽음 {unread.length}개
+      </p>
+      <LoadState {...state} retry={state.refresh} />
+      {writes.message ? <p role="alert">{writes.message}</p> : null}
+      {Array.from(grouped, ([day, rows]) => (
+        <section key={day} className="personal-inbox-day" aria-label={day}>
+          <h3>{day}</h3>
+          {rows.map((row) => (
             <article
               className={`personal-list-row ${row.read ? "" : "unread"}`}
               key={row.key}
@@ -489,42 +554,44 @@ function Inbox() {
               <div>
                 <b>{row.title}</b>
                 <p>{row.body}</p>
-                <small>{when(row.at)}</small>
+                <small>
+                  <time dateTime={row.at}>{when(row.at)}</time> ·{" "}
+                  {row.read ? "읽음" : "안 읽음"}
+                </small>
               </div>
-              <Link
-                href={row.href}
-                onClick={() =>
-                  void writes.run("/api/personal/inbox/read", {
-                    keys: [row.key],
-                  })
-                }
-              >
+              <Link href={row.href} onClick={() => void markRead([row.key])}>
                 확인
               </Link>
             </article>
           ))}
-          {!all.length && !state.loading && !state.error ? (
-            <p>아직 도착한 알림이 없어요.</p>
-          ) : null}
-          {state.data?.hasMore ? (
-            <button
-              type="button"
-              disabled={state.loading}
-              onClick={() => {
-                setPrevious(all);
-                setBefore(state.data?.nextBefore || "");
-              }}
-            >
-              이전 알림 더 보기
-            </button>
-          ) : null}
-          <p className="comparison-basis">
-            이곳에서 주문·계좌 기록과 가격 알림을 확인해요. 휴대폰 푸시는 기존
-            가격 알림 설정을 따라요.
-          </p>
-        </Panel>
-      )}
-    </>
+        </section>
+      ))}
+      {!visible.length && !state.loading && !state.error ? (
+        <p>
+          {unreadOnly
+            ? state.data?.hasMore
+              ? "불러온 알림은 모두 읽었어요. 이전 알림도 더 확인할 수 있어요."
+              : "모든 알림을 확인했어요. 새 소식이 도착하면 여기서 알려드릴게요."
+            : "아직 도착한 알림이 없어요."}
+        </p>
+      ) : null}
+      {state.data?.hasMore ? (
+        <button
+          type="button"
+          disabled={state.loading || !state.data.nextCursor}
+          onClick={() => {
+            setPrevious(all);
+            setCursor(state.data?.nextCursor || "");
+          }}
+        >
+          이전 알림 더 보기
+        </button>
+      ) : null}
+      <p className="comparison-basis">
+        이곳에서 주문·계좌 기록과 가격 알림을 확인해요. 휴대폰 푸시는 기존 가격
+        알림 설정을 따라요.
+      </p>
+    </Panel>
   );
 }
 function Disclosures() {
@@ -600,6 +667,7 @@ function Support() {
   const [category, setCategory] = useState("BUG"),
     [subject, setSubject] = useState(""),
     [body, setBody] = useState("");
+  const [receipt, setReceipt] = useState<Ticket | null>(null);
   const request = useRef<{ key: string; fingerprint: string } | null>(null);
   const writes = useWrite(state.refresh);
   async function submit() {
@@ -613,6 +681,8 @@ function Support() {
       requestKey: request.current.key,
     });
     if (result) {
+      setReceipt(result);
+      setOffset(0);
       setSubject("");
       setBody("");
       request.current = null;
@@ -621,6 +691,16 @@ function Support() {
   return (
     <>
       <Panel title="문의 보내기">
+        {receipt && !state.unauthorized ? (
+          <div className="personal-feedback" role="status">
+            <b>문의를 접수했어요</b>
+            <p>{receipt.subject}</p>
+            <small>
+              접수 번호 {receipt.id} · {when(receipt.createdAt)}
+            </small>
+            <p>답변은 아래 내 문의 내역과 알림에서 확인할 수 있어요.</p>
+          </div>
+        ) : null}
         <form
           className="personal-form"
           onSubmit={(e) => {
@@ -690,14 +770,14 @@ function Support() {
         <div className="personal-inline-actions">
           <button
             type="button"
-            disabled={!offset}
+            disabled={!offset || state.loading}
             onClick={() => setOffset((v) => v - 20)}
           >
             이전
           </button>
           <button
             type="button"
-            disabled={!state.data?.hasMore}
+            disabled={!state.data?.hasMore || state.loading}
             onClick={() => setOffset((v) => v + 20)}
           >
             다음
@@ -738,7 +818,10 @@ function TicketRow({ row }: { row: Ticket }) {
 }
 
 function Account() {
-  const [tab, setTab] = useState("RECURRING");
+  const [tab, setTab] = usePersonalTab(
+    ["RECURRING", "FX", "CORPORATE", "HISTORY"],
+    "RECURRING",
+  );
   return (
     <>
       <p className="personal-simulation">
@@ -782,6 +865,9 @@ function InstrumentPicker({
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<InstrumentIdentity[]>([]),
     [error, setError] = useState("");
+  const [resolvedQuery, setResolvedQuery] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const searching = Boolean(query.trim()) && resolvedQuery !== query;
   useEffect(() => {
     if (!query.trim()) return;
     const controller = new AbortController();
@@ -798,16 +884,20 @@ function InstrumentPicker({
               .slice(0, 8),
           );
           setError("");
+          setResolvedQuery(query);
         })
         .catch((e) => {
-          if (!controller.signal.aborted) setError(e.message);
+          if (!controller.signal.aborted) {
+            setError(e.message);
+            setResolvedQuery(query);
+          }
         });
     }, 250);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, attempt]);
   return (
     <div className="personal-picker">
       <label>
@@ -819,10 +909,33 @@ function InstrumentPicker({
           onChange={(e) => {
             setQuery(e.target.value);
             setResults([]);
+            setError("");
+            setResolvedQuery("");
           }}
         />
       </label>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? (
+        <div role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setResolvedQuery("");
+              setAttempt((v) => v + 1);
+            }}
+          >
+            검색 다시 시도
+          </button>
+        </div>
+      ) : null}
+      {searching ? (
+        <p role="status">종목을 찾고 있어요…</p>
+      ) : query.trim() && !error && !results.length ? (
+        <p role="status">
+          일치하는 종목이 없어요. 회사명이나 종목 코드를 확인해 주세요.
+        </p>
+      ) : null}
       {query
         ? results.map((row) => (
             <button
@@ -832,6 +945,8 @@ function InstrumentPicker({
                 onSelect(row);
                 setQuery("");
                 setResults([]);
+                setError("");
+                setResolvedQuery("");
               }}
             >
               <StockLogo symbol={row.symbol} name={row.name} color="#687cf5" />
@@ -1047,7 +1162,8 @@ function Fx() {
   const request = useRef<{ key: string; fingerprint: string } | null>(null);
   const writes = useWrite(balance.refresh);
   async function preview() {
-    if(quote?.expiresAt && new Date(quote.expiresAt).getTime()<=Date.now()) request.current=null;
+    if (quote?.expiresAt && new Date(quote.expiresAt).getTime() <= Date.now())
+      request.current = null;
     const fingerprint = JSON.stringify({ direction, amount });
     if (!request.current || request.current.fingerprint !== fingerprint)
       request.current = { key: crypto.randomUUID(), fingerprint };
@@ -1183,10 +1299,6 @@ function Fx() {
           </dl>
           {quote.status !== "BOOKED" ? (
             <>
-              <p>
-                이 견적은 {quote.expiresAt ? when(quote.expiresAt) : "—"}까지
-                유효해요.
-              </p>
               <label className="personal-check">
                 <input
                   type="checkbox"
@@ -1195,30 +1307,90 @@ function Fx() {
                 />
                 연습용 자금의 변경 금액을 확인했어요
               </label>
-              <button
-                type="button"
-                className="personal-primary"
+              <QuoteConfirmation
+                key={quote.id}
+                expiresAt={quote.expiresAt}
                 disabled={!checked || writes.busy}
-                onClick={async () => {
+                busy={writes.busy}
+                onRefresh={() => void preview()}
+                onConfirm={async () => {
                   const result = await writes.run<Money>(
                     `/api/personal/fx/${quote.id}/confirm`,
                     {},
                   );
-                  if (result) {setQuote(result);request.current=null;}
+                  if (result) {
+                    setQuote(result);
+                    request.current = null;
+                  }
                 }}
-              >
-                가상 환전 확정
-              </button>
+              />
             </>
           ) : (
             <>
               <p>{quote.data.message}</p>
               <Link href="/#holdings">내 자산 확인</Link>
+              <Link
+                className="personal-history-link"
+                href="/account-tools?tab=HISTORY"
+              >
+                자금 기록 보기
+              </Link>
             </>
           )}
         </Panel>
       ) : null}
     </>
+  );
+}
+function QuoteConfirmation({
+  expiresAt,
+  disabled,
+  busy,
+  onConfirm,
+  onRefresh,
+}: {
+  expiresAt: string | null;
+  disabled: boolean;
+  busy: boolean;
+  onConfirm: () => void;
+  onRefresh: () => void;
+}) {
+  const remaining = useCallback(
+    () =>
+      expiresAt
+        ? Math.max(
+            0,
+            Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000),
+          )
+        : 0,
+    [expiresAt],
+  );
+  const [seconds, setSeconds] = useState(remaining);
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds(remaining()), 1000);
+    return () => clearInterval(timer);
+  }, [remaining]);
+  return (
+    <div className="personal-quote-confirmation">
+      <p>
+        {seconds > 0
+          ? `견적 유효시간 ${Math.floor(seconds / 60)}분 ${seconds % 60}초`
+          : "견적이 만료됐어요. 최신 금액을 다시 확인해 주세요."}
+      </p>
+      <button
+        type="button"
+        className="personal-primary"
+        disabled={disabled || seconds <= 0}
+        onClick={onConfirm}
+      >
+        {busy ? "처리 중…" : "가상 환전 확정"}
+      </button>
+      {seconds <= 0 ? (
+        <button type="button" disabled={busy} onClick={onRefresh}>
+          최신 견적 다시 받기
+        </button>
+      ) : null}
+    </div>
   );
 }
 function MoneyHistory() {
