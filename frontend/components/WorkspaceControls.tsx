@@ -17,7 +17,7 @@ function subscribe(callback: () => void) {
     window.removeEventListener("stockpilot:display", callback);
   };
 }
-export default function WorkspaceControls() {
+export default function WorkspaceControls({ themeOnly = false }: { themeOnly?: boolean } = {}) {
   const snapshot = useSyncExternalStore(subscribe, read, () => defaultSnapshot);
   let prefs;
   try {
@@ -49,7 +49,7 @@ export default function WorkspaceControls() {
   }
   return (
     <div className="workspace-controls" aria-label="화면 설정">
-      <button
+      {!themeOnly ? <button
         type="button"
         title="금액 가리기"
         aria-label="금액 가리기"
@@ -57,8 +57,8 @@ export default function WorkspaceControls() {
         onClick={() => save({ dark, compact, privateMode: !privateMode })}
       >
         {privateMode ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-      <button
+      </button> : null}
+      {!themeOnly ? <button
         type="button"
         title="촘촘한 목록"
         aria-label="촘촘한 목록"
@@ -66,7 +66,7 @@ export default function WorkspaceControls() {
         onClick={() => save({ dark, compact: !compact, privateMode })}
       >
         {compact ? <Rows3 size={18} /> : <PanelTop size={18} />}
-      </button>
+      </button> : null}
       <button
         type="button"
         title="다크 모드"

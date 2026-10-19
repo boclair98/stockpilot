@@ -5,6 +5,7 @@ import MobileServiceNav from "@/components/MobileServiceNav";
 import PwaRuntime from "@/components/PwaRuntime";
 import GlobalDisplayControls from "@/components/GlobalDisplayControls";
 import { adsenseClient } from "@/lib/ads";
+import { siteUrl, socialImage } from "@/lib/site-metadata";
 import "./globals.css";
 import "./market.css";
 import "./market-index.css";
@@ -46,14 +47,15 @@ import "./comparison.css";
 import "./mobile-refinements.css";
 import "./release-safety.css";
 import "./personal.css";
+import "./welcome.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://stockpilot.coders.kr"),
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "StockPilot — KRX·NXT·미국주식 가상투자",
+    default: "StockPilot — 실제 시세로, 내 돈 없이 투자 연습",
     template: "%s | StockPilot",
   },
-  description: "주식 기초부터 KRX·NXT·미국주식 실제 시세 가상투자까지 배우고 연습하는 투자 학습 서비스",
+  description: "한국·미국 주식을 실제 시세로 살펴보고, 연습 자금으로 모의 매수·매도를 해보세요. 종목 비교부터 투자 기록과 수익률 리그까지 StockPilot에서 함께해요.",
   applicationName: "StockPilot",
   keywords: ["주식 기초", "주식 공부", "모의투자", "가상투자", "주식 연습", "KRX", "NXT", "미국주식", "수익률 리그"],
   alternates: { canonical: "/" },
@@ -64,11 +66,13 @@ export const metadata: Metadata = {
     siteName: "StockPilot",
     title: "StockPilot — 실전처럼 배우는 가상투자",
     description: "실제 시세, 안전한 가상 주문, 수익률 리그와 투자 훈련을 한곳에서 경험하세요.",
+    images: [socialImage],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "StockPilot — 실전처럼 배우는 가상투자",
     description: "KRX·NXT·미국주식 실제 시세 기반 가상투자 서비스",
+    images: [socialImage.url],
   },
   robots: { index: true, follow: true },
   manifest: "/manifest.webmanifest",

@@ -20,6 +20,7 @@ import {
   Bell,
   BrainCircuit,
   ChevronRight,
+  Compass,
   Gauge,
   GraduationCap,
   History,
@@ -557,25 +558,7 @@ export default function TradingTerminal() {
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        if (localStorage.getItem("stockpilot_onboarding_v2") !== "done") {
-          setGuideOpen(true);
-        }
-      } catch {
-        // Private browsing can block storage; the guide still remains available in the header.
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, []);
-
   const closeGuide = useCallback(() => {
-    try {
-      localStorage.setItem("stockpilot_onboarding_v2", "done");
-    } catch {
-      // The in-memory close still works when storage is unavailable.
-    }
     setGuideOpen(false);
   }, []);
 
@@ -584,7 +567,7 @@ export default function TradingTerminal() {
     window.setTimeout(() => {
       document
         .getElementById("search-card")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        ?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
       searchInputRef.current?.focus({ preventScroll: true });
     }, 180);
   }, []);
@@ -1513,6 +1496,11 @@ export default function TradingTerminal() {
           </small>
         </div>
       </section>
+      {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry" aria-label="처음 시작하는 투자 연습">
+        <span className="welcome-entry-icon"><Compass size={24} aria-hidden="true"/></span>
+        <div><strong>투자, 내 돈 없이 먼저 연습해요.</strong><p>실제 시세를 살펴보고 연습 자금으로 모의주문해 보세요.</p></div>
+        <div className="welcome-entry-actions"><button type="button" onClick={focusSearch}>종목 찾아보기<ArrowUpRight size={16} aria-hidden="true"/></button><Link href="/guide">어떻게 이용하나요?<ChevronRight size={16} aria-hidden="true"/></Link></div>
+      </aside> : null}
       {accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
         <div><b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b><p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>{accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}</div>
         <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} className={accountRefreshing ? "spin" : ""}/>{accountRefreshing ? "확인 중" : "잔고 다시 확인"}</button>
@@ -2773,7 +2761,7 @@ export default function TradingTerminal() {
           </a>
         </span>
       </footer>
-      {guideOpen ? <OnboardingGuide open onClose={closeGuide} /> : null}
+      {guideOpen ? <OnboardingGuide open onClose={closeGuide} onExplore={() => { closeGuide(); focusSearch(); }} /> : null}
       {confirmingOrder && quote && (
         <div
           className="order-confirm-backdrop"

@@ -39,11 +39,14 @@ http.createServer(async(req,res) => {
     if (req.method !== 'GET') return res.writeHead(403).end('Fixture writes disabled');
     let data = {};
     const p = url.pathname;
-    if (p === '/api/me') data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
+    if (p === '/api/me') {
+      if (process.env.VISITOR_FIXTURE === '1') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리된 방문자 화면 검증"}');
+      data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
+    }
     else if (p === '/api/trading/bootstrap') data = {quotes,status:{configured:true,connected:false,quoteCount:quotes.length}};
     else if (p === '/api/trading/portfolio') {
       if (scenario === 'portfolio-error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{}');
-      data = {authenticated:true,cash:{KRW:100000000,USD:100000},positions:[],orders:[],protections:[]};
+      data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions:[],orders:[],protections:[]};
     }
     else if (p.startsWith('/api/trading/orders/request/')) {
       data = fixtureReceipts.get(p.split('/').pop());
