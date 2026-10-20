@@ -8,9 +8,13 @@ __pycache__
 *.sqlite
 *.sqlite3
 *.pem
+*.crt
+*.cert
 *.key
 *.p12
 *.pfx
+mTLS_*.zip
+mtls*.zip
 backend/uploads/
 *.pyc
 .venv

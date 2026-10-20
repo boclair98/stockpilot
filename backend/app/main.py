@@ -5,6 +5,8 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -79,6 +81,19 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.enable_api_docs else None,
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_auth_validation(request: Request, error: RequestValidationError):
+    # FastAPI's default validation JSON includes rejected input. One-use
+    # native authentication codes must not be reflected in responses/logs.
+    if request.url.path == "/api/auth/toss/exchange":
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "앱 계정 연결 요청을 다시 확인해 주세요."},
+            headers={"Cache-Control": "no-store"},
+        )
+    return await request_validation_exception_handler(request, error)
 
 
 def _toss_origins() -> list[str]:

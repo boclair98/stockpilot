@@ -20,6 +20,7 @@ from app.core.identity import (
     encode_session,
     encode_signed,
 )
+from app.services.toss_auth import exchange_anonymous_code, exchange_ready
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -33,6 +34,31 @@ TOSS_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{24,256}$")
 
 class TossAnonymousSessionRequest(BaseModel):
     anonymous_key: str = Field(min_length=24, max_length=256)
+
+
+class TossAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096, pattern=r"^\S+$")
+
+
+def _toss_session(anonymous_key: str, *, verified: bool) -> JSONResponse:
+    # Same namespace as the previous client preserves every user's account.
+    user_id = uuid5(
+        NAMESPACE_URL,
+        f"https://apps-in-toss.toss.im/anonymous/{anonymous_key}",
+    )
+    token = encode_signed(
+        {
+            "id": str(user_id),
+            "name": f"toss-{str(user_id)[:8]}",
+            "provider": "toss",
+            "auth_method": "code_exchange" if verified else "legacy_hash",
+        },
+        "toss-access",
+    )
+    return JSONResponse(
+        {"access_token": token, "token_type": "bearer", "expires_in": SESSION_MAX_AGE},
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
 
 
 def _ready() -> bool:
@@ -92,7 +118,16 @@ async def auth_status() -> dict:
         "provider": "google",
         "configured": _ready(),
         "tossAnonymousSession": bool(settings.auth_session_secret),
+        "tossCodeExchange": bool(settings.auth_session_secret) and exchange_ready(),
     }
+
+
+@router.post("/toss/exchange")
+async def toss_code_session(payload: TossAuthCodeRequest) -> JSONResponse:
+    if not settings.auth_session_secret:
+        raise HTTPException(503, "앱 계정 연결을 준비 중이에요.")
+    key = await exchange_anonymous_code(payload.code)
+    return _toss_session(key, verified=True)
 
 
 @router.post("/toss/anonymous")
@@ -106,29 +141,12 @@ async def toss_anonymous_session(payload: TossAnonymousSessionRequest) -> JSONRe
     """
 
     _require_session_secret()
+    if settings.toss_secure_auth_required:
+        raise HTTPException(426, "새 버전의 앱을 열어 계정을 다시 연결해 주세요.")
     anonymous_key = payload.anonymous_key.strip()
     if not TOSS_KEY_PATTERN.fullmatch(anonymous_key):
         raise HTTPException(400, "앱인토스 사용자 식별키 형식이 올바르지 않습니다.")
-    user_id = uuid5(
-        NAMESPACE_URL,
-        f"https://apps-in-toss.toss.im/anonymous/{anonymous_key}",
-    )
-    token = encode_signed(
-        {
-            "id": str(user_id),
-            "name": f"toss-{str(user_id)[:8]}",
-            "provider": "toss",
-        },
-        "toss-access",
-    )
-    return JSONResponse(
-        {
-            "access_token": token,
-            "token_type": "bearer",
-            "expires_in": SESSION_MAX_AGE,
-        },
-        headers={"Cache-Control": "no-store"},
-    )
+    return _toss_session(anonymous_key, verified=False)
 
 
 @router.get("/google/login")

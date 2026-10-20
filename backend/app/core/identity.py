@@ -105,6 +105,12 @@ def current_identity(request: Request) -> Identity | None:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() == "bearer" and token:
         payload = decode_signed(token, "toss-access", SESSION_MAX_AGE)
+        if (
+            payload
+            and settings.toss_secure_auth_required
+            and payload.get("auth_method") != "code_exchange"
+        ):
+            payload = None
         if payload:
             try:
                 return Identity(

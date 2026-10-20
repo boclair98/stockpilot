@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -97,6 +98,17 @@ class Settings(BaseSettings):
         "https://stockpilot-kr.private-web.tossmini.com"
     )
     auth_session_secret: str | None = None
+    # Apps in Toss certificate files are mounted/injected by the host, never
+    # copied into the repository or the client bundle.
+    toss_mtls_cert_path: str | None = None
+    toss_mtls_key_path: str | None = None
+    # Hosts without secret file mounts may inject base64 PEMs as server-only
+    # secret env vars. SecretStr keeps accidental settings reprs redacted.
+    toss_mtls_cert_b64: SecretStr | None = None
+    toss_mtls_key_b64: SecretStr | None = None
+    # Turn on only with the secure-client rollout. Existing signed sessions
+    # are rejected too; account UUIDs and stored financial data stay unchanged.
+    toss_secure_auth_required: bool = False
     auth_cookie_secure: bool = True
     # Publishable console ID; empty disables rewarded practice restarts.
     toss_practice_rewarded_group: str = ""
