@@ -379,5 +379,26 @@ class InstrumentCatalog:
             None,
         )
 
+    def matching_names_cached(
+        self, query: str, market: str | None = None
+    ) -> list[tuple[str, str]]:
+        """Local-only name matching for history; never waits on quote/master APIs.
+
+        History may contain delisted/unknown symbols, which remain searchable by
+        code in the database. The application warms this catalog in the background.
+        """
+        needle = query.casefold().strip()
+        if not needle:
+            return []
+        keys = set()
+        for item, _, name, english in self._search_rows.values():
+            if market and item.market != market:
+                continue
+            if needle in name or needle in english:
+                keys.add((item.exchange, item.symbol))
+                if item.market == "KR" and item.exchange == "KRX":
+                    keys.add(("NXT", item.symbol))
+        return sorted(keys)
+
 
 instrument_catalog = InstrumentCatalog()

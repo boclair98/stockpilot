@@ -35,6 +35,7 @@ from app.core.order_integrity import normalize_idempotency_key, request_fingerpr
 from app.core.practice import optional_practice_identity, require_practice_identity
 from app.core.traffic import traffic_store
 from app.models import Position, ProtectionPlan, TradeOrder, TradingAccount
+from app.routes.order_history import router as order_history_router
 from app.services.audit import record_audit
 from app.services.execution_quality import simulated_fill
 from app.services.instrument_catalog import Instrument, instrument_catalog
@@ -43,6 +44,7 @@ from app.services.portfolio_snapshots import record_daily_snapshot
 from app.services.risk_engine import assess_pretrade, load_control, quote_age_seconds
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
+router.include_router(order_history_router)
 
 
 class QuoteFanout:

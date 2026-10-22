@@ -1,5 +1,20 @@
 # OpenUI Design Plan
 
+## 2026-10-22 · 웹 개인 투자 흐름 개선
+
+- 대상은 Coders 웹뿐이다. 앱인토스, 기존 계좌·주문 계산, 사용자 LeagueRooms 변경은 보존한다. 사용자가 이번 변경의 배포를 명시적으로 요청했다.
+- 근거: portfolio API는 최근 주문 30개로 제한되고 OrderTimeline은 회사명·통화 없이 코드/체결가를 표시한다. 관심종목은 시장/정렬만 있어 이름으로 찾기 어렵다.
+- 목적/사용자: 초보 투자자가 자신의 실제 모의 기록을 찾고 복기한다. 기존 시세/시장 화면 디자인은 보존한다.
+- 주요 행동: 조회하기 → 인증된 읽기 전용 기록 API, 20건 더 보기 → 커서 다음 페이지, 불러온 기록 CSV → 현재 조회한 기록의 로컬 파일 저장. 서버로 내보내지 않는다.
+- Resolved inputs: Topic=개인 투자 기록; Offer=회사명·기간·시장으로 실제 모의 주문 조회; Audience=한국어 초보자; Primary user action=기록 조회; Deliverable=기존 웹 통합; Style direction=현재 StockPilot; Tonal key=기존 light/dark; Icon policy=lucide; Proof assets=실제 API/격리 테스트 데이터; Motion intensity=최소.
+- Composition contract: 신규 hero 없음. 기존 shell→기록 제목/조작→기간·검색 필터→일자별 주문 목록. 관심종목 기존 stock row 재사용. 모바일 필터 1–2열, 목록은 회사/방향/수량/체결금액 우선, 부가정보는 펼치기. 중첩 카드 없음.
+- 시각: 기존 --ws-ink/surface/soft/muted/line/brand/up/down 재사용. 밝은 canvas #F7F9FC, ink #172333; dark #0C111A/#F0F4FA. Pretendard 제목22px, 본문15–16px, 보조13px, tabular-nums. 간격8/12/16/20/24, 컨트롤44–48px, radius12. 초점2px brand outline.
+- 날짜 기준은 서울, 매수·매도는 텍스트/색상을 함께 사용. 통화 합산 금지. 주문 접수/체결 구분, 미확정 금액은 대시. CSV는 불러온 건수만, 전체 기록처럼 표현하지 않는다.
+- 검색 변경/세션 만료/요청 유실/잘못된 데이터/빈 목록을 처리한다. 요청 취소와 순서 검증으로 이전 검색이 새 조건을 덮어쓰지 않는다. 인증 API에 주문/DB 쓰기 없음.
+- 수정 경로: InvestmentHistory, OrderTimeline, MarketWatchlist, TradingTerminal 연결, order-history lib/CSS, backend history route/helper/tests, README와 격리 fixture. 배포 설정/DB schema 유지.
+- Filled prompt: Preserve StockPilot's current working market composition, brand and light/dark tokens. Implement a clear Korean order history with authenticated cursor pagination, company identity, explicit side/status/currency, date filters, safe local CSV export, and searchable watchlists. Reuse semantic controls and existing rows; no new hero, invented performance, prices, mascot, or brand change. Keep mobile tap targets, focus, empty/error/retry states and reduced motion. Output integrated source, isolated API/browser tests and screenshots before canonical→fork→Coders publication.
+- 검증: 서버 계정 격리/동일 시각 커서/필터/경계 날짜, CSV 수식 방지, 타입·빌드·safety; 격리 브라우저360/390/768/1440에서 필터·더보기·테마·키보드·넘침; 배포 후 화면·health·인증 거부 확인. 운영 주문을 시험 생성하지 않는다.
+
 ## Variant 1
 
 ### Resolved inputs

@@ -4,6 +4,10 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 const root = path.resolve('out');
 const quotes = [['005930','삼성전자','KR','KRX',72000],['000660','SK하이닉스','KR','KRX',175000],['AAPL','애플','US','NAS',220]].map(([symbol,name,market,exchange,price]) => ({id:`${market}:${exchange}:${symbol}`,symbol,name,englishName:symbol,market,exchange,price,currency:market==='KR'?'KRW':'USD',change:100,changePercent:1.25,asOf:'2026-10-13T01:00:00Z',source:'격리된 로컬 검증 자료',marketState:'OPEN'}));
+const historyRows = Array.from({length:43},(_,i)=>{
+  const quote=quotes[i%3], filled=i%5!==0, quantity=i%4+1;
+  return {id:`local-history-${i}`,symbol:quote.symbol,name:quote.name,exchange:quote.exchange,market:quote.market,currency:quote.currency,side:i%2?'SELL':'BUY',orderType:filled?'MARKET':'LIMIT',quantity,status:filled?'FILLED':'OPEN',fillPrice:filled?quote.price:null,grossAmount:filled?quote.price*quantity:null,fee:filled?10:0,tax:0,realizedPnl:i%2&&filled?100:null,createdAt:new Date(Date.UTC(2026,9,22-Math.floor(i/6),3,i%6)).toISOString()};
+}).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 let failedSearch = false;
 // Explicit opt-in fault fixtures. These are local, in-memory receipts only;
 // this server never connects to the production backend or writes a database.
@@ -39,6 +43,18 @@ http.createServer(async(req,res) => {
     if (req.method !== 'GET') return res.writeHead(403).end('Fixture writes disabled');
     let data = {};
     const p = url.pathname;
+    if(p === '/api/trading/orders/history') {
+      const query=url.searchParams.get('q')||'';
+      if(query==='error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 일시적인 기록 조회 실패"}');
+      if(query==='expired') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"로그인이 만료됐어요."}');
+      if(query==='slow') await new Promise(resolve=>setTimeout(resolve,1200));
+      const from=url.searchParams.get('from'),to=url.searchParams.get('to');
+      const rows=historyRows.filter(row=>(!query||`${row.name} ${row.symbol}`.toLowerCase().includes(query.toLowerCase()))
+        && ['side','market','status'].every(key=>!url.searchParams.get(key)||row[key]===url.searchParams.get(key))
+        && (!from||row.createdAt.slice(0,10)>=from)&&(!to||row.createdAt.slice(0,10)<=to));
+      const offset=Number(url.searchParams.get('cursor')||0),items=rows.slice(offset,offset+20),hasMore=rows.length>offset+20;
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items,hasMore,nextCursor:hasMore?String(offset+20):null,asOf:'2026-10-22T12:00:00Z'}));
+    }
     if (p === '/api/me') {
       if (process.env.VISITOR_FIXTURE === '1') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리된 방문자 화면 검증"}');
       data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
@@ -82,4 +98,4 @@ http.createServer(async(req,res) => {
     const body = await readFile(file);
     res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream'}).end(body);
   } catch { res.writeHead(404).end(); }
-}).listen(5232,'127.0.0.1',()=>console.log('Isolated UI fixture: http://127.0.0.1:5232 (no production connection, writes disabled)'));
+}).listen(Number(process.env.PORT||5232),'127.0.0.1',()=>console.log(`Isolated UI fixture: http://127.0.0.1:${process.env.PORT||5232} (no production connection, writes disabled)`));

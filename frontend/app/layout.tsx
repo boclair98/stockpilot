@@ -48,6 +48,7 @@ import "./mobile-refinements.css";
 import "./release-safety.css";
 import "./personal.css";
 import "./welcome.css";
+import "./order-history.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

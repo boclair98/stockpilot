@@ -44,7 +44,6 @@ import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
 import WorkspaceControls from "./WorkspaceControls";
 import CommandSearch from "./CommandSearch";
 import DecisionNotebook from "./DecisionNotebook";
-import OrderTimeline from "./OrderTimeline";
 import RankedMarketBrowser from "./RankedMarketBrowser";
 import FullMarketCatalog from "./FullMarketCatalog";
 import { useDialogFocus } from "@/lib/dialog-focus";
@@ -58,6 +57,9 @@ import OrderResult, { type OrderResultState } from "./OrderResult";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { isOrderReceipt, isValidPortfolio, isValidQuote, type OrderReceipt } from "@/lib/trading-validation";
 
+const InvestmentHistory = dynamic(() => import("./InvestmentHistory"), {
+  loading: () => <p role="status">투자 기록 화면을 준비하고 있어요…</p>,
+});
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => (
     <div
@@ -2155,7 +2157,7 @@ export default function TradingTerminal() {
           ) : null}
           <div id="decision-review">
             {workspaceView === "RECORDS" ? (
-              <OrderTimeline orders={portfolio.orders} />
+              <InvestmentHistory key={me?.coders_id || "visitor"} authenticated={Boolean(me)} />
             ) : null}
             {detailTab === "REVIEW" ? (
               <DecisionNotebook
