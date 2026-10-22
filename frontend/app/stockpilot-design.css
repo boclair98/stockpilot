@@ -397,6 +397,12 @@ body {
   color: var(--ws-muted);
   font-size: 13px;
   font-weight: 650;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.consumer-app .workspace-index .index-title > div {
+  flex-wrap: wrap;
 }
 
 .consumer-app .workspace-index .index-title strong {

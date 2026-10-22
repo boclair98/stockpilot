@@ -60,6 +60,11 @@ http.createServer(async(req,res) => {
       data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
     }
     else if (p === '/api/trading/bootstrap') data = {quotes,status:{configured:true,connected:false,quoteCount:quotes.length}};
+    else if (p === '/api/trading/kospi') data = {
+      name:'KOSPI',value:5555.55,change:-12.5,changePercent:-0.22,
+      asOf:'2026-10-22T01:00:00Z',source:'격리된 로컬 검증 자료',
+      points:[5600,5620,5580,5610,5570,5590,5560,5580,5540,5555.55].map((close,i)=>({date:`2026-10-${String(13+i).padStart(2,'0')}`,open:close,high:close+5,low:close-5,close,volume:1000})),
+    };
     else if (p === '/api/trading/portfolio') {
       if (scenario === 'portfolio-error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{}');
       data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions:[],orders:[],protections:[]};
