@@ -1895,7 +1895,12 @@ html[data-theme="dark"] .mobile-menu-grid > a.active {
   }
 
   .consumer-app .workspace-index .market-index-card {
-    grid-template-columns: minmax(0, 1fr) minmax(120px, .7fr);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .consumer-app .workspace-index .market-index-visual {
+    display: block;
   }
 
   .consumer-app .workspace-index .market-index-visual svg {

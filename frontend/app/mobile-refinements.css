@@ -1,4 +1,15 @@
 /* Preserve the current visual system while enlarging mobile controls. */
+.consumer-app.view-market .workspace-summary .balance-detail {
+  grid-template-columns:minmax(0,1fr);
+}
+.consumer-app.view-market .workspace-summary .balance-detail > span {
+  flex-wrap:wrap;
+  word-break:keep-all;
+  gap:4px 12px;
+}
+.consumer-app.view-market .workspace-summary .balance-detail b {
+  margin-left:0;
+}
 @media(max-width:767px) {
   .consumer-app .ranked-market-switch button,
   .consumer-app .ranked-metric-tabs button,

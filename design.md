@@ -14,6 +14,8 @@
 - 수정 경로: InvestmentHistory, OrderTimeline, MarketWatchlist, TradingTerminal 연결, order-history lib/CSS, backend history route/helper/tests, README와 격리 fixture. 배포 설정/DB schema 유지.
 - Filled prompt: Preserve StockPilot's current working market composition, brand and light/dark tokens. Implement a clear Korean order history with authenticated cursor pagination, company identity, explicit side/status/currency, date filters, safe local CSV export, and searchable watchlists. Reuse semantic controls and existing rows; no new hero, invented performance, prices, mascot, or brand change. Keep mobile tap targets, focus, empty/error/retry states and reduced motion. Output integrated source, isolated API/browser tests and screenshots before canonical→fork→Coders publication.
 - 검증: 서버 계정 격리/동일 시각 커서/필터/경계 날짜, CSV 수식 방지, 타입·빌드·safety; 격리 브라우저360/390/768/1440에서 필터·더보기·테마·키보드·넘침; 배포 후 화면·health·인증 거부 확인. 운영 주문을 시험 생성하지 않는다.
+- 운영 QA 추가: 768px 시장 홈의 좁은 자산 요약에서 2열 세부금액과 flex가 겹쳐 한글 라벨이 세로로 줄바꿈됐다. 기존 색상/금액 계산을 유지하고 시장 홈의 세부금액만 1열로 배치하며 긴 행은 항목 단위로 감싸도록 보완한다.
+- 같은 태블릿 구간의 구형 CSS가 KOSPI 그래프를 숨기는 점을 확인했다. 최종 디자인의 ≤1023px 구간에서 그래프를 명시적으로 복원하고 설명 아래에 배치한다. ≤767px의 기존 간결한 좌우 배치는 유지한다.
 
 ## Variant 1
 
