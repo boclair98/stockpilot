@@ -1,5 +1,19 @@
 # OpenUI Design Plan
 
+## 2026-10-23 · 웹 일상 투자 흐름 고도화
+
+- 목적/근거: 검색 중 이전 결과를 선택할 수 있고 뒤로가기에서 주문 초안이 다른 종목으로 넘어갈 수 있다. 전체 종목의 다음 페이지 재시도는 첫 페이지로 돌아간다. 투자 점검은 KRW와 USD의 절대 금액을 비교/합산한다. 보유 주식 목록에는 검색·시장·수익률 정렬·상세 진입이 없다. 리스크 분석은 통신 오류를 숨기고 계속 로딩한다.
+- 범위: 기존 웹 Next/React/FastAPI와 현재 색상·레이아웃·계좌·금융 주문 규칙을 보존한다. 앱인토스와 기존 LeagueRooms 변경은 대상 밖이다. 이번 요청은 구현/로컬 검증까지이며 새로운 커밋·푸시·배포는 하지 않는다.
+- Resolved inputs: Topic=일상 모의투자 탐색과 내 자산; Offer=정확한 종목 선택과 통화별 자산 점검; Audience=한국어 초보 투자자; Primary action=검색한 종목 선택/보유 종목 찾기/실패한 조회 재시도; Deliverable=기존 웹 통합; Style=current StockPilot; Tone=current light/dark; Icons=기존 lucide; Proof=기존 실제 API 계약과 명시적 로컬 고정 자료; Motion=minimal.
+- Composition contract: 홈 hero·시장 순위 배치 변경 없음. 기존 자산의 보유 주식 섹션에 검색/시장/수익률 정렬을 추가하고 행에서 종목 상세로 연결한다. 투자 점검은 같은 통화 안에서 비중을 계산하며 보호 범위는 원화·달러로 분리한다. 분석 화면은 현재 구성 안에 재조회·명시적 실패/빈 기록 상태를 추가한다.
+- 시각: --ws-ink/muted/surface/soft/line/brand/up/down 재사용, Pretendard 유지. 제목18–22px, 입력16px, 행본문14–16px, 메타13px, 44px 조작 영역, 기존12–16px 반경과8/12/16/20px 간격. 모바일 필터2열+검색전체폭, 행은 회사/수량과 평가액/수익률 순으로 재배치한다.
+- CTA: 보유 회사명→기존 종목 선택/상세 흐름, 조건 초기화→로컬 검색 조건, 다시 시도→실패한 읽기 요청만 재시도. 자동 주문 재전송 없음. 기록 없는 지표는 0 대신 대시로 유지한다.
+- 상태/접근성: 로딩·빈 결과·서버 오류·세션 만료·지연·응답 역전 처리, 취소 가능한 조회와 제한시간, 버튼 포커스·표 레이블·비색상 손익 구분. 개인정보·주문은 테스트 서버에서만 생성한다.
+- 추가 확인 범위: 계좌 명세 실패 시 임의의 초기 잔액을 실제 계좌처럼 표시하지 않는다. 가격 알림 평가를 푸시 설정과 분리하고 오래된50건이 뒤 사용자 알림을 막지 않도록 순환한다. 목표 가격은 저장 가능한 정밀도로 검증하고 정기매수 시각은 유효한 HH:mm만 허용한다. 환전/정기매수의 결과 미확정 요청은 원래 요청번호를 보존한다.
+- 변경 경로: TradingTerminal/FullMarketCatalog, 신규 HoldingsPanel와 통화별 risk helper, PortfolioAnalytics와 응답 검증, 필요한 알림 검증 보완. README는 실제 완성 항목만 갱신한다.
+- 검증: 통화 분리/보호 중복 상한/수량 정밀도, 검색 중 선택 차단/뒤로가기 초안 초기화, 더보기 실패 후 기존 행 유지, 분석 실패/재시도. 타입·빌드와 관련 회귀 테스트, 360/390/768/1440px 라이트·다크 실제 브라우저. 미확인 운영 인증/부하 시험은 별도로 밝힌다.
+- Filled prompt: Preserve StockPilot's existing product composition and theme. Improve instrument selection safety, owner-facing holdings discovery, currency-separated risk reporting, and recoverable read-only requests. Reuse existing instrument navigation, API/auth contracts, typography, stock marks, and semantic controls. Do not invent market data, returns, ranks, financial outcomes, or a new brand. Output integrated working components and verified local flows without publishing this new iteration.
+
 ## 2026-10-22 · 웹 개인 투자 흐름 개선
 
 - 대상은 Coders 웹뿐이다. 앱인토스, 기존 계좌·주문 계산, 사용자 LeagueRooms 변경은 보존한다. 사용자가 이번 변경의 배포를 명시적으로 요청했다.

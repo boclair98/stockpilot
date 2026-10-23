@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import StockRow from "./StockRow";
 import { isInstrument } from "@/lib/instrument-identity";
+import { requestJson } from "@/lib/reliable-request";
 
 type Market = "KR" | "US";
 type Instrument = {
@@ -37,12 +38,10 @@ async function getPage(
     offset: String(offset),
     limit: "20",
   });
-  const response = await fetch(`/api/toss-market/instruments?${params}`, {
+  const payload = await requestJson<CatalogPage>(`/api/toss-market/instruments?${params}`, {
     signal,
+    cache: "no-store",
   });
-  if (!response.ok)
-    throw new Error("종목 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
-  const payload = await response.json();
   if (
     !payload || !Array.isArray(payload.items) ||
     !Number.isInteger(payload.total) ||
@@ -58,6 +57,7 @@ async function getPage(
     !payload.partial &&
     Boolean(payload.hasMore) &&
     items.length > 0 &&
+    typeof nextOffset === "number" &&
     Number.isInteger(nextOffset) &&
     nextOffset > offset;
   return {
@@ -90,6 +90,7 @@ export default function FullMarketCatalog({
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [failedOffset, setFailedOffset] = useState<number | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   useEffect(() => () => activeRequest.current?.abort(), []);
 
@@ -100,6 +101,7 @@ export default function FullMarketCatalog({
       activeRequest.current = controller;
       setBusy(true);
       setError("");
+      setFailedOffset(null);
       try {
         const page = await getPage(nextMarket, nextExchange, 0, controller.signal);
         if (controller.signal.aborted) return;
@@ -109,12 +111,14 @@ export default function FullMarketCatalog({
         setHasMore(page.hasMore);
         setNextOffset(page.nextOffset);
       } catch (cause) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
+          setFailedOffset(0);
           setError(
             cause instanceof Error
               ? cause.message
               : "종목 목록을 불러오지 못했어요.",
           );
+        }
       } finally {
         if (activeRequest.current === controller) {
           activeRequest.current = null;
@@ -125,17 +129,21 @@ export default function FullMarketCatalog({
     [],
   );
 
-  async function loadMore() {
-    if (!hasMore || nextOffset === null || busy || partial) return;
+  async function loadMore(offset = nextOffset) {
+    if (!hasMore || offset === null || busy || partial || activeRequest.current) return;
     const controller = new AbortController();
     activeRequest.current = controller;
     setBusy(true);
     setError("");
+    setFailedOffset(null);
+    let retryOffset: number | null = offset;
     try {
-      const page = await getPage(market, exchange, nextOffset, controller.signal);
+      const page = await getPage(market, exchange, offset, controller.signal);
       if (controller.signal.aborted) return;
       const ids = new Set(items.map((item) => item.id));
       if (page.items.some((item) => ids.has(item.id))) {
+        retryOffset = null;
+        setHasMore(false);
         throw new Error("목록이 바뀌었어요. 새로고침한 뒤 다시 살펴봐 주세요.");
       }
       setItems((current) => [...current, ...page.items]);
@@ -144,12 +152,14 @@ export default function FullMarketCatalog({
       setHasMore(page.hasMore);
       setNextOffset(page.nextOffset);
     } catch (cause) {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
+        setFailedOffset(retryOffset);
         setError(
           cause instanceof Error
             ? cause.message
             : "다음 종목을 불러오지 못했어요.",
         );
+      }
     } finally {
       if (activeRequest.current === controller) {
         activeRequest.current = null;
@@ -278,8 +288,11 @@ export default function FullMarketCatalog({
           {error ? (
             <div className="ranked-state" role="alert">
               <p>{error}</p>
-              <button type="button" onClick={() => void fetchFirst(market, exchange)}>
-                다시 조회
+              <button type="button" disabled={busy} onClick={() => {
+                if (failedOffset !== null && failedOffset > 0) void loadMore(failedOffset);
+                else void fetchFirst(market, exchange);
+              }}>
+                {failedOffset !== null && failedOffset > 0 ? "다음 종목 다시 조회" : "다시 조회"}
               </button>
             </div>
           ) : null}

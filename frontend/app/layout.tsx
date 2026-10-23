@@ -49,6 +49,8 @@ import "./release-safety.css";
 import "./personal.css";
 import "./welcome.css";
 import "./order-history.css";
+import "./holdings-upgrade.css";
+import "./analytics-recovery.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -1,0 +1,61 @@
+.analytics-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--ws-line, #e4eaf1);
+  border-radius: 14px;
+  background: var(--ws-soft, #f7f9fc);
+  color: var(--ws-ink, #172333);
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.analytics-recovery > div { flex: 1 1 220px; min-width: 0; }
+.analytics-recovery p { margin: 4px 0 0; color: var(--ws-muted, #637184); }
+.analytics-recovery :is(button, a), .analytics-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--ws-line, #e4eaf1);
+  border-radius: 10px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-brand, #2463eb);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.analytics-recovery button:disabled { cursor: wait; opacity: .65; }
+.analytics-refresh { margin-top: 16px; font-size: 14px; }
+.analytics-series { margin-top: 16px; color: var(--ws-ink, #172333); }
+.analytics-series summary { min-height: 44px; padding: 12px 0; font-size: 14px; font-weight: 600; cursor: pointer; }
+.analytics-series-scroll { max-width: 100%; overflow-x: auto; }
+.analytics-series table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.analytics-series caption { padding: 8px 0; color: var(--ws-muted, #637184); font-size: 13px; text-align: left; line-height: 1.6; }
+.analytics-series :is(th, td) { padding: 12px 8px; border-bottom: 1px solid var(--ws-line, #e4eaf1); text-align: right; white-space: nowrap; }
+.analytics-series tr > :first-child { text-align: left; }
+.analytics-series thead { background: var(--ws-soft, #f7f9fc); }
+.analytics-series > p, .analytics-series-empty { color: var(--ws-muted, #637184); font-size: 13px; line-height: 1.6; word-break: keep-all; }
+.portfolio-analytics :is(.analytics-heading > small, .analytics-note, .analytics-return small, .analytics-quality small) { font-size: 13px; line-height: 1.6; }
+.portfolio-analytics .analytics-loading { font-size: 14px; }
+.portfolio-analytics :is(.analytics-return span, .analytics-quality span) { font-size: 13px; }
+.portfolio-analytics .analytics-metrics article span { font-size: 14px; }
+.portfolio-analytics .analytics-metrics article span small { font-size: 12px; white-space: normal; line-height: 1.5; }
+.portfolio-analytics .analytics-login b { font-size: 15px; }
+.portfolio-analytics .analytics-login small { font-size: 13px; line-height: 1.6; }
+.portfolio-analytics .analytics-login a { min-height: 44px; font-size: 14px; font-weight: 600; }
+:is(.analytics-recovery button, .analytics-recovery a, .analytics-refresh, .analytics-series summary, .analytics-series-scroll):focus-visible { outline: 2px solid var(--ws-brand, #2463eb); outline-offset: 3px; }
+@media (max-width: 480px) {
+  .analytics-recovery :is(button, a) { width: 100%; }
+  .analytics-series :is(th, td) { padding: 10px 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-analytics .spin { animation: none; }
+}

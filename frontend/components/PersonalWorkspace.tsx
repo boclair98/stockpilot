@@ -20,6 +20,7 @@ import WorkspaceControls from "./WorkspaceControls";
 import StockLogo from "./StockLogo";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { usePersonalTab } from "@/lib/personal-navigation";
+import { personalTime, prepareKeyedWrite, writeAttempt, type PersonalRequestKey } from "@/lib/personal-write";
 import {
   isInstrument,
   type InstrumentIdentity,
@@ -115,7 +116,7 @@ const titles: Record<Mode, string> = {
   account: "계좌 관리",
   operations: "개인 기능 운영",
 };
-const when = (at: string) => new Date(at).toLocaleString("ko-KR");
+const when = personalTime;
 const cash = (value: string, currency: string) =>
   `${currency === "KRW" ? "₩" : "US$"}${Number(value).toLocaleString("ko-KR", { maximumFractionDigits: currency === "KRW" ? 0 : 2 })}`;
 const categories: Record<string, string> = {
@@ -361,13 +362,14 @@ function useWrite(after: () => void) {
     [message, setMessage] = useState("");
   const lock = useRef(false);
   const pending = useRef<string | null>(null);
+  const keyed = useRef<PersonalRequestKey | null>(null);
   const run = async <T,>(
     url: string,
     body: unknown,
     method = "POST",
   ): Promise<T | null> => {
     if (lock.current) return null;
-    const attempt = JSON.stringify({ url, body, method });
+    const attempt = writeAttempt(url, body, method);
     if (pending.current && pending.current !== attempt) {
       setMessage(
         "직전 요청의 결과를 먼저 확인해 주세요. 같은 내용으로 재시도하거나 페이지를 새로 열어 기록을 조회할 수 있어요.",
@@ -402,7 +404,25 @@ function useWrite(after: () => void) {
       setBusy(false);
     }
   };
-  return { run, busy, message };
+  const runKeyed = async <T,>(
+    url: string,
+    body: Record<string, unknown>,
+    options: { freshKey?: boolean; retainKey?: boolean } = {},
+  ): Promise<T | null> => {
+    if (lock.current) return null;
+    const prepared = prepareKeyedWrite(keyed.current, pending.current, url, body, options.freshKey);
+    if (!prepared) {
+      setMessage("직전 요청의 결과를 먼저 확인해 주세요. 원래 입력으로 돌아가면 같은 요청 번호로 다시 확인할 수 있어요.");
+      return null;
+    }
+    // Only an accepted attempt can advance the key; rejected draft edits leave
+    // the original request available for an exact retry after a lost response.
+    keyed.current = prepared.request;
+    const result = await run<T>(url, prepared.payload);
+    if (result && !options.retainKey) keyed.current = null;
+    return result;
+  };
+  return { run, runKeyed, clearKey: () => { keyed.current = null; }, busy, message };
 }
 
 function Notices() {
@@ -668,24 +688,18 @@ function Support() {
     [subject, setSubject] = useState(""),
     [body, setBody] = useState("");
   const [receipt, setReceipt] = useState<Ticket | null>(null);
-  const request = useRef<{ key: string; fingerprint: string } | null>(null);
   const writes = useWrite(state.refresh);
   async function submit() {
-    const fingerprint = JSON.stringify({ category, subject, body });
-    if (!request.current || request.current.fingerprint !== fingerprint)
-      request.current = { key: crypto.randomUUID(), fingerprint };
-    const result = await writes.run<Ticket>("/api/personal/support", {
+    const result = await writes.runKeyed<Ticket>("/api/personal/support", {
       category,
       subject,
       body,
-      requestKey: request.current.key,
     });
     if (result) {
       setReceipt(result);
       setOffset(0);
       setSubject("");
       setBody("");
-      request.current = null;
     }
   }
   return (
@@ -973,7 +987,6 @@ function Recurring() {
     [amount, setAmount] = useState(""),
     [weekday, setWeekday] = useState("0"),
     [time, setTime] = useState("10:00");
-  const request = useRef<{ key: string; fingerprint: string } | null>(null);
   const writes = useWrite(state.refresh);
   async function submit() {
     if (!stock) return;
@@ -985,17 +998,10 @@ function Recurring() {
       weekday: Number(weekday),
       localTime: time,
     };
-    const fingerprint = JSON.stringify(payload);
-    if (!request.current || request.current.fingerprint !== fingerprint)
-      request.current = { key: crypto.randomUUID(), fingerprint };
     if (
-      await writes.run("/api/personal/recurring", {
-        ...payload,
-        requestKey: request.current.key,
-      })
+      await writes.runKeyed("/api/personal/recurring", payload)
     ) {
       setAmount("");
-      request.current = null;
     }
   }
   return (
@@ -1159,19 +1165,13 @@ function Fx() {
     [amount, setAmount] = useState(""),
     [quote, setQuote] = useState<Money | null>(null),
     [checked, setChecked] = useState(false);
-  const request = useRef<{ key: string; fingerprint: string } | null>(null);
   const writes = useWrite(balance.refresh);
   async function preview() {
-    if (quote?.expiresAt && new Date(quote.expiresAt).getTime() <= Date.now())
-      request.current = null;
-    const fingerprint = JSON.stringify({ direction, amount });
-    if (!request.current || request.current.fingerprint !== fingerprint)
-      request.current = { key: crypto.randomUUID(), fingerprint };
-    const result = await writes.run<Money>("/api/personal/fx/quote", {
+    const expired = Boolean(quote?.expiresAt && new Date(quote.expiresAt).getTime() <= Date.now());
+    const result = await writes.runKeyed<Money>("/api/personal/fx/quote", {
       direction,
       amount,
-      requestKey: request.current.key,
-    });
+    }, { freshKey: expired, retainKey: true });
     if (result) {
       setQuote(result);
       setChecked(false);
@@ -1320,7 +1320,7 @@ function Fx() {
                   );
                   if (result) {
                     setQuote(result);
-                    request.current = null;
+                    writes.clearKey();
                   }
                 }}
               />

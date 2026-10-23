@@ -831,7 +831,7 @@ class PlanIn(BaseModel):
     exchange: str = Field(min_length=3, max_length=8)
     amount: Decimal = Field(gt=0, le=50_000_000)
     weekday: int = Field(ge=0, le=4)
-    localTime: str = Field(pattern=r"^\d{2}:\d{2}$")
+    localTime: str = Field(pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
 
 
 def plan_view(row):

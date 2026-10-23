@@ -51,6 +51,8 @@ import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
 import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
+import HoldingsPanel from "./HoldingsPanel";
+import { portfolioRisk } from "@/lib/portfolio-insights";
 import { useCloudSaved } from "@/lib/cloud-saved";
 import AdSlot from "./AdSlot";
 import OrderResult, { type OrderResultState } from "./OrderResult";
@@ -253,6 +255,8 @@ export default function TradingTerminal() {
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
   const [selected, setSelected] = useState("KR:KRX:005930");
+  const selectedIdentity = useRef("KR:KRX:005930");
+  const selectionRequest = useRef(0);
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [kind, setKind] = useState<"MARKET" | "LIMIT" | "STOP" | "STOP_LIMIT">(
     "MARKET",
@@ -279,6 +283,8 @@ export default function TradingTerminal() {
   const [searchMarket, setSearchMarket] = useState<"ALL" | Market>("ALL");
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const searchRequest = useRef(0);
   const [clock, setClock] = useState<Date | null>(null);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [alertFocusKey, setAlertFocusKey] = useState(0);
@@ -305,6 +311,8 @@ export default function TradingTerminal() {
     "MARKET" | "DETAIL" | "WATCH" | "ASSETS" | "RECORDS"
   >("MARKET");
   const showMarket = useCallback(() => {
+    selectionRequest.current++;
+    setSearching(false);
     setWorkspaceView("MARKET");
     setMobileOrderOpen(false);
     history.pushState(
@@ -315,7 +323,21 @@ export default function TradingTerminal() {
   }, []);
   const [detailTab, setDetailTab] = useState("RESEARCH");
   const [searchFailed, setSearchFailed] = useState(false);
-  const selectionRequest = useRef(0);
+  const activateInstrument = useCallback((id: string, price?: number) => {
+    selectedIdentity.current = id;
+    setSelected(id);
+    setSide("BUY");
+    setKind("MARKET");
+    setQuantity("1");
+    setLimitPrice(price === undefined ? "" : String(price));
+    setTriggerPrice(price === undefined ? "" : String(price));
+    setProtectionQuantity("1");
+    setTakeProfitPrice("");
+    setStopLossPrice("");
+    setConfirmingOrder(false);
+    setMobileOrderOpen(false);
+    setOrderSafetyChecks({simulation:false,quote:false,amount:false,inventory:false});
+  }, []);
   const closeMobileOrder = useCallback(() => setMobileOrderOpen(false), []);
   const closeConfirmation = useCallback(() => {
     if (!busy) setConfirmingOrder(false);
@@ -357,11 +379,6 @@ export default function TradingTerminal() {
         window.matchMedia("(max-width:1023px)").matches
       )
         setMobileOrderOpen(true);
-      if (params.get("symbol")) {
-        setSelected(
-          `${params.get("market") || "KR"}:${params.get("exchange") || "KRX"}:${params.get("symbol")}`,
-        );
-      }
     };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener("popstate", sync);
@@ -632,33 +649,35 @@ export default function TradingTerminal() {
       return;
     }
     const controller = new AbortController();
+    const request = ++searchRequest.current;
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(
+        const data = await requestJson<{items?: unknown[]}>(
           `/api/trading/search?q=${encodeURIComponent(query)}&market=${searchMarket}&limit=20`,
           { signal: controller.signal, cache: "no-store" },
         );
-        if (!response.ok) throw new Error("search unavailable");
-        const data = await response.json();
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && request === searchRequest.current) {
           setSearchFailed(false);
-          if (!Array.isArray(data.items)) throw new Error("search unavailable");
-          startTransition(() => setSearchResults(data.items.filter(isInstrument)));
+          if (!data || !Array.isArray(data.items)) throw new Error("search unavailable");
+          setSearchResults(data.items.filter(isInstrument).map(item => ({
+            ...item,
+            englishName: "englishName" in item && typeof item.englishName === "string" ? item.englishName : "",
+          })));
         }
       } catch {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && request === searchRequest.current) {
           setSearchResults([]);
           setSearchFailed(true);
         }
       } finally {
-        if (!controller.signal.aborted) setSearching(false);
+        if (!controller.signal.aborted && request === searchRequest.current) setSearching(false);
       }
     }, 280);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [searchQuery, searchMarket]);
+  }, [searchQuery, searchMarket, searchAttempt]);
 
   const krTop = useMemo(
     () =>
@@ -860,48 +879,13 @@ export default function TradingTerminal() {
       KRW: positionValues.KRW,
       USD: positionValues.USD,
     } satisfies Record<Currency, number>;
-    const total = {
-      KRW: portfolio.cash.KRW + invested.KRW,
-      USD: portfolio.cash.USD + invested.USD,
-    } satisfies Record<Currency, number>;
-    const cashRatio = {
-      KRW: total.KRW > 0 ? (portfolio.cash.KRW / total.KRW) * 100 : 100,
-      USD: total.USD > 0 ? (portfolio.cash.USD / total.USD) * 100 : 100,
-    } satisfies Record<Currency, number>;
-    const largest = portfolio.positions.reduce<Position | null>(
-      (current, position) =>
-        !current || position.marketValue > current.marketValue
-          ? position
-          : current,
-      null,
-    );
-    const largestTotal = largest ? total[largest.currency] : 0;
-    const concentration =
-      largest && largestTotal > 0
-        ? (largest.marketValue / largestTotal) * 100
-        : 0;
+    const {largest,concentration,protectionCoverage,cashRatio} = portfolioRisk(portfolio.positions,portfolio.cash,portfolio.protections);
     const winners = portfolio.positions.filter(
       (position) => position.profit > 0,
     ).length;
     const losers = portfolio.positions.filter(
       (position) => position.profit < 0,
     ).length;
-    const protectedValue = portfolio.protections
-      .filter((plan) => plan.status === "ACTIVE")
-      .reduce((sum, plan) => {
-        const position = portfolio.positions.find(
-          (item) =>
-            item.symbol === plan.symbol && item.exchange === plan.exchange,
-        );
-        if (!position) return sum;
-        return (
-          sum +
-          Math.min(plan.quantity, position.quantity) * position.currentPrice
-        );
-      }, 0);
-    const totalInvested = invested.KRW + invested.USD;
-    const protectionCoverage =
-      totalInvested > 0 ? (protectedValue / totalInvested) * 100 : 0;
     const notices: string[] = [];
     const stressLoss = {
       KRW: invested.KRW * (stressMove / 100),
@@ -914,14 +898,13 @@ export default function TradingTerminal() {
     } else {
       if (concentration >= 55 && largest) {
         notices.push(
-          `${largest.name} 비중이 ${concentration.toFixed(0)}%로 높아요.`,
+          `${largest.name}의 ${largest.currency==="KRW"?"원화":"달러"} 자산 내 비중이 ${concentration.toFixed(0)}%예요.`,
         );
       }
-      if (cashRatio.KRW < 8 && cashRatio.USD < 8) {
-        notices.push(
-          "원화와 달러 현금 비중이 모두 낮아 추가 주문 여력이 작아요.",
-        );
-      } else if (cashRatio.KRW > 80 && cashRatio.USD > 80) {
+      const activeCashRatios = [cashRatio.KRW,cashRatio.USD].filter((ratio):ratio is number=>ratio!==null);
+      if (activeCashRatios.some(ratio=>ratio<8)) {
+        notices.push("현금 비중이 낮은 통화가 있어요. 추가 주문 전에 주문 가능 금액을 확인해 주세요.");
+      } else if (activeCashRatios.length>0&&activeCashRatios.every(ratio=>ratio>80)) {
         notices.push("현금 비중이 높아 아직 시장 노출이 작은 편이에요.");
       }
       if (losers > winners && losers > 0) {
@@ -929,10 +912,9 @@ export default function TradingTerminal() {
           "손실 중인 종목이 더 많아 손절·목표가 알림을 점검해 보세요.",
         );
       }
-      if (protectionCoverage < 25) {
-        notices.push(
-          `익절·손절 보호 범위가 ${protectionCoverage.toFixed(0)}%로 낮아요.`,
-        );
+      for (const currency of ["KRW","USD"] as const) {
+        const coverage=protectionCoverage[currency];
+        if(coverage!==null&&coverage<25) notices.push(`${currency==="KRW"?"원화":"달러"} 보유 주식의 익절·손절 보호 범위는 ${coverage.toFixed(0)}%예요.`);
       }
       if (!notices.length) {
         notices.push("현금, 보유 비중, 손익 균형이 무난한 상태예요.");
@@ -1001,50 +983,46 @@ export default function TradingTerminal() {
     return request;
   }, []);
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const symbol = params.get("symbol");
-    if (
-      params.get("view") !== "detail" ||
-      !symbol ||
-      !/^[A-Z0-9.\-]{1,12}$/i.test(symbol)
-    )
-      return;
-    const market: Market = params.get("market") === "US" ? "US" : "KR";
-    const exchange =
-      params.get("exchange") || (market === "US" ? "NAS" : "KRX");
-    if (!/^[A-Z]{3,8}$/.test(exchange)) return;
     let active = true;
-    const request = ++selectionRequest.current;
-    void loadQuote({
-      id: `${market}:${exchange}:${symbol}`,
-      symbol,
-      name: symbol,
-      englishName: "",
-      market,
-      exchange,
-      currency: market === "US" ? "USD" : "KRW",
-    })
-      .then((data) => {
-        if (active && request === selectionRequest.current) {
-          setQuotes((current) => [
-            ...current.filter((q) => q.id !== data.id),
-            data,
-          ]);
-          setSelected(data.id);
-          setLimitPrice(String(data.price));
-          setTriggerPrice(String(data.price));
-        }
+    const restoreInstrument = () => {
+      // Back/forward also cancels a quote selection that has not finished yet.
+      const request = ++selectionRequest.current;
+      setSearching(false);
+      setConfirmingOrder(false);
+      const params = new URLSearchParams(location.search);
+      const symbol = params.get("symbol")?.toUpperCase();
+      if (params.get("view") !== "detail" || !symbol || !/^[A-Z0-9.\-]{1,12}$/.test(symbol)) return;
+      const market: Market = params.get("market") === "US" ? "US" : "KR";
+      const exchange = params.get("exchange") || (market === "US" ? "NAS" : "KRX");
+      if (!/^[A-Z]{3,8}$/.test(exchange)) return;
+      const id = `${market}:${exchange}:${symbol}`;
+      if (selectedIdentity.current !== id) activateInstrument(id);
+      if (location.hash === "#order-ticket" && window.innerWidth < 980) setMobileOrderOpen(true);
+      void loadQuote({
+        id, symbol, name: symbol, englishName: "", market, exchange,
+        currency: market === "US" ? "USD" : "KRW",
       })
-      .catch(() => {
-        if (active)
-          notify(
-            "이 종목의 시세를 불러오지 못했어요. 검색으로 다시 선택해 주세요.",
-          );
-      });
+        .then((data) => {
+          if (!active || request !== selectionRequest.current) return;
+          setQuotes((current) => [...current.filter((q) => q.id !== data.id), data]);
+          // A delayed read must not overwrite a price the user has started typing.
+          setLimitPrice((current) => current || String(data.price));
+          setTriggerPrice((current) => current || String(data.price));
+        })
+        .catch(() => {
+          if (active && request === selectionRequest.current)
+            notify("이 종목의 시세를 불러오지 못했어요. 검색으로 다시 선택해 주세요.");
+        });
+    };
+    restoreInstrument();
+    window.addEventListener("popstate", restoreInstrument);
+    window.addEventListener("hashchange", restoreInstrument);
     return () => {
       active = false;
+      window.removeEventListener("popstate", restoreInstrument);
+      window.removeEventListener("hashchange", restoreInstrument);
     };
-  }, [loadQuote, notify]);
+  }, [activateInstrument, loadQuote, notify]);
 
   const toggleFavorite = useCallback(
     async (item: SearchItem) => {
@@ -1083,11 +1061,8 @@ export default function TradingTerminal() {
 
   function selectTopQuote(item: Quote) {
     selectionRequest.current++;
-    setQuantity("1");
-    setConfirmingOrder(false);
-    setSelected(item.id);
-    setLimitPrice(String(item.price));
-    setTriggerPrice(String(item.price));
+    setSearching(false);
+    activateInstrument(item.id, item.price);
     rememberStock({
       id: item.id,
       symbol: item.symbol,
@@ -1114,17 +1089,11 @@ export default function TradingTerminal() {
       url.searchParams.set("exchange", data.exchange);
       url.hash = "instrument-workspace";
       history.pushState({ stockpilotView: "DETAIL" }, "", url);
-      setQuantity("1");
-      setConfirmingOrder(false);
-      startTransition(() => {
-        setQuotes((current) => [
-          ...current.filter((entry) => entry.id !== data.id),
-          data,
-        ]);
-        setSelected(data.id);
-      });
-      setLimitPrice(String(data.price));
-      setTriggerPrice(String(data.price));
+      setQuotes((current) => [
+        ...current.filter((entry) => entry.id !== data.id),
+        data,
+      ]);
+      activateInstrument(data.id, data.price);
       rememberStock({
         id: data.id,
         symbol: data.symbol,
@@ -1139,9 +1108,8 @@ export default function TradingTerminal() {
       // slide the heading beneath the sticky header, especially in WebKit.
       requestAnimationFrame(() => window.scrollTo(0, 0));
     } catch (error) {
-      notify(
-        error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
-      );
+      if (request === selectionRequest.current)
+        notify(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       if (request === selectionRequest.current) setSearching(false);
     }
@@ -1628,11 +1596,11 @@ export default function TradingTerminal() {
             <div className="checkup-metrics">
               <span>
                 <small>원화 현금</small>
-                <b>{portfolioCheck.cashRatio.KRW.toFixed(0)}%</b>
+                <b>{portfolioCheck.cashRatio.KRW===null?"—":portfolioCheck.cashRatio.KRW.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>달러 현금</small>
-                <b>{portfolioCheck.cashRatio.USD.toFixed(0)}%</b>
+                <b>{portfolioCheck.cashRatio.USD===null?"—":portfolioCheck.cashRatio.USD.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>최대 비중</small>
@@ -1645,10 +1613,15 @@ export default function TradingTerminal() {
                 </b>
               </span>
               <span>
-                <small>보호 범위</small>
-                <b>{portfolioCheck.protectionCoverage.toFixed(0)}%</b>
+                <small>원화 보호 범위</small>
+                <b>{portfolioCheck.protectionCoverage.KRW===null?"—":portfolioCheck.protectionCoverage.KRW.toFixed(0)+"%"}</b>
+              </span>
+              <span>
+                <small>달러 보호 범위</small>
+                <b>{portfolioCheck.protectionCoverage.USD===null?"—":portfolioCheck.protectionCoverage.USD.toFixed(0)+"%"}</b>
               </span>
             </div>
+            <p className="checkup-currency-note">최대 비중과 보호 범위는 같은 통화 안에서 계산해요.</p>
             <div className="checkup-advice">
               <PieChart size={16} />
               <div>
@@ -1814,25 +1787,27 @@ export default function TradingTerminal() {
                         )
                         ?.focus();
                     }
-                    if (event.key === "Enter" && searchResults[0]) {
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing && !searching && !searchFailed && searchResults[0]) {
                       event.preventDefault();
                       void chooseSearchResult(searchResults[0]);
                     }
                     if (event.key === "Escape") {
+                      searchRequest.current++;
+                      selectionRequest.current++;
                       setSearchQuery("");
                       setSearchResults([]);
+                      setSearchFailed(false);
                       setSearching(false);
                     }
                   }}
                   onChange={(event) => {
                     const value = event.target.value;
+                    searchRequest.current++;
+                    selectionRequest.current++;
                     setSearchQuery(value);
-                    if (value.trim()) {
-                      setSearching(true);
-                    } else {
-                      setSearchResults([]);
-                      setSearching(false);
-                    }
+                    setSearchResults([]);
+                    setSearchFailed(false);
+                    setSearching(Boolean(value.trim()));
                   }}
                   placeholder="회사명 · 종목코드 · 티커 검색"
                 />
@@ -1845,8 +1820,13 @@ export default function TradingTerminal() {
                     className={searchMarket === item ? "active" : ""}
                     aria-pressed={searchMarket === item}
                     onClick={() => {
+                      if (searchMarket === item) return;
+                      searchRequest.current++;
+                      selectionRequest.current++;
                       setSearchMarket(item);
-                      if (searchQuery.trim()) setSearching(true);
+                      setSearchResults([]);
+                      setSearchFailed(false);
+                      setSearching(Boolean(searchQuery.trim()));
                     }}
                   >
                     {item === "ALL" ? "전체" : item === "KR" ? "한국" : "미국"}
@@ -1898,14 +1878,23 @@ export default function TradingTerminal() {
                     </button>
                   ))
                 ) : (
-                  <p
+                  <div
                     className="search-state"
                     role={searchFailed ? "alert" : "status"}
                   >
                     {searchFailed
-                      ? "검색을 불러오지 못했어요. 검색어를 다시 입력해 주세요."
+                      ? "검색을 불러오지 못했어요. 다시 시도해 주세요."
                       : "일치하는 종목이 없어요."}
-                  </p>
+                    {searchFailed ? (
+                      <button type="button" onClick={() => {
+                        searchRequest.current++;
+                        setSearchResults([]);
+                        setSearchFailed(false);
+                        setSearching(true);
+                        setSearchAttempt((current) => current + 1);
+                      }}>다시 검색</button>
+                    ) : null}
+                  </div>
                 )}
               </div>
             )}
@@ -2178,69 +2167,7 @@ export default function TradingTerminal() {
             )}
           </div>
 
-          <div className="portfolio-panel" id="holdings">
-            <div className="section-head">
-              <div>
-                <h2>보유 주식</h2>
-                <p>
-                  {portfolio.authenticated
-                    ? "사용자별 가상계좌에 저장돼요"
-                    : "로그인하면 투자 기록이 저장돼요"}
-                </p>
-              </div>
-            </div>
-            {portfolio.positions.length ? (
-              portfolio.positions.map((position) => {
-                const price =
-                  position.currentPrice ??
-                  quotes.find(
-                    (item) =>
-                      item.symbol === position.symbol &&
-                      item.exchange === position.exchange,
-                  )?.price ??
-                  position.averagePrice;
-                const profit =
-                  position.profit ??
-                  (price - position.averagePrice) * position.quantity;
-                return (
-                  <div
-                    className="holding"
-                    key={`${position.exchange}:${position.symbol}`}
-                  >
-                    <StockLogo
-                      symbol={position.symbol}
-                      name={position.name}
-                      color={colorFor(position.symbol)}
-                      logoUrl={position.logoUrl}
-                    />
-                    <span>
-                      <b>{position.name}</b>
-                      <small>
-                        {position.quantity}주 · 평균{" "}
-                        {money(position.averagePrice, position.currency)}
-                      </small>
-                    </span>
-                    <span className="private-value">
-                      <b>
-                        {money(price * position.quantity, position.currency)}
-                      </b>
-                      <small className={profit >= 0 ? "up" : "down"}>
-                        {profit >= 0 ? "+" : ""}
-                        {money(profit, position.currency)} ·{" "}
-                        {(position.returnRate ?? 0).toFixed(2)}%
-                      </small>
-                    </span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="empty">
-                <span>🌱</span>
-                <b>아직 보유한 주식이 없어요</b>
-                <p>실제 시세로 첫 가상주문을 시작해 보세요.</p>
-              </div>
-            )}
-          </div>
+          <HoldingsPanel positions={portfolio.positions} authenticated={portfolio.authenticated} onSelect={position=>chooseSearchResult({...position,id:`${position.market}:${position.exchange}:${position.symbol}`,englishName:""})}/>
         </div>
 
         {mobileOrderOpen ? (

@@ -9,10 +9,17 @@ const historyRows = Array.from({length:43},(_,i)=>{
   return {id:`local-history-${i}`,symbol:quote.symbol,name:quote.name,exchange:quote.exchange,market:quote.market,currency:quote.currency,side:i%2?'SELL':'BUY',orderType:filled?'MARKET':'LIMIT',quantity,status:filled?'FILLED':'OPEN',fillPrice:filled?quote.price:null,grossAmount:filled?quote.price*quantity:null,fee:filled?10:0,tax:0,realizedPnl:i%2&&filled?100:null,createdAt:new Date(Date.UTC(2026,9,22-Math.floor(i/6),3,i%6)).toISOString()};
 }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 let failedSearch = false;
+const upgradeFixture=process.env.UPGRADE_FIXTURE==='1';
+const upgradeFailures=new Set();
+const holdingRows=Array.from({length:25},(_,i)=>{
+  const quote=quotes[i%3],quantity=i%4+1,averagePrice=quote.price*(i%2?1.1:.9);
+  return {symbol:i<3?quote.symbol:String(900000+i),name:i<3?quote.name:`검증 보유 종목 ${i+1}`,market:quote.market,currency:quote.currency,exchange:quote.exchange,quantity,averagePrice,currentPrice:quote.price,costBasis:averagePrice*quantity,marketValue:quote.price*quantity,profit:(quote.price-averagePrice)*quantity,returnRate:(quote.price/averagePrice-1)*100};
+});
+const analyticsFixture={dataQuality:'TRACKING',periodDays:3,openPositionCount:25,totalReturn:2,maxDrawdown:1,dailyVolatility:1.5,annualizedVolatility:23.81,sharpeRatio:.4,winRate:50,profitFactor:1.2,fillRate:80,averageSlippageBps:2,averageSpreadBps:3,filledOrderCount:8,closedTradeCount:4,dailySeries:[{date:'2026-10-20',returnRate:0,change:null},{date:'2026-10-21',returnRate:3,change:3},{date:'2026-10-22',returnRate:2,change:-1}]};
 // Explicit opt-in fault fixtures. These are local, in-memory receipts only;
 // this server never connects to the production backend or writes a database.
 const fixtureReceipts = new Map();
-const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt']);
+const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','catalog-retry','normal']);
 let receiptWrites = 0;
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.webmanifest':'application/manifest+json'};
 http.createServer(async(req,res) => {
@@ -43,6 +50,22 @@ http.createServer(async(req,res) => {
     if (req.method !== 'GET') return res.writeHead(403).end('Fixture writes disabled');
     let data = {};
     const p = url.pathname;
+    if(upgradeFixture&&p==='/api/growth/analytics') {
+      if(scenario==='analytics-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 분석 조회 실패"}');}
+      data=scenario==='analytics-guest'?{authenticated:false,analytics:null}:{authenticated:true,analytics:scenario==='analytics-empty'?null:scenario==='analytics-malformed'?{...analyticsFixture,totalReturn:'invalid'}:analyticsFixture};
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(data));
+    }
+    if(upgradeFixture&&p==='/api/trading/statement') {
+      if(scenario==='statement-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 계좌 명세 조회 실패"}');}
+      data=scenario==='statement-guest'?{authenticated:false}:{authenticated:true,asOf:'2026-10-23T01:00:00Z',cash:{KRW:75000000,USD:90000},equity:{KRW:76000000,USD:91000},positions:[{symbol:'005930',name:'삼성전자',quantity:10,averagePrice:99000,currentPrice:100000,marketValue:1000000,unrealizedPnl:10000,currency:'KRW'},{symbol:'AAPL',name:'애플',quantity:4,averagePrice:247.5,currentPrice:250,marketValue:1000,unrealizedPnl:10,currency:'USD'}],summary:{marketValue:{KRW:1000000,USD:1000},unrealizedPnl:{KRW:10000,USD:10},realizedPnl:{KRW:0,USD:0},costs:{KRW:100,USD:1},filledOrders:2,openOrders:0,rejectedOrders:0},rules:{isSimulation:true,initialCash:{KRW:100000000,USD:100000},fees:{commissionRate:.015,krSellTaxRate:.2,slippage:'격리 검증'},orderTypes:[],sessions:[],dataPolicy:{maxQuoteAgeSeconds:60,staleOrderPolicy:'격리 검증',source:'격리 검증'},disclaimer:'실제 돈이 아닌 연습용 자금입니다.'}};
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(data));
+    }
+    if(upgradeFixture&&p==='/api/toss-market/instruments') {
+      const offset=Number(url.searchParams.get('offset')||0),market=url.searchParams.get('market')||'KR',quote=quotes.find(item=>item.market===market);
+      if(scenario==='catalog-retry'&&offset===20&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 다음 페이지 실패"}');}
+      const rows=Array.from({length:45},(_,i)=>({...quote,id:`${market}:${quote.exchange}:${900000+i}`,symbol:String(900000+i),name:`전체 검증 종목 ${i+1}`}));
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items:rows.slice(offset,offset+20),total:rows.length,partial:false,hasMore:offset+20<rows.length,nextOffset:offset+20<rows.length?offset+20:null}));
+    }
     if(p === '/api/trading/orders/history') {
       const query=url.searchParams.get('q')||'';
       if(query==='error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 일시적인 기록 조회 실패"}');
@@ -67,7 +90,7 @@ http.createServer(async(req,res) => {
     };
     else if (p === '/api/trading/portfolio') {
       if (scenario === 'portfolio-error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{}');
-      data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions:[],orders:[],protections:[]};
+      data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions:upgradeFixture?holdingRows:[],orders:[],protections:[]};
     }
     else if (p.startsWith('/api/trading/orders/request/')) {
       data = fixtureReceipts.get(p.split('/').pop());
@@ -76,7 +99,8 @@ http.createServer(async(req,res) => {
     else if (p === '/api/trading/search') {
       const query = url.searchParams.get('q');
       if (query === 'retry' && !failedSearch) { failedSearch = true; return res.writeHead(503,{'Content-Type':'application/json'}).end('{}'); }
-      data = {items:query === 'empty'?[]:query === 'invalid'?[null,{},...quotes]:quotes};
+      if(query==='slow') await new Promise(resolve=>setTimeout(resolve,1800));
+      data = {items:query === 'empty'?[]:query === 'invalid'?[null,{},...quotes]:upgradeFixture?quotes.filter(item=>`${item.name} ${item.symbol}`.toLowerCase().includes((query||'').toLowerCase())):quotes};
     }
     else if (p === '/api/trading/quote') data = quotes.find(q=>q.symbol===url.searchParams.get('symbol')) || quotes[0];
     else if (p === '/api/toss-market/browse-rankings') {

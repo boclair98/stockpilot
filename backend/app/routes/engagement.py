@@ -32,6 +32,7 @@ from app.services.portfolio_snapshots import (
     combined_return_rate,
     record_daily_snapshot,
 )
+from app.services.price_alerts import current_alert_price
 
 router = APIRouter(prefix="/api/features", tags=["features"])
 
@@ -46,7 +47,7 @@ class InstrumentIn(BaseModel):
 
 class AlertIn(InstrumentIn):
     direction: str = Field(pattern="^(ABOVE|BELOW)$")
-    targetPrice: Decimal = Field(gt=0)
+    targetPrice: Decimal = Field(gt=0, max_digits=18, decimal_places=4, allow_inf_nan=False)
 
 
 class PushDeviceIn(BaseModel):
@@ -203,9 +204,10 @@ async def _evaluate_alerts(session: AsyncSession, owner: UUID) -> list[PriceAler
         if not instrument:
             continue
         quote = await _quote(instrument)
-        if quote and alert_triggered(
+        current = current_alert_price(quote)
+        if current is not None and alert_triggered(
             alert.direction,
-            Decimal(str(quote["price"])),
+            current,
             Decimal(alert.target_price),
         ):
             alert.status = "TRIGGERED"
@@ -538,7 +540,23 @@ async def create_alert(
     owner: UUID = Depends(require_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    from app.routes.trading import account
+
     instrument = await _instrument(payload)
+    # Serialize this owner's create/count/dedup, including uncertain client retries.
+    await account(session, owner, lock=True)
+    existing = await session.scalar(
+        sa.select(PriceAlert).where(
+            PriceAlert.owner_id == owner,
+            PriceAlert.symbol == instrument.symbol,
+            PriceAlert.exchange == instrument.exchange,
+            PriceAlert.direction == payload.direction,
+            PriceAlert.target_price == payload.targetPrice,
+            PriceAlert.status == "ACTIVE",
+        )
+    )
+    if existing:
+        return {"id": str(existing.id), "status": existing.status}
     count = await session.scalar(
         sa.select(sa.func.count()).where(
             PriceAlert.owner_id == owner,

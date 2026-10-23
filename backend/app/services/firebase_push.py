@@ -14,6 +14,7 @@ from firebase_admin import credentials, messaging
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+PUSH_SEND_TIMEOUT_SECONDS = 20
 
 
 @dataclass(frozen=True)
@@ -97,11 +98,11 @@ class FirebasePush:
         )
 
         try:
-            response = await asyncio.to_thread(
-                messaging.send_each_for_multicast,
-                message,
-                False,
-                app,
+            # The installed SDK's async transport is cancellable. A timed-out
+            # notifier must not leave a blocking send thread behind its lease.
+            response = await asyncio.wait_for(
+                messaging.send_each_for_multicast_async(message, False, app),
+                timeout=PUSH_SEND_TIMEOUT_SECONDS,
             )
         except Exception:
             logger.exception("Firebase Cloud Messaging send failed")

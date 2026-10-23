@@ -1,7 +1,9 @@
 "use client";
 
 import { ArrowDownRight, ArrowUpRight, ChevronDown, ClipboardList, Download, Scale, ShieldCheck, SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
+import { signInHref } from "@/lib/identity";
 
 type Currency = "KRW" | "USD";
 type Rules = {
@@ -41,6 +43,30 @@ type Statement = {
   riskLimits?: { maxOpenOrders: number; maxDailyOrders: number; tradingHalted: boolean };
 };
 
+/** Guest statements never render account amounts; authenticated amounts must be verified. */
+export function isStatementResponse(value: unknown): value is Statement {
+  const object = (item: unknown): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item);
+  const finite = (item: unknown): item is number => typeof item === "number" && Number.isFinite(item);
+  const positive = (item: unknown) => finite(item) && item >= 0;
+  const count = (item: unknown) => positive(item) && Number.isSafeInteger(item);
+  const pair = (item: unknown, nonnegative = true) => object(item) && [item.KRW, item.USD].every(nonnegative ? positive : finite);
+  if (!object(value) || typeof value.authenticated !== "boolean") return false;
+  if (!value.authenticated) return true;
+  if (typeof value.asOf !== "string" || !Number.isFinite(Date.parse(value.asOf)) || !pair(value.cash) || !pair(value.equity)) return false;
+  if (!Array.isArray(value.positions) || !value.positions.every(item => object(item)
+    && [item.symbol, item.name].every(field => typeof field === "string" && field.trim().length > 0)
+    && (item.currency === "KRW" || item.currency === "USD") && positive(item.quantity) && positive(item.marketValue) && finite(item.unrealizedPnl)
+    && [item.averagePrice, item.currentPrice].every(field => field === undefined || positive(field)))) return false;
+  const summary = value.summary, rules = value.rules;
+  if (!object(summary) || ![summary.filledOrders, summary.openOrders, summary.rejectedOrders].every(count)
+    || !pair(summary.marketValue) || !pair(summary.unrealizedPnl, false) || !pair(summary.realizedPnl, false) || !pair(summary.costs)) return false;
+  if (!object(rules) || typeof rules.isSimulation !== "boolean" || !pair(rules.initialCash) || typeof rules.disclaimer !== "string"
+    || !object(rules.fees) || ![rules.fees.commissionRate, rules.fees.krSellTaxRate].every(positive) || typeof rules.fees.slippage !== "string"
+    || !object(rules.dataPolicy) || !positive(rules.dataPolicy.maxQuoteAgeSeconds)) return false;
+  return Array.isArray(rules.orderTypes) && rules.orderTypes.length <= 20 && rules.orderTypes.every(item => object(item) && typeof item.label === "string")
+    && Array.isArray(rules.sessions) && rules.sessions.length <= 20 && rules.sessions.every(item => object(item) && typeof item.label === "string" && typeof item.time === "string");
+}
+
 type RebalanceProfile = "CONSERVATIVE" | "BALANCED" | "GROWTH";
 
 const REBALANCE_PROFILES: Record<RebalanceProfile, { label: string; cashTarget: number; description: string }> = {
@@ -64,38 +90,44 @@ export default function SimulationControlCenter({
   onNotice: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [statement, setStatement] = useState<Statement | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ owner: boolean; statement: Statement | null; loading: boolean; error: string; unauthorized: boolean } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [rebalanceProfile, setRebalanceProfile] = useState<RebalanceProfile>("BALANCED");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/trading/statement", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error("거래 명세서를 불러오지 못했어요.");
-      setStatement((await response.json()) as Statement);
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : "거래 명세서를 불러오지 못했어요.");
-    } finally {
-      setLoading(false);
-    }
-  }, [onNotice]);
+  const current = result?.owner === authenticated ? result : null;
+  const statement = current?.statement ?? null;
+  const loading = expanded && (!current || current.loading);
 
   useEffect(() => {
     if (!expanded) return;
+    const controller = new AbortController();
+    let pending: AbortController | null = null;
+    const load = async () => {
+      if (pending || controller.signal.aborted) return;
+      const request = new AbortController(); pending = request;
+      setResult(previous => ({ owner: authenticated, statement: previous?.owner === authenticated ? previous.statement : null, loading: true, error: "", unauthorized: false }));
+      try {
+        const payload = await requestJson<unknown>("/api/trading/statement", { credentials: "include", cache: "no-store", signal: request.signal }, 15_000);
+        if (controller.signal.aborted) return;
+        if (!isStatementResponse(payload)) throw new Error("거래 명세서 응답을 확인하지 못했어요. 다시 조회해 주세요.");
+        setResult({ owner: authenticated, statement: payload, loading: false, error: "", unauthorized: false });
+      } catch (error: unknown) {
+        if (controller.signal.aborted) return;
+        const unauthorized = error instanceof ApiRequestError && error.status === 401;
+        setResult(previous => ({ owner: authenticated, statement: !unauthorized && previous?.owner === authenticated ? previous.statement : null, loading: false, error: error instanceof Error ? error.message : "거래 명세서를 불러오지 못했어요.", unauthorized }));
+      } finally { pending = null; }
+    };
     const initial = window.setTimeout(() => void load(), 0);
     const timer = window.setInterval(() => void load(), 60_000);
     return () => {
+      controller.abort(); pending?.abort();
       window.clearTimeout(initial);
       window.clearInterval(timer);
     };
-  }, [expanded, load, authenticated]);
+  }, [expanded, authenticated, attempt]);
 
-  const updatedAt = statement?.asOf
+  const updatedAt = statement?.authenticated && statement.asOf
     ? new Date(statement.asOf).toLocaleTimeString("ko-KR", {
+      timeZone: "Asia/Seoul",
       hour: "2-digit",
       minute: "2-digit",
     })
@@ -162,11 +194,13 @@ export default function SimulationControlCenter({
       </button>
       {expanded && (
         <div className="simulation-control-body">
-          {loading && !statement ? <p className="simulation-loading">명세서를 준비하고 있어요…</p> : (
+          {loading && !statement ? <p className="simulation-loading" role="status">명세서를 준비하고 있어요…</p> : null}
+          {current?.error ? <div className="analytics-recovery" role="alert"><div><b>거래 명세서를 불러오지 못했어요</b><p>{current.error} {statement?.authenticated ? "아래는 마지막으로 확인한 이전 자료예요." : "확인되지 않은 잔액은 표시하지 않아요."}</p></div>{current.unauthorized ? <a href={signInHref("/")}>Google로 다시 로그인</a> : null}<button type="button" disabled={loading} onClick={() => setAttempt(value => value + 1)}>{loading ? "조회 중…" : "명세서 다시 조회"}</button></div> : null}
+          {statement?.authenticated ? (
             <>
               <div className="simulation-summary-grid">
-                <article><small>원화 총자산</small><b>{money(statement?.equity.KRW ?? 100_000_000, "KRW")}</b><span>현금 {money(statement?.cash.KRW ?? 100_000_000, "KRW")}</span></article>
-                <article><small>달러 총자산</small><b>{money(statement?.equity.USD ?? 100_000, "USD")}</b><span>현금 {money(statement?.cash.USD ?? 100_000, "USD")}</span></article>
+                <article><small>원화 총자산</small><b>{money(statement.equity.KRW, "KRW")}</b><span>현금 {money(statement.cash.KRW, "KRW")}</span></article>
+                <article><small>달러 총자산</small><b>{money(statement.equity.USD, "USD")}</b><span>현금 {money(statement.cash.USD, "USD")}</span></article>
                 <article><small>체결·대기 주문</small><b>{summary?.filledOrders ?? 0} · {summary?.openOrders ?? 0}</b><span>거절 {summary?.rejectedOrders ?? 0}건</span></article>
                 <article><small>보유 종목</small><b>{statement?.positions.length ?? 0}개</b><span>마지막 갱신 {updatedAt}</span></article>
               </div>
@@ -205,7 +239,7 @@ export default function SimulationControlCenter({
               </section>
               <div className="simulation-control-foot"><span><ClipboardList size={14} /> {rules?.disclaimer}</span><button type="button" onClick={downloadStatement}><Download size={14} /> 명세서 CSV</button></div>
             </>
-          )}
+          ) : !loading && !current?.error ? <div className="analytics-recovery"><div><b>로그인 후 내 거래 명세서를 확인해요</b><p>개인 자산을 조회하기 전에는 예시 잔액을 표시하지 않아요.</p></div><a href={signInHref("/")}>Google 로그인</a></div> : null}
         </div>
       )}
     </section>
