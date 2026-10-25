@@ -226,3 +226,15 @@ test("primary views start at the top after commit without jumping on same-view r
   }
   h.props("WATCH"); h.unmount(); h.tick(16); assert.equal(h.scrolls.length, 3, "unmount cancels the queued frame");
 });
+
+test("direct detail entry renders primary content without waiting for intersection and retains it", async () => {
+  const h = harness("components/DeferredMount.tsx", { children: "primary chart", eager: true });
+  h.render(); assert.equal(h.text(), "primary chart");
+  assert.equal(h.tree().props.style.minHeight, undefined);
+  h.tick(16); await h.flush(); h.props({ children: "primary chart", eager: false });
+  assert.equal(h.text(), "primary chart", "returning to the market must not unload mounted content");
+  h.unmount();
+  const terminal = fs.readFileSync(path.join(root, "components/TradingTerminal.tsx"), "utf8");
+  assert.match(terminal, /<DeferredMount[^>]+eager=\{workspaceView === "DETAIL"\}>\s*<StockTrendPanel/);
+  assert.match(terminal, /<DeferredMount[^>]+eager=\{workspaceView === "DETAIL"\}>\s*<CompanyInsight/);
+});

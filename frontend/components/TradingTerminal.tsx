@@ -2087,7 +2087,7 @@ export default function TradingTerminal() {
               </button>
             </div>
           </header>
-          <DeferredMount minHeight={390} rootMargin="420px 0px">
+          <DeferredMount minHeight={390} rootMargin="420px 0px" eager={workspaceView === "DETAIL"}>
             <StockTrendPanel
               symbol={activeSymbol}
               name={selectedName}
@@ -2132,7 +2132,7 @@ export default function TradingTerminal() {
 
           {detailTab === "RESEARCH" ? (
             <div id="news-panel" className="market-anchor-section">
-              <DeferredMount minHeight={320} rootMargin="320px 0px">
+              <DeferredMount minHeight={320} rootMargin="320px 0px" eager={workspaceView === "DETAIL"}>
                 <CompanyInsight
                   symbol={activeSymbol}
                   market={quote?.market ?? "KR"}
