@@ -52,6 +52,10 @@ import "./order-history.css";
 import "./holdings-upgrade.css";
 import "./analytics-recovery.css";
 import "./trade-calendar.css";
+import "./brokerage-workspace.css";
+import "./us-market-details.css";
+import "./broker-chart.css";
+import "./broker-rankings.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

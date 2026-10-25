@@ -1,0 +1,20 @@
+/* Focused product access. Existing themes, accounts and order layout stay intact. */
+.broker-detail-loading { padding:16px; color:var(--ws-muted); font-size:14px; }
+.broker-service-access { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 20px; padding:12px 0; border-top:1px solid var(--ws-line); border-bottom:1px solid var(--ws-line); min-width:0; }
+.broker-service-caption { color:var(--ws-muted); font-size:14px; word-break:keep-all; }
+.broker-service-access > div { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; min-width:0; }
+.broker-service-access a { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:8px 14px; border:1px solid transparent; border-radius:10px; color:var(--ws-ink); font-size:14px; font-weight:650; text-decoration:none; white-space:nowrap; }
+.broker-service-access svg { flex-shrink:0; color:var(--ws-brand); }
+.broker-service-access a:focus-visible { outline:2px solid var(--ws-brand); outline-offset:2px; }
+.broker-service-compact { display:none; }
+@media (hover:hover) { .broker-service-access a:hover { border-color:var(--ws-line); background:var(--ws-soft); } }
+@media (max-width:1000px) { .broker-service-caption { display:none; } .broker-service-access > div { width:100%; } }
+@media (max-width:600px) {
+  .broker-service-access { margin:0 0 16px; padding:8px 0; }
+  .broker-service-access a { gap:6px; padding:8px 4px; font-size:14px; }
+  .broker-service-full { display:none; }
+  .broker-service-compact { display:inline; }
+  .consumer-app .broker-welcome.welcome-entry { gap:12px; padding:14px 16px; }
+  .consumer-app .broker-welcome .welcome-entry-icon { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { .broker-service-access a { transition:none; } }

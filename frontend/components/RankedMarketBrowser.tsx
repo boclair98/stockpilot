@@ -1,30 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, ChevronDown, X, ArrowUpRight } from "lucide-react";
 import StockRow from "./StockRow";
-import { isInstrument } from "@/lib/instrument-identity";
-type Stock = {
-  id: string;
-  symbol: string;
-  name: string;
-  englishName: string;
-  market: "KR" | "US";
-  currency: "KRW" | "USD";
-  exchange: string;
-  price: number;
-  changePercent: number | null;
-  marketCapEok?: number | null;
-  marketCapUsd?: number | null;
-  volume?: number | null;
-  logoUrl?: string | null;
-};
-type Page = {
-  items: Stock[];
-  asOf: string;
-  hasMore: boolean;
-  nextOffset: number | null;
-  partial: boolean;
-};
+import { type InstrumentIdentity } from "@/lib/instrument-identity";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
+import { normalizeRankingPage, rankingComparisonHref, toggleComparison, type RankedStock, type RankingPage } from "@/lib/ranking-comparison";
+type Stock = RankedStock;
+type Page = RankingPage;
 async function load(
   market: "KR" | "US",
   metric: string,
@@ -41,28 +24,13 @@ async function load(
     offset: String(offset),
   });
   if (snapshot) params.set("snapshot", snapshot);
-  const response = await fetch(`/api/toss-market/browse-rankings?${params}`, {
-    signal,
-  });
-  if (!response.ok)
-    throw new Error(
-      response.status === 409
-        ? "자료가 갱신됐어요. 새로고침해 주세요."
-        : "목록을 불러오지 못했어요. 다시 시도해 주세요.",
-    );
-  const p = await response.json();
-  if (!p || !Array.isArray(p.items) || typeof p.asOf !== "string" || !Number.isFinite(Date.parse(p.asOf)))
-    throw new Error("확인 가능한 목록이 없어요.");
-  const items = p.items.filter(
-    (s: Stock) => isInstrument(s) && s.market === market && Number.isFinite(s.price) && s.price > 0,
-  );
-  const hasMore = p.hasMore === true && items.length > 0 && Number.isInteger(p.nextOffset) && p.nextOffset > offset;
-  return {
-    ...p,
-    items,
-    hasMore,
-    nextOffset: hasMore ? p.nextOffset : null,
-  };
+  try {
+    const payload = await requestJson<unknown>(`/api/toss-market/browse-rankings?${params}`, { signal, cache: "no-store" }, 15_000);
+    return normalizeRankingPage(payload, market, offset);
+  } catch (cause) {
+    if (cause instanceof ApiRequestError && cause.status === 409) throw new Error("자료가 갱신됐어요. 새로고침해 주세요.");
+    throw cause;
+  }
 }
 export default function RankedMarketBrowser({
   selectedId,
@@ -82,7 +50,16 @@ export default function RankedMarketBrowser({
     [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [exchange, setExchange] = useState("ALL");
+  const [comparison, setComparison] = useState<InstrumentIdentity[]>([]);
+  const [selectionNotice, setSelectionNotice] = useState("");
+  const [failedPage, setFailedPage] = useState<"first" | "more" | null>(null);
   const request = useRef<AbortController | null>(null);
+  const comparisonHref = rankingComparisonHref(comparison);
+  function selectForComparison(item: Stock | InstrumentIdentity) {
+    const next = toggleComparison(comparison, item);
+    setComparison(next.items);
+    setSelectionNotice(next.message);
+  }
   useEffect(() => {
     const sync = () => {
       const desired =
@@ -110,14 +87,17 @@ export default function RankedMarketBrowser({
     const c = new AbortController();
     request.current?.abort();
     request.current = c;
+    // Synchronize the pending state with this external, abortable ranking query.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBusy(true);
     setError("");
+    setFailedPage(null);
     void load(market, metric, exchange, 0, undefined, c.signal)
       .then((d) => {
         if (!c.signal.aborted) setData(d);
       })
       .catch((e) => {
-        if (!c.signal.aborted) setError(e.message);
+        if (!c.signal.aborted) { setError(e instanceof Error ? e.message : "목록을 확인하지 못했어요."); setFailedPage("first"); }
       })
       .finally(() => {
         if (request.current === c) {
@@ -133,6 +113,7 @@ export default function RankedMarketBrowser({
     request.current = c;
     setBusy(true);
     setError("");
+    setFailedPage(null);
     try {
       const next = await load(
         market,
@@ -150,8 +131,10 @@ export default function RankedMarketBrowser({
         throw new Error("순위가 바뀌었어요. 새로고침해 주세요.");
       setData({ ...next, items: [...data.items, ...next.items] });
     } catch (e) {
-      if (!c.signal.aborted)
+      if (!c.signal.aborted) {
         setError(e instanceof Error ? e.message : "다시 시도해 주세요.");
+        setFailedPage("more");
+      }
     } finally {
       if (request.current === c) {
         request.current = null;
@@ -160,7 +143,7 @@ export default function RankedMarketBrowser({
     }
   }
   return (
-    <section className="ranked-browser" aria-label="시장 종목 순위">
+    <section className="ranked-browser broker-rankings" aria-label="시장 종목 순위">
       <header>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
@@ -254,6 +237,14 @@ export default function RankedMarketBrowser({
               : "전일 대비 하락률 순서"}{" "}
         · 제공 자료 기준
       </p>
+      <section className={`ranking-comparison${comparison.length ? " has-selection" : " is-empty"}`} aria-labelledby="ranking-comparison-title">
+        <div className="ranking-comparison-heading"><div><h3 id="ranking-comparison-title">함께 비교하기 <span>{comparison.length}/3</span></h3><p>종목 옆 비교 버튼으로 2~3개를 골라보세요.</p></div>
+          {comparison.length ? <button className="ranking-comparison-clear" type="button" onClick={() => { setComparison([]); setSelectionNotice("비교 선택을 모두 해제했어요."); }}>선택 초기화</button> : null}
+        </div>
+        {comparison.length ? <ul className="ranking-comparison-items">{comparison.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span><button type="button" aria-label={`${item.name} 비교 선택 해제`} onClick={() => selectForComparison(item)}><X size={16} aria-hidden="true" /></button></li>)}</ul> : null}
+        {comparison.length ? <div className="ranking-comparison-action">{comparisonHref ? <Link href={comparisonHref}>선택한 {comparison.length}개 비교 <ArrowUpRight size={16} aria-hidden="true" /></Link> : <button type="button" disabled>2개부터 비교할 수 있어요</button>}<small>계좌·보유 정보는 전달하지 않아요.</small></div> : null}
+        <p className="ranking-selection-status" role="status">{selectionNotice}</p>
+      </section>
       <div
         className={`stock-list-heading${metric === "CAP" || metric === "VOLUME" ? " with-metric" : ""}`}
       >
@@ -272,8 +263,8 @@ export default function RankedMarketBrowser({
               stock={s}
               rank={i + 1}
               metric={
-                metric === "VOLUME" && typeof s.volume === "number"
-                  ? `${s.volume.toLocaleString("ko-KR")}주`
+                metric === "VOLUME"
+                  ? s.volume !== null ? `${s.volume.toLocaleString("ko-KR")}주` : "—"
                   : metric === "CAP"
                     ? s.currency === "KRW" &&
                       typeof s.marketCapEok === "number" &&
@@ -293,6 +284,9 @@ export default function RankedMarketBrowser({
               }
               active={selectedId === s.id}
               saved={savedIds.has(s.id)}
+              metricLabel={metric === "CAP" ? "시가총액" : metric === "VOLUME" ? "거래량" : undefined}
+              compared={comparison.some(item => item.id === s.id)}
+              onCompare={() => selectForComparison(s)}
               onOpen={() => void onSelect(s)}
               onSave={() => onSave(s)}
             />
@@ -301,7 +295,7 @@ export default function RankedMarketBrowser({
       </ol>
       {busy ? (
         <p className="ranked-state" role="status">
-          다음 자료 확인 중…
+          {data?.items.length ? "다음 자료 확인 중…" : "순위를 확인하고 있어요…"}
         </p>
       ) : null}
       {error ? (
@@ -312,7 +306,7 @@ export default function RankedMarketBrowser({
             onClick={() =>
               error.includes("새로고침")
                 ? setAttempt((v) => v + 1)
-                : data?.hasMore
+                : failedPage === "more" && data?.hasMore
                   ? void more()
                   : setAttempt((v) => v + 1)
             }
@@ -345,6 +339,7 @@ export default function RankedMarketBrowser({
           {!data.hasMore ? " · 제공 자료 끝" : ""}
         </p>
       ) : null}
+      {comparisonHref && data?.items.length ? <div className="ranking-comparison-bottom"><Link href={comparisonHref}>선택한 {comparison.length}개 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link></div> : null}
     </section>
   );
 }

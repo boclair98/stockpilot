@@ -1,0 +1,65 @@
+/* Ranked discovery only: reuse the current light/dark financial tokens. */
+.consumer-app .broker-rankings { min-width: 0; }
+.broker-rankings .ranking-comparison { margin: 12px 16px 18px; padding: 14px 16px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-soft); color: var(--ws-ink); min-width: 0; }
+.broker-rankings .ranking-comparison.is-empty { padding: 10px 0; border-width: 1px 0; border-radius: 0; background: transparent; }
+.broker-rankings .ranking-comparison.is-empty .ranking-comparison-heading > div { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; }
+.broker-rankings .ranking-comparison.is-empty .ranking-comparison-heading p { margin:0; }
+.broker-rankings .ranking-comparison-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.broker-rankings .ranking-comparison-heading h3 { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 15px; line-height: 1.5; }
+.broker-rankings .ranking-comparison-heading h3 span { color: var(--ws-brand); font-size: 13px; font-variant-numeric: tabular-nums; }
+.broker-rankings .ranking-comparison-heading p { margin: 4px 0 0; font-size: 13px; color: var(--ws-muted); line-height: 1.6; word-break: keep-all; }
+.broker-rankings .ranking-comparison-clear { min-height: 44px; border: 0; padding: 8px; background: transparent; color: var(--ws-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.broker-rankings .ranking-comparison-items { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.broker-rankings .ranking-comparison-items li { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; border: 1px solid var(--ws-line); background: var(--ws-surface); border-radius: 10px; padding-left: 12px; }
+.broker-rankings .ranking-comparison-items li > span { display: grid; gap: 2px; min-width: 0; padding-block: 7px; }
+.broker-rankings .ranking-comparison-items b { font-size: 13px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; word-break: keep-all; }
+.broker-rankings .ranking-comparison-items small { color: var(--ws-muted); font-size: 12px; overflow-wrap: anywhere; }
+.broker-rankings .ranking-comparison-items button { display: grid; place-items: center; flex-shrink: 0; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--ws-muted); cursor: pointer; }
+.broker-rankings .ranking-comparison-action { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+.broker-rankings .ranking-comparison-action :is(a, button), .broker-rankings .ranking-comparison-bottom a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-surface); color: var(--ws-brand); text-decoration: none; font: inherit; font-size: 14px; font-weight: 650; }
+.broker-rankings .ranking-comparison-action button:disabled { color: var(--ws-muted); cursor: default; }
+.broker-rankings .ranking-comparison-action small { color: var(--ws-muted); font-size: 12px; line-height: 1.5; word-break: keep-all; }
+.broker-rankings .ranking-selection-status { margin: 8px 0 0; font-size: 13px; color: var(--ws-muted); line-height: 1.6; word-break: keep-all; }
+.broker-rankings .ranking-selection-status:empty { margin: 0; }
+.broker-rankings .ranking-comparison-bottom { margin: 0 16px 16px; }
+.consumer-app .broker-rankings .stock-list-heading { padding-right: 116px; }
+.consumer-app .broker-rankings .consumer-stock-row.with-comparison { display: grid; grid-template-columns: minmax(0, 1fr) 44px 52px; align-items: center; }
+.consumer-app .broker-rankings .stock-row-open { width: 100%; grid-template-columns: minmax(2ch, max-content) 32px minmax(0, 1fr) 120px; gap: 10px; padding: 12px 4px 12px 16px; border: 0; }
+.consumer-app .broker-rankings .with-metric .stock-row-open { grid-template-columns: minmax(2ch, max-content) 32px minmax(0, 1fr) 120px 112px; }
+.consumer-app .broker-rankings .stock-row-open .rank-price { grid-column: auto; text-align: right; display: grid; gap: 3px; }
+.consumer-app .broker-rankings .stock-row-metric { display: grid; gap: 3px; font-size: 13px; white-space: nowrap; text-align: right; }
+.consumer-app .broker-rankings .stock-row-metric-label { color: var(--ws-muted); font-size: 11px; font-weight: 400; }
+.consumer-app .broker-rankings .stock-row-save, .consumer-app .broker-rankings .stock-row-compare { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 3px; min-width: 44px; width: 44px; min-height: 44px; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: var(--ws-muted); font-size: 11px; line-height: 1.2; cursor: pointer; }
+.consumer-app .broker-rankings :is(.stock-row-save, .stock-row-compare)[aria-pressed="true"] { color: var(--ws-brand); background: var(--ws-tint); }
+.broker-rankings :is(button, a, select):focus-visible { outline: 2px solid var(--ws-brand); outline-offset: -2px; }
+
+/* The row is its own size container, so tablet side columns adapt as well. */
+@container (max-width: 700px) {
+  .consumer-app .broker-rankings .stock-row-open,
+  .consumer-app .broker-rankings .with-metric .stock-row-open { grid-template-columns: minmax(2ch, max-content) 32px minmax(0, 1fr); gap: 5px 8px; padding-inline: 12px 4px; }
+  .consumer-app .broker-rankings .stock-row-open .rank-number,
+  .consumer-app .broker-rankings .stock-row-open .symbol-logo { grid-row: 1; }
+  .consumer-app .broker-rankings .stock-row-open .rank-identity { grid-column: 3; grid-row: 1; }
+  .consumer-app .broker-rankings .stock-row-open .rank-price { grid-column: 3; display: flex; text-align: left; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; }
+  .consumer-app .broker-rankings .stock-row-metric { grid-column: 3; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; text-align: left; font-size: 12px; }
+  .consumer-app .broker-rankings .stock-row-metric-label { font-size: 12px; }
+}
+@media (max-width: 767px) {
+  .consumer-app .broker-rankings { display: block; }
+  .consumer-app .broker-rankings > header { padding: 12px 12px 8px; flex-wrap: wrap; }
+  .consumer-app .broker-rankings :is(.ranked-market-switch button, .ranked-refresh) { min-height: 44px; min-width: 44px; }
+  .consumer-app .broker-rankings .ranked-sort { margin: 0 12px 12px; font-size: 13px; gap: 8px; align-items: center; }
+  .consumer-app .broker-rankings .ranked-sort select { flex: 1; min-width: 0; width: auto; font-size: 16px; }
+  .consumer-app .broker-rankings .ranking-exchange-filter { margin-inline: 12px; }
+  .broker-rankings .ranking-comparison { margin-inline: 12px; padding: 12px; }
+  .consumer-app .broker-rankings .stock-list-heading { display: block; padding: 10px 12px; }
+  .consumer-app .broker-rankings .stock-list-heading > span:not(:first-child) { display: none; }
+  .consumer-app .broker-rankings .stock-list-heading > span:first-child::after { content: " · 현재가 · 전일 대비"; }
+}
+@media (hover: hover) {
+  .broker-rankings .ranking-comparison :is(a, button):not(:disabled):hover,
+  .consumer-app .broker-rankings .stock-row-compare:hover { background: var(--ws-tint); color: var(--ws-brand); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .broker-rankings :is(.stock-row-compare, .ranking-comparison-action a) { transition: background-color 150ms ease, color 150ms ease; }
+}

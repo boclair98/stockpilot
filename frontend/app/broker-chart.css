@@ -1,0 +1,65 @@
+.stock-trend-panel.broker-chart { overflow: visible; min-width: 0; color: var(--ws-ink); }
+.consumer-app .broker-chart .stock-trend-head h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; line-height: 1.5; }
+.consumer-app .broker-chart .stock-trend-head p { font-size: 13px; line-height: 1.6; }
+.consumer-app .broker-chart .trend-periods button { min-height: 44px; font-size: 14px; padding: 9px 14px; }
+.broker-chart :is(button,input) { font: inherit; }
+.broker-chart button { cursor: pointer; }
+.broker-chart button:disabled { cursor: default; opacity: .5; }
+.broker-chart-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.broker-chart-modes { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.broker-chart-modes button,.broker-chart-reload,.broker-chart-state button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 9px 12px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-surface); color: var(--ws-muted); font-size: 14px; font-weight: 600; }
+.broker-chart-modes button[aria-pressed="true"] { background: var(--ws-soft); color: var(--ws-brand); border-color: var(--ws-brand); }
+.broker-chart-state { min-height: 290px; display: flex; flex-wrap: wrap; align-content: center; align-items: center; justify-content: center; gap: 12px; color: var(--ws-muted); font-size: 14px; line-height: 1.6; }
+.broker-chart-state p { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.broker-chart-period { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; margin: 12px 0; font-size: 13px; color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.broker-chart-period b { font-size: 18px; color: var(--ws-ink); }
+.broker-chart-period b small { font-size: 12px; color: var(--ws-muted); font-weight: 500; }
+.broker-chart [data-sign="up"] { color: var(--ws-up); }
+.broker-chart [data-sign="down"] { color: var(--ws-down); }
+.broker-chart [data-sign="flat"] { color: var(--ws-muted); }
+.broker-chart-inspection { border-top: 1px solid var(--ws-line); padding: 14px 0 10px; font-variant-numeric: tabular-nums; }
+.broker-chart-inspection > time { font-size: 13px; font-weight: 650; }
+.broker-chart-inspection dl { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin: 10px 0 0; }
+.broker-chart-inspection dl > div { min-width: 0; }
+.broker-chart-inspection dt { margin: 0 0 5px; font-size: 12px; color: var(--ws-muted); }
+.broker-chart-inspection dd { margin: 0; font-size: 14px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.broker-chart-canvas { position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; margin-top: 12px; min-width: 0; }
+.consumer-app .broker-chart .broker-chart-svg { display: block; width: 100%; height: 300px; overflow: visible; touch-action: pan-y; }
+.broker-chart-grid { stroke: var(--ws-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.broker-chart-line { fill: none; stroke: currentColor; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.broker-chart-average { fill: none; stroke: var(--ws-brand); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.broker-chart-candle { fill: currentColor; stroke: currentColor; }
+.broker-chart-candle line { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.broker-chart-candle rect { stroke: none; }
+.broker-chart-volume { fill: var(--ws-muted); opacity: .32; }
+.broker-chart-volume[data-selected="true"] { fill: var(--ws-brand); opacity: .7; }
+.broker-chart-crosshair { stroke: var(--ws-muted); stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.broker-chart-scale { position: relative; display: flex; flex-direction: column; align-items: end; justify-content: space-between; padding: 5px 0 20px; font-size: 11px; color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.broker-chart-scale > span:nth-child(2) { position: absolute; top: 67%; right: 0; }
+.broker-chart-scale small { font-size: 11px; }
+.broker-chart-axis { display: flex; justify-content: space-between; margin-right: 66px; font-size: 12px; color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.broker-chart-scrubber { display: flex; align-items: center; gap: 12px; min-height: 48px; font-size: 13px; color: var(--ws-muted); }
+.broker-chart-scrubber input { flex: 1; min-width: 0; min-height: 44px; accent-color: var(--ws-brand); cursor: pointer; touch-action: pan-y; }
+.broker-chart-note { color: var(--ws-muted); font-size: 12px; line-height: 1.7; word-break: keep-all; overflow-wrap: anywhere; margin: 8px 0 12px; }
+.broker-chart-table { border-top: 1px solid var(--ws-line); margin-top: 16px; }
+.broker-chart-table summary { padding: 14px 0; min-height: 44px; font-size: 14px; font-weight: 650; cursor: pointer; }
+.broker-chart-table > div { overflow-x: auto; max-width: 100%; }
+.broker-chart-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+.broker-chart-table caption { text-align: left; color: var(--ws-muted); padding: 8px 0; }
+.broker-chart-table :is(th,td) { white-space: nowrap; text-align: right; padding: 12px 10px; border-bottom: 1px solid var(--ws-line); }
+.broker-chart-table tr > :first-child { text-align: left; }
+.broker-chart-table thead { color: var(--ws-muted); background: var(--ws-soft); }
+.broker-chart :is(button,input,summary,[tabindex]):focus-visible { outline: 2px solid var(--ws-brand); outline-offset: 3px; }
+@media (hover:hover) { .broker-chart button:not(:disabled):hover { background: var(--ws-soft); color: var(--ws-ink); } }
+@media (max-width: 600px) {
+  .consumer-app .broker-chart .stock-trend-head h2 { font-size: 17px; }
+  .consumer-app .broker-chart .trend-periods { width: 100%; }
+  .consumer-app .broker-chart .trend-periods button { flex: 1; }
+  .broker-chart-inspection dl { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px 8px; }
+  .broker-chart-inspection dd { font-size: 13px; }
+  .consumer-app .broker-chart .broker-chart-svg { height: 256px; }
+  .broker-chart-canvas { gap: 5px; }
+  .broker-chart-period { flex-direction: column; gap: 6px; }
+  .broker-chart-period > span { font-size: 12px; }
+  .broker-chart-scale { font-size: 10px; }
+}

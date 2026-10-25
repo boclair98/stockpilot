@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 
 import DeferredMount from "./DeferredMount";
+import BrokerServiceAccess from "./BrokerServiceAccess";
 import MarketIndexChart, { type IndexData } from "./MarketIndexChart";
 import WorkspaceControls from "./WorkspaceControls";
 import CommandSearch from "./CommandSearch";
@@ -91,6 +92,9 @@ const StockTrendPanel = dynamic(() => import("./StockTrendPanel"), {
       aria-hidden="true"
     />
   ),
+});
+const USMarketDetails = dynamic(() => import("./USMarketDetails"), {
+  loading: () => <p className="broker-detail-loading" role="status">종목 지표를 준비하고 있어요…</p>,
 });
 const SimulationControlCenter = dynamic(
   () => import("./SimulationControlCenter"),
@@ -425,6 +429,8 @@ export default function TradingTerminal() {
       const stored = JSON.parse(sessionStorage.getItem("stockpilot_pending_order_v1") || "null");
       if (stored?.owner === me.coders_id && typeof stored.key === "string" && /^[a-zA-Z0-9._:-]{8,128}$/.test(stored.key)) {
         pendingOrder.current = {key:stored.key,owner:me.coders_id,body:"",name:"이전 주문"};
+        // Restore an external session-storage receipt when the authenticated owner changes.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setOrderResult({kind:"uncertain",message:"이전에 보낸 주문의 응답을 확인하지 못했어요. 처리 결과를 조회해 주세요."});
       }
     } catch { /* Private browsing can block session storage. */ }
@@ -1148,6 +1154,8 @@ export default function TradingTerminal() {
     event.preventDefault();
     if (!portfolio.authenticated || !quote || !activePosition) return;
     if (accountActionLock.current || orderLock.current || pendingOrder.current) return;
+    // Event handler only: a real wall clock is required to reject an expired balance.
+    // eslint-disable-next-line react-hooks/purity
     if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 보호 주문을 설정해 주세요."); void refreshPortfolio(); return; }
     const takeProfit = Number(takeProfitPrice);
     const stopLoss = Number(stopLossPrice);
@@ -1295,6 +1303,8 @@ export default function TradingTerminal() {
       notify("주문 전 확인 항목을 모두 체크해 주세요.");
       return;
     }
+    // Called only by explicit order actions; re-check the real wall clock before sending.
+    // eslint-disable-next-line react-hooks/purity
     if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 주문해 주세요."); void refreshPortfolio(); return; }
     if (retry && (!pendingOrder.current?.body || pendingOrder.current.owner && pendingOrder.current.owner !== me?.coders_id)) return;
     if (!retry && (pendingOrder.current || !quote)) return;
@@ -1466,7 +1476,8 @@ export default function TradingTerminal() {
           </small>
         </div>
       </section>
-      {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry" aria-label="처음 시작하는 투자 연습">
+      {workspaceView === "MARKET" ? <BrokerServiceAccess /> : null}
+      {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry broker-welcome" aria-label="처음 시작하는 투자 연습">
         <span className="welcome-entry-icon"><Compass size={24} aria-hidden="true"/></span>
         <div><strong>투자, 내 돈 없이 먼저 연습해요.</strong><p>실제 시세를 살펴보고 연습 자금으로 모의주문해 보세요.</p></div>
         <div className="welcome-entry-actions"><button type="button" onClick={focusSearch}>종목 찾아보기<ArrowUpRight size={16} aria-hidden="true"/></button><Link href="/guide">어떻게 이용하나요?<ChevronRight size={16} aria-hidden="true"/></Link></div>
@@ -2068,6 +2079,9 @@ export default function TradingTerminal() {
             />
           </DeferredMount>
 
+          {workspaceView === "DETAIL" && quote?.market === "US" ? (
+            <USMarketDetails key={quote.id} symbol={quote.symbol} name={quote.name} market={quote.market} exchange={quote.exchange} currency={quote.currency} />
+          ) : null}
           <nav className="workspace-detail-tabs" aria-label="종목 상세 보기">
             {[
               { id: "RESEARCH", name: "기업·공시" },

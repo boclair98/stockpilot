@@ -1,0 +1,37 @@
+.us-market-details { container-type: inline-size; min-width: 0; margin: 20px 0; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); color: var(--ws-ink); padding: 20px; }
+.us-details-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.us-details-header > div { min-width: 0; }
+.us-details-header h3 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 18px; line-height: 1.5; word-break: keep-all; }
+.us-details-header svg { flex-shrink: 0; }
+.us-details-header p, .us-details-footer p { margin: 5px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.us-market-details button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-soft); color: var(--ws-ink); font: inherit; font-size: 14px; cursor: pointer; flex-shrink: 0; }
+.us-market-details button:disabled { opacity: .55; cursor: wait; }
+.us-market-details :is(button, summary):focus-visible { outline: 2px solid var(--ws-brand); outline-offset: 3px; }
+.us-details-highlights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; margin: 24px 0; }
+.us-details-highlights > div { min-width: 0; }
+.us-details-highlights dt { color: var(--ws-muted); font-size: 13px; line-height: 1.6; word-break: keep-all; }
+.us-details-highlights dt span { display: block; font-size: 12px; }
+.us-details-highlights dd { margin: 6px 0 0; font-size: clamp(18px, 2.8cqi, 23px); font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.us-details-prices { display: grid; grid-template-columns: 1fr; gap: 22px; padding: 20px 0; border-top: 1px solid var(--ws-line); }
+.us-details-prices > div { min-width: 0; }
+.us-details-prices h4 { margin: 0 0 10px; font-size: 15px; line-height: 1.5; }
+.us-details-prices dl { margin: 0; }
+.us-details-prices dl > div { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; padding: 7px 0; font-size: 14px; line-height: 1.5; }
+.us-details-prices dt { color: var(--ws-muted); }
+.us-details-prices dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.us-details-prices p, .us-details-note { margin: 10px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere; }
+.us-details-footer { padding-top: 12px; border-top: 1px solid var(--ws-line); }
+.us-details-help { margin-top: 12px; border-top: 1px solid var(--ws-line); }
+.us-details-help summary { min-height: 44px; padding: 13px 0; color: var(--ws-ink); font-size: 14px; cursor: pointer; }
+.us-details-help p { margin: 0 0 10px; font-size: 13px; line-height: 1.7; color: var(--ws-muted); word-break: keep-all; overflow-wrap: anywhere; }
+.us-details-state { padding: 24px 0 4px; }
+.us-details-state p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; word-break: keep-all; }
+.us-details-state span { display: block; color: var(--ws-muted); font-size: 13px; line-height: 1.7; }
+.us-details-loading { margin: 24px 0 8px; }
+.us-details-loading p { color: var(--ws-muted); font-size: 14px; }
+.us-details-loading > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.us-details-loading span { min-height: 58px; background: var(--ws-soft); border-radius: 10px; }
+@container (min-width: 540px) { .us-details-highlights { grid-template-columns: repeat(4, minmax(0, 1fr)); } .us-details-prices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; } .us-details-loading > div { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 320px) { .us-details-header button span { display: none; } .us-details-header button { width: 44px; padding: 10px; } }
+@media (max-width: 480px) { .us-market-details { padding: 16px; } }
+@media (hover: hover) { .us-market-details button:not(:disabled):hover { border-color: var(--ws-brand); } }

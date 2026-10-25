@@ -53,7 +53,7 @@ http.createServer(async(req,res) => {
       catch{return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리된 테스트 서버에 연결하지 못했어요."}');}
     }
     if (req.method === 'POST' && url.pathname === '/api/trading/orders' && fixtureCases.has(scenario) && scenario !== 'portfolio-error') {
-      for await (const chunk of req) { /* Consume local fixture draft; never save it. */ }
+      for await (const chunk of req) { void chunk; /* Consume local fixture draft; never save it. */ }
       const key = req.headers['idempotency-key'];
       let receipt = fixtureReceipts.get(key);
       if (!receipt) {
@@ -130,16 +130,27 @@ http.createServer(async(req,res) => {
       if(query==='slow') await new Promise(resolve=>setTimeout(resolve,1800));
       data = {items:query === 'empty'?[]:query === 'invalid'?[null,{},...quotes]:upgradeFixture?quotes.filter(item=>`${item.name} ${item.symbol}`.toLowerCase().includes((query||'').toLowerCase())):quotes};
     }
-    else if (p === '/api/trading/quote') data = quotes.find(q=>q.symbol===url.searchParams.get('symbol')) || quotes[0];
+    else if (p === '/api/trading/quote') {
+      const symbol=url.searchParams.get('symbol'),market=url.searchParams.get('market')||'KR',exchange=url.searchParams.get('exchange')||(market==='US'?'NAS':'KRX');
+      const known=quotes.find(q=>q.symbol===symbol&&q.market===market&&q.exchange===exchange);
+      const base=quotes.find(q=>q.market===market)||quotes[0];
+      data=known||{...base,id:`${market}:${exchange}:${symbol}`,symbol,market,exchange,name:`격리 검증 종목 ${symbol}`};
+    }
+    else if (p === '/api/trading/quote-details') {
+      const symbol=url.searchParams.get('symbol'),exchange=url.searchParams.get('exchange');
+      data={symbol,exchange,market:'US',currency:'USD',asOf:new Date().toISOString(),source:'격리된 로컬 검증 자료',price:220,open:218,high:224,low:215,previousClose:219,week52High:260,week52Low:170,marketCapUsd:3200000000000,listedShares:14545454545,per:28.5,pbr:8.2};
+    }
     else if (p === '/api/toss-market/browse-rankings') {
       const market = url.searchParams.get('market'), exchange=url.searchParams.get('exchange'),offset=Number(url.searchParams.get('offset'));
       const q = quotes.find(q=>q.market===market);
-      data = {asOf:'2026-10-13T01:00:00Z',items:Array.from({length:20},(_,i)=>({...q,id:`${market}:${exchange}:${offset+i}`,symbol:`${offset+i+100000}`,name:`${exchange} 검증 종목 ${offset+i+1}`,marketCapEok:1000,marketCapUsd:1000000,volume:1000})),hasMore:offset===0,nextOffset:offset===0?20:null,partial:false};
+      const listing=exchange==='ALL'?(market==='US'?'NAS':'KRX'):exchange==='KOSPI'||exchange==='KOSDAQ'?'KRX':exchange;
+      const known=quotes.filter(item=>item.market===market);
+      data = {asOf:'2026-10-13T01:00:00Z',items:Array.from({length:20},(_,i)=>{const source=offset+i<known.length?known[offset+i]:null,symbol=source?.symbol||`${offset+i+100000}`;return {...(source||q),id:`${market}:${listing}:${symbol}`,symbol,exchange:listing,name:source?.name||`${exchange} 검증 종목 ${offset+i+1}`,marketCapEok:1000,marketCapUsd:1000000,volume:1000};}),hasMore:offset===0,nextOffset:offset===0?20:null,partial:false};
     }
     else if (p === '/api/features/history') {
-      const symbol=url.searchParams.get('symbol');
+      const symbol=url.searchParams.get('symbol'),market=url.searchParams.get('market')||'KR',exchange=url.searchParams.get('exchange')||(market==='US'?'NAS':'KRX');
       const base=symbol==='AAPL'?200:symbol==='000660'?150000:70000;
-      data = {items:Array.from({length:65},(_,i)=>({date:new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10),close:Math.round(base*(1+(symbol==='000660'?-.001:.002)*i)),open:base,high:base*1.2,low:base*.8,volume:1000}))};
+      data = {symbol,market,exchange,currency:market==='US'?'USD':'KRW',source:'격리된 로컬 검증 자료',asOf:new Date().toISOString(),items:Array.from({length:65},(_,i)=>{const close=Math.round(base*(1+(symbol==='000660'?-.001:.002)*i));return {date:new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10),close,open:close*(i%2?.99:1.01),high:close*1.025,low:close*.975,volume:1000+(i%7)*230};})};
     }
     else if (p.includes('company')) data = {available:false,configured:false};
     else if (p.includes('news')) data = {items:[]};

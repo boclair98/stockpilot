@@ -170,3 +170,95 @@ Check one dominant guide message, one visual world, factual proof, working route
 
 ### Output target
 - Path: `frontend/app/guide/page.tsx`, `frontend/components/TradingTerminal.tsx`, and the scoped supporting files listed above.
+# 2026-10-25 · 증권 서비스형 탐색과 종목 상세
+
+## 감사 결과와 범위
+
+- 기존 Next.js 16.2.2 static export/React 19/FastAPI와 StockPilot 브랜드를 유지한다. 실거래·신용·대출·실계좌 기능은 추가하지 않는다. Apps in Toss와 기존 계좌 데이터/주문 규칙/사용자 LeagueRooms 변경은 범위 밖이다.
+- `TradingTerminal.tsx`의 시장·관심·자산·기록/상세 화면과 기존 비교·공시·정기매수·환전은 이미 있다. 중복 서비스를 만들지 않는다.
+- 근거: `StockTrendPanel.tsx`는 실제 OHLCV를 받지만 선과 종가/거래량 표만 제공하며 날짜 검사·조회 제한시간·재시도가 부족하다. 미국 전용 `quote-details` API는 웹에서 사용하지 않는다. 순위 목록은 `/compare`로 종목을 바로 전달하지 않으며 작은 화면에서 순위 지표가 숨겨진다.
+- 이번 결과: 실제 미국 핵심 지표, 선/봉차트·거래량·선택일 OHLC, 순위에서 최대3종목 비교 연결, 시장 홈의 주요 기능 바로가기와 반응형 정보 위계. 새로운 데이터 공급자·DB 마이그레이션·실제 주문은 없다.
+
+## 참고 보드와 관찰 한계
+
+|원문/플랫폼|직접 확인한 내용|StockPilot 적용|
+|---|---|---|
+|https://stock.naver.com/ · 공개 웹 텍스트|국내/미국·글로벌/시장지표/뉴스/리서치/MY의 명확한 정보 구획, 최근 본·관심·보유 패널|기존 화면을 역할별로 연결하고 주요 기능 진입점 제공|
+|https://www.tossinvest.com/ · 공개 웹 텍스트|홈/주식 골라보기/내 계좌, 시총·거래량·등락률 순위와 필터|일관된 순위 행, 작은 화면에서도 지표명과 수치 제공, 비교 동선|
+|https://securities.miraeasset.com/ · 공식 공개 페이지|본문 추출 불가|확인하지 못한 UI·기능을 관찰했다고 주장하지 않음|
+|StockPilot 운영·로컬 화면 · 직접 관찰|기존 인디고/뉴트럴 테마, 종목 상세·차트·시장 목록·하단 메뉴|기존 브랜드/컴포넌트와 실제 데이터 재사용|
+
+네이버·토스 참고 사이트의 브라우저 열기 권한이 거부되어 해당 화면의 시각·간격·모션을 직접 관찰하지 못했다. 이를 우회해 캡처하지 않는다. 타사 자산·폰트·화면을 복제하지 않고 공개 구조와 실제 프로젝트에 근거해 설계한다.
+
+## Variant 1 — StockPilot Brokerage Workspace
+
+### Resolved inputs
+- Topic: 실제 한국·미국 시세로 연습하는 StockPilot의 증권형 시장 탐색과 종목 분석.
+- Offer: 종목 찾기→핵심 지표·OHLCV 확인→2~3종목 비교→기존 모의주문/관심/기록으로 이어지는 작업 흐름.
+- Audience: 모바일 중심의 주식 초보자와 데스크톱에서 여러 종목을 살펴보는 기존 사용자.
+- Primary user action: 시장 순위에서 종목 상세를 열어 근거를 확인하거나 비교할 종목2~3개를 고른다.
+- Deliverable: 기존 React 제품에 통합된 반응형 웹 컴포넌트·CSS·검증 코드. 새로운 마케팅 랜딩은 만들지 않는다.
+- Style direction: Clear Consumer Brokerage; 기존 인디고 브랜드, 안정적인 숫자 열, 읽기 쉬운 한국어, 공유 표면과 정돈된 도구 모음.
+- Tonal key: 기존 다크 기본값과 사용자가 선택한 라이트 테마를 그대로 존중한다.
+- Icon policy: 기존 lucide-react의 일관된 선형 아이콘만 사용한다.
+- Proof assets: 기존 실제 순위/시세/history/quote-details API와 프로젝트의 허용된 종목 로고. 새 증거 이미지·가격·인기·수익률은 만들지 않는다.
+- Motion intensity: Minimal; 선택·접기·재조회 피드백120~180ms, reduced-motion에서 제거. 가격 카운트업·자동 행 재정렬·상시 점멸은 없다.
+
+### Composition contract
+- Hero archetype: asymmetrical product workspace; 대형 캠페인 히어로 대신 간결한 시장 제목·세션 문맥과 실제 순위가 첫 화면을 이끈다.
+- First-viewport structure: 기존 상단 탐색과 검색→시장 제목→간결한 기능 바로가기→시장/계좌 요약→순위 시작. 데스크톱은 기존 주 영역+관심 보조 영역, 모바일은 검색·시장 목록 우선 단일 열.
+- Primary visual/proof artifact: 실제 종목 목록과 종목 상세의 OHLCV 차트. 장식용 대시보드·기기 목업·비행기 이미지를 만들지 않는다.
+- Interaction behavior: 종목 행 상세 이동과 관심/비교 조작 분리; 비교는2~3개일 때 `/compare?items=...`로 실제 이동; 지표/차트 실패는 해당 영역에서 재조회, 주문 자동 재시도 없음.
+- Reuse boundary: API·인증·금액 계산·기존 주문 창·비교 페이지·로고·테마 토큰 재사용. 새 도메인 컴포넌트는 독립된 스타일 범위를 가지며 전역 색상 덮어쓰기는 하지 않는다.
+
+### 시각·반응형 기준
+
+실제 `stockpilot-design.css`/`theme-contrast.css`의 최종 토큰을 우선한다. 밝은 배경#F7F9FC, 표면#FFFFFF, 글자#172333, 보조#637184, 선#E4EAF1, 브랜드#2463EB; 다크는 기존 토큰을 재사용한다. 상승/하락은 기존 빨강/파랑과 부호·문구로 구분하며 매수/매도·폼 오류와 혼동하지 않는다.
+
+폰트는 기존 StockPilot Pretendard/시스템 대체, 금액 tabular-nums. 본문14~16px, 입력16px, 섹션20~22px, 큰 시세30~36px. 간격4/8/12/16/20/24/32, 일반 컨트롤12px 반경, 주요 표면16~18px. 작은 글씨로 문제를 숨기지 않는다.
+
+360/390px: 조작44px 목표, 날짜·수치 줄바꿈 억제, 비교 트레이는 하단 네비/주문 버튼과 겹치지 않는 문서 흐름. 순위 지표는 별도 라벨 있는 보조 행으로 표시한다. 768px: 차트/주문 영역이 좁아지기 전에 단일 열. 1440px: 차트 주 영역과 기존 주문 패널 유지. min-width:0, keep-all, 긴 식별자 overflow-wrap 적용. 가로 넘침을 전역 숨김으로 해결하지 않는다.
+
+### 내용·데이터 계약·상태
+
+- 미국 핵심 지표는 `GET /api/trading/quote-details`의 일치하는 symbol/exchange/currency만 표시한다. PER/PBR·시총·52주 값 null은 `—`, 오류/자료없음/로딩을 구분한다. 한국52주 값을80일 자료로 추정하지 않는다. 새 공급자나 재배포 권한이 필요한 호가·틱·기관수급·컨센서스는 이번에 만들어내지 않는다.
+- 차트는 `/api/features/history`의 실제 일별 자료를 날짜/가격/거래량 검증 후 사용한다. 유효하지 않은 OHLC는 봉을 그리지 않으며 종가가 확인된 자료는 선 모드로 안전하게 확인할 수 있다. 기간과 일봉 간격을 구분하고 현재 계좌 곡선으로 가짜 과거를 만들지 않는다. 키보드와 표 대체 제공, 터치 세로 스크롤 방해 금지.
+- 비교 선택은 공개 종목 identity만 URL에 포함하며 개인 보유·잔고·메모를 포함하지 않는다. 시장 전환·더보기에도 선택 유지, 최대3개·중복 방지·선택 해제/초기화 제공. 비정상 API/타임아웃/이전 응답은 복구 가능하게 처리한다.
+- 핵심 CTA: 종목 비교 `/compare`, 가격 알림 `/notifications`, 계좌 도구 `/account-tools`, 매매 기록 `/#decision-review`; 버튼처럼 보이는 장식·가짜 제휴/추천/공식 인가 표시는 없다.
+
+### Filled generation prompt
+
+Create one high-concept product page for StockPilot's real-market simulated-investing workspace.
+
+Inputs: Topic is Korean and US stock discovery and evidence-based practice. Offer is a working progression from actual rankings to instrument fundamentals, OHLCV inspection, comparison and the existing simulated order flow. Audience is beginner mobile investors and returning desktop users. Primary action is inspect an instrument or select two to three instruments for comparison. Deliverable is integrated React components in the existing Next.js application. Style direction is Clear Consumer Brokerage. Tonal key follows the existing dark default and selectable light theme. Icon policy is minimal, existing Lucide only. Proof assets are the project's actual API responses and permitted instrument marks, never fabricated financial data. Motion intensity is minimal.
+
+Objective: make the useful product content dominant, specific and action-oriented. Choose one clear solution; do not replace the working market with a marketing campaign. Internal concept is an asymmetrical product workspace with the stock list and price chart as the single proof artifact, existing indigo/neutral tokens as palette driver, consistent dark/light semantics, and feedback-only motion.
+
+Non-negotiables: one concise first-viewport heading, useful market content visible quickly, at most one primary and one secondary promotional CTA if any. No invented users, prices, testimonials, popularity, integrations or screenshots. Existing accounts, APIs, routes, order calculations and financial correctness are mandatory. Product-native financial rows and focused analysis panels are justified; generic floating SaaS decorations and nested decorative cards are not.
+
+Composition: preserve shell and search, improve access to existing tools, align identity/price/change/metric in rows, provide an accessible comparison selection tray, and make quote→chart→facts→deliberate simulated order the detail hierarchy. Keep personal context subordinate on mobile; retain meaningful two-region composition on desktop. Use typography, alignment, spacing and contrast before extra frames.
+
+Visual system: reuse semantic StockPilot tokens, Pretendard fallbacks, tabular figures, existing logo and Lucide icons. Separate brand, gain/loss, action and error semantics. No proprietary company assets, company fonts, random colors, fake cockpit, coins or mascots. Background and surfaces should serve financial reading, not cinematic decoration.
+
+Proof and concept: actual API values remain unmodified. Null is not zero, missing is not empty success, stale data keeps its timestamp. US fundamentals appear only for supported US instruments; actual daily OHLCV determines candlesticks and volume. Preserve gaps and the accessible table. No future data leakage or invented historical curve.
+
+Support: group existing comparison, alerts, account tools and records in one compact service cluster, not repeated feature banners. Keep these controls subordinate to market discovery.
+
+Motion: optional120~180ms state feedback only. No scroll hijacking, fake urgency, pulsing prices or count-up balances. Respect reduced motion and do not delay financial actions.
+
+Accessibility and readability: semantic navigation, labels and table captions, keyboard focus, finite request states, inline retry, 44px important touch targets, clear price signs, useful long Korean wrapping, safe mobile navigation and order actions. No text overlap, one-syllable columns or hidden essential metrics.
+
+Anti-drift: keep one coherent product language and actual working functionality. Do not collapse into generic dashboards or a recolor-only exercise. Do not add disconnected features, fake proof, floating panels or an unused second component library. Preserve existing private Apps in Toss source and unrelated user edits.
+
+Output: integrated production-ready React/CSS/helpers/tests in the existing project, with minimal dependencies and responsive behavior. Final self-check covers desktop/mobile composition, actual data/error flows, keyboard/table alternatives, contrast, no overflow, working comparison URLs, no private values in links, and build/test results. Report unavailable visual-reference access and any new API licensing requirement honestly.
+
+### Output target
+- `frontend/components/TradingTerminal.tsx` integration and compact service access; new `BrokerServiceAccess.tsx`/scoped CSS.
+- `frontend/components/StockTrendPanel.tsx`, chart helper/style/tests for actual OHLCV.
+- New US detail component/helper/style/tests; backend contracts unchanged.
+- `frontend/components/RankedMarketBrowser.tsx`, `StockRow.tsx`, scoped ranking/comparison styles/tests.
+- Existing `layout.tsx`, `package.json`, README and QA notes only as needed.
+
+### 실행·검증
+
+기존 build/TypeScript/ESLint·안전성10종에 새 지표/차트/비교 회귀를 더한다. 운영 API는 읽기 전용으로 확인하고 쓰기는 격리 테스트만 한다. 360×800/390×844/768×1024/1440×900 양 테마의 실제 StockPilot 화면을 관찰한다. 참고 사이트 차단을 우회하지 않는다. 공개 전 민감값/기존 사용자 변경 제외를 재확인하며, 게시 권한이 확인된 범위에서만 upstream→fork→Coders→운영검증 순서로 진행한다.

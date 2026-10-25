@@ -1,5 +1,5 @@
 "use client";
-import { Star } from "lucide-react";
+import { Check, Plus, Star } from "lucide-react";
 import StockLogo from "./StockLogo";
 
 export type RowInstrument = {
@@ -17,8 +17,11 @@ type Props = {
   stock: RowInstrument;
   rank?: number;
   metric?: string;
+  metricLabel?: string;
   active?: boolean;
   saved: boolean;
+  compared?: boolean;
+  onCompare?: () => void;
   onOpen: () => void;
   onSave: () => void;
 };
@@ -26,8 +29,11 @@ export default function StockRow({
   stock,
   rank,
   metric,
+  metricLabel,
   active = false,
   saved,
+  compared = false,
+  onCompare,
   onOpen,
   onSave,
 }: Props) {
@@ -38,7 +44,7 @@ export default function StockRow({
   const change = stock.changePercent;
   return (
     <div
-      className={`consumer-stock-row${metric ? " with-metric" : ""}${active ? " selected" : ""}`}
+      className={`consumer-stock-row${metric ? " with-metric" : ""}${active ? " selected" : ""}${onCompare ? " with-comparison" : ""}`}
     >
       <button
         className="stock-row-open"
@@ -81,7 +87,7 @@ export default function StockRow({
               : "선택 후 조회"}
           </small>
         </span>
-        {metric ? <span className="stock-row-metric">{metric}</span> : null}
+        {metric ? <span className="stock-row-metric">{metricLabel ? <small className="stock-row-metric-label">{metricLabel}</small> : null}<span>{metric}</span></span> : null}
       </button>
       <button
         className="stock-row-save"
@@ -92,6 +98,9 @@ export default function StockRow({
       >
         <Star size={19} fill={saved ? "currentColor" : "none"} />
       </button>
+      {onCompare ? <button className="stock-row-compare" type="button" aria-pressed={compared} aria-label={`${stock.name} 비교 ${compared ? "제외" : "추가"}`} onClick={onCompare}>
+        {compared ? <Check size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}<span>비교</span>
+      </button> : null}
     </div>
   );
 }
