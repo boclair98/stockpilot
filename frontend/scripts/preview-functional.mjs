@@ -8,6 +8,24 @@ const historyRows = Array.from({length:43},(_,i)=>{
   const quote=quotes[i%3], filled=i%5!==0, quantity=i%4+1;
   return {id:`local-history-${i}`,symbol:quote.symbol,name:quote.name,exchange:quote.exchange,market:quote.market,currency:quote.currency,side:i%2?'SELL':'BUY',orderType:filled?'MARKET':'LIMIT',quantity,status:filled?'FILLED':'OPEN',fillPrice:filled?quote.price:null,grossAmount:filled?quote.price*quantity:null,fee:filled?10:0,tax:0,realizedPnl:i%2&&filled?100:null,createdAt:new Date(Date.UTC(2026,9,22-Math.floor(i/6),3,i%6)).toISOString()};
 }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+historyRows.forEach((row,index)=>{row.executionAt=row.status==='FILLED'?new Date(Date.parse(row.createdAt)+(index===1?86_400_000:0)).toISOString():null;row.executionTimeEstimated=false;});
+function activityFixture(month) {
+  const empty=currency=>({currency,count:0,buyCount:0,sellCount:0,buyAmount:0,sellAmount:0,fees:0,taxes:0,realizedPnl:0});
+  const days=new Map(),totals=['KRW','USD'].map(empty);
+  for(const row of historyRows.filter(item=>item.status==='FILLED')) {
+    const date=new Date(Date.parse(row.executionAt)+9*3600_000).toISOString().slice(0,10);
+    if(!date.startsWith(month))continue;
+    if(!days.has(date))days.set(date,{date,currencies:[],legacyDateCount:0,unknownCurrencyCount:0});
+    const day=days.get(date);let item=day.currencies.find(i=>i.currency===row.currency);
+    if(!item){item=empty(row.currency);day.currencies.push(item);}
+    for(const sum of [item,totals.find(i=>i.currency===row.currency)]) {
+      sum.count++;sum[row.side==='BUY'?'buyCount':'sellCount']++;
+      sum[row.side==='BUY'?'buyAmount':'sellAmount']+=row.grossAmount;
+      sum.fees+=row.fee;sum.taxes+=row.tax;sum.realizedPnl+=row.realizedPnl||0;
+    }
+  }
+  return {month,timezone:'Asia/Seoul',basis:'execution',asOf:new Date().toISOString(),days:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),totals,legacyDateCount:0,unknownCurrencyCount:0};
+}
 let failedSearch = false;
 const upgradeFixture=process.env.UPGRADE_FIXTURE==='1';
 const upgradeFailures=new Set();
@@ -19,7 +37,7 @@ const analyticsFixture={dataQuality:'TRACKING',periodDays:3,openPositionCount:25
 // Explicit opt-in fault fixtures. These are local, in-memory receipts only;
 // this server never connects to the production backend or writes a database.
 const fixtureReceipts = new Map();
-const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','catalog-retry','normal']);
+const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','statement-large','calendar-error','calendar-malformed','calendar-expired','personal-malformed','catalog-retry','normal']);
 let receiptWrites = 0;
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.webmanifest':'application/manifest+json'};
 http.createServer(async(req,res) => {
@@ -50,6 +68,14 @@ http.createServer(async(req,res) => {
     if (req.method !== 'GET') return res.writeHead(403).end('Fixture writes disabled');
     let data = {};
     const p = url.pathname;
+    if(upgradeFixture&&p==='/api/trading/activity') {
+      if(scenario==='calendar-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 캘린더 조회 실패"}');}
+      if(scenario==='calendar-expired')return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 로그인 만료"}');
+      const data=activityFixture(url.searchParams.get('month'));
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(scenario==='calendar-malformed'?{...data,totals:[]}:data));
+    }
+    if(upgradeFixture&&p==='/api/personal/recurring')return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(scenario==='personal-malformed'?{items:null}:{items:[],runs:[],worker:null}));
+    if(upgradeFixture&&p==='/api/personal/notices')return res.writeHead(200,{'Content-Type':'application/json'}).end('{"items":[]}');
     if(upgradeFixture&&p==='/api/growth/analytics') {
       if(scenario==='analytics-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 분석 조회 실패"}');}
       data=scenario==='analytics-guest'?{authenticated:false,analytics:null}:{authenticated:true,analytics:scenario==='analytics-empty'?null:scenario==='analytics-malformed'?{...analyticsFixture,totalReturn:'invalid'}:analyticsFixture};
@@ -74,9 +100,11 @@ http.createServer(async(req,res) => {
       const from=url.searchParams.get('from'),to=url.searchParams.get('to');
       const rows=historyRows.filter(row=>(!query||`${row.name} ${row.symbol}`.toLowerCase().includes(query.toLowerCase()))
         && ['side','market','status'].every(key=>!url.searchParams.get(key)||row[key]===url.searchParams.get(key))
-        && (!from||row.createdAt.slice(0,10)>=from)&&(!to||row.createdAt.slice(0,10)<=to));
+        && (url.searchParams.get('dateBasis')!=='execution'||row.status==='FILLED')
+        && (!from||new Date(Date.parse(url.searchParams.get('dateBasis')==='execution'?row.executionAt:row.createdAt)+9*3600_000).toISOString().slice(0,10)>=from)
+        && (!to||new Date(Date.parse(url.searchParams.get('dateBasis')==='execution'?row.executionAt:row.createdAt)+9*3600_000).toISOString().slice(0,10)<=to));
       const offset=Number(url.searchParams.get('cursor')||0),items=rows.slice(offset,offset+20),hasMore=rows.length>offset+20;
-      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items,hasMore,nextCursor:hasMore?String(offset+20):null,asOf:'2026-10-22T12:00:00Z'}));
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items,hasMore,nextCursor:hasMore?String(offset+20):null,asOf:new Date().toISOString()}));
     }
     if (p === '/api/me') {
       if (process.env.VISITOR_FIXTURE === '1') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리된 방문자 화면 검증"}');

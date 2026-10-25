@@ -51,6 +51,7 @@ import "./welcome.css";
 import "./order-history.css";
 import "./holdings-upgrade.css";
 import "./analytics-recovery.css";
+import "./trade-calendar.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

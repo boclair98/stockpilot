@@ -4,6 +4,8 @@ export type HistoryOrder = {
   side: string; orderType: string; quantity: number; status: string;
   fillPrice: number | null; grossAmount: number | null;
   fee: number | null; tax: number | null; realizedPnl: number | null; createdAt: string;
+  executionAt?: string | null;
+  executionTimeEstimated?: boolean;
 };
 export type HistoryPage = { items: HistoryOrder[]; hasMore: boolean; nextCursor: string | null; asOf: string };
 export const orderStatusLabels: Record<string, string> = {
@@ -33,7 +35,9 @@ export function validHistoryPage(value: unknown): value is HistoryPage {
       && [row.fillPrice,row.grossAmount,row.fee,row.tax,row.realizedPnl].every(v=>v===null||typeof v==="number"&&Number.isFinite(v))
       && (row.fillPrice === null || row.fillPrice > 0)
       && (row.grossAmount === null || row.grossAmount >= 0)
-      && typeof row.createdAt==="string" && Number.isFinite(Date.parse(row.createdAt)));
+      && typeof row.createdAt==="string" && Number.isFinite(Date.parse(row.createdAt))
+      && (row.executionAt === undefined || row.executionAt === null || typeof row.executionAt === "string" && Number.isFinite(Date.parse(row.executionAt)))
+      && (row.executionTimeEstimated === undefined || typeof row.executionTimeEstimated === "boolean"));
 }
 export function appendHistory(previous: HistoryOrder[], incoming: HistoryOrder[]) {
   const seen = new Set(previous.map(row=>row.id));
@@ -46,12 +50,14 @@ function csvCell(value: string | number | null, identifier = false) {
   return '"' + text.replaceAll('"','""') + '"';
 }
 export function historyCsv(rows: HistoryOrder[]) {
-  const header = ["주문 ID","종목명","종목 코드","거래소","통화","매매","상태","수량","체결가","체결금액(비용 제외)","수수료","세금","실현손익","주문시각(서울)"];
+  const header = ["주문 ID","종목명","종목 코드","거래소","통화","매매","상태","수량","체결가","체결금액(비용 제외)","수수료","세금","실현손익","주문시각(서울)","체결시각(서울)","체결시각 기준"];
   return "\uFEFF" + [header.map(v=>csvCell(v)).join(","), ...rows.map(row => [
     csvCell(row.id,true),csvCell(row.name),csvCell(row.symbol,true),csvCell(row.exchange),csvCell(row.currency),
     csvCell(sideLabel(row.side)),csvCell(orderStatusLabels[row.status]||row.status),csvCell(row.quantity),
     csvCell(row.status==="FILLED"?row.fillPrice:null),csvCell(row.status==="FILLED"?row.grossAmount:null),
     csvCell(row.fee),csvCell(row.tax),csvCell(row.realizedPnl),
     csvCell(new Date(row.createdAt).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",hour12:false})),
+    csvCell(row.status==="FILLED" && row.executionAt ? new Date(row.executionAt).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",hour12:false}) : null),
+    csvCell(row.status==="FILLED" && row.executionAt ? row.executionTimeEstimated ? "주문시각 대체" : "체결시각" : null),
   ].join(","))].join("\r\n");
 }

@@ -1,5 +1,18 @@
 # OpenUI Design Plan
 
+## 2026-10-25 · 매매 캘린더와 장기 이용 정확성
+
+- 범위: 사용자가 코더스 웹의 기능 고도화·오류 수정·배포를 요청했다. 기존 디자인·계좌·금융 규칙·앱인토스·사용자 LeagueRooms 변경은 보존한다. 홈 구성이나 브랜드 개편은 하지 않는다.
+- 근거: 투자 기록에 날짜별 체결 탐색이 없다. 계좌 명세는 최근100주문만 합산해 오래 사용한 계좌의 누계가 잘릴 수 있다. 정기매수는 종목 통화 전환 시 기존 예산 숫자가 남고 검색 중 이전 선택을 제출할 수 있다. 일부 개인 응답의 구조 오류가 화면을 중단시킬 수 있다.
+- Resolved inputs: Topic=실제 모의 기록 탐색; Offer=월별 체결 캘린더와 정확한 누계; Audience=한국어 초보/재방문 투자자; Primary action=달/날짜 선택 후 실제 체결 기록 확인; Deliverable=기존 웹 통합; Style=current StockPilot; Tonal key=기존 light/dark; Icons=lucide; Proof=본인 계좌의 실제 저장 기록과 격리 fixture; Motion=minimal.
+- Composition contract: 신규 hero 없음. 기존 투자 기록의 목록/캘린더 전환을 제공하고 월 선택→월별 통화 요약→날짜→선택일 요약→상세 기록으로 연결한다. 날짜별 기록은 체결 시각(구형 기록은 주문 시각)을 기준으로 표시하고 주문일 필터와 명확히 구분한다. 원화/달러를 합산하지 않는다.
+- 시각: 기존 --ws-ink/muted/surface/soft/line/brand/up/down과 Pretendard 유지. 제목20–22px/700, 본문14–16px/1.6, 입력16px, 보조13px. 간격8/12/16/24, 기존12–16px 반경. 모바일 7열 날짜는 가능한 44px 조작 높이, 요약은 한 열, 태블릿/PC 통화 요약 두 열. 숫자 tabular-nums, keep-all/min-width:0, 선택/손익은 글자로도 표시한다.
+- CTA: 이전/다음 달→읽기 API 재조회; 날짜→해당일 실제 요약; 체결 기록 보기→기존 목록을 FILLED+체결일 범위로 조회. 로그인·데이터 없음·오류·재시도·시간초과·늦은 응답·키보드 포커스 상태를 제공한다. 광고·주문·잔고 변경 없음.
+- 안전성: 본인 인증+계정별 SQL집계, 조회 월 범위 제한, 캐시 no-store. 총계는 DB집계로 구하며 기록 전체를 브라우저로 가져오지 않는다. 없는 손익·통화는 0으로 꾸미지 않는다. FX 재확인은 원래 견적/요청번호를 유지하며 새 환율 실패가 이미 처리한 결과 조회를 막지 않게 한다.
+- 수정: TradeCalendar/component/helper/CSS, InvestmentHistory/OrderTimeline/history contract, read-only activity router/order_history, 명세 집계와 환전 복구, PersonalWorkspace 유효성/정기매수 선택. README/테스트/격리 preview를 함께 갱신한다.
+- 검증: 월/KST 경계·계정 격리·집계100건 초과·중복 요청·응답 유실·잘못된 개인 응답·통화 전환. 빌드/타입/관련 lint/회귀 검사, 360/390/768/1440 라이트·다크·날짜→기록 흐름. GitHub 원본→실제 fork sync→코더스 ready→운영 화면/health를 확인한다. 실제 로그인·푸시·대규모 부하는 별도 한계로 보고한다.
+- Filled prompt/output: Extend StockPilot's existing investment history with a precise read-only monthly execution calendar, currency-separated actual totals and direct date-filtered records. Keep the existing design system, routes, account ownership, trading calculations and web/AIT separation. Fix confirmed long-history aggregation, uncertain retry and recurring budget selection defects. Reuse semantic controls, loading/error/empty states, safe responsive layout and visible focus. Output integrated production components and regression tests without fabricated prices or balances.
+
 ## 2026-10-23 · 웹 일상 투자 흐름 고도화
 
 - 목적/근거: 검색 중 이전 결과를 선택할 수 있고 뒤로가기에서 주문 초안이 다른 종목으로 넘어갈 수 있다. 전체 종목의 다음 페이지 재시도는 첫 페이지로 돌아간다. 투자 점검은 KRW와 USD의 절대 금액을 비교/합산한다. 보유 주식 목록에는 검색·시장·수익률 정렬·상세 진입이 없다. 리스크 분석은 통신 오류를 숨기고 계속 로딩한다.

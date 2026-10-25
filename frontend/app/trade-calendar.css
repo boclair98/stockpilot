@@ -1,0 +1,44 @@
+.trade-calendar { margin: 20px 0; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); color: var(--ws-ink); min-width: 0; }
+.trade-calendar :is(button, input, a) { font: inherit; color: inherit; }
+.trade-calendar button { cursor: pointer; }
+.trade-calendar button:disabled { cursor: default; opacity: .5; }
+.trade-calendar-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; min-height: 64px; padding: 16px; border: 0; background: transparent; text-align: left; }
+.trade-calendar-toggle > span { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.trade-calendar-toggle b { font-size: 16px; }
+.trade-calendar-toggle small { color: var(--ws-muted); font-size: 13px; }
+.trade-calendar-toggle > svg { flex-shrink: 0; transition: transform 160ms ease; }
+.trade-calendar-toggle[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.trade-calendar-body { padding: 0 16px 16px; }
+.trade-calendar-controls { display: flex; align-items: flex-end; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.trade-calendar-controls button, .trade-calendar-selection button, .trade-calendar-state :is(button, a) { min-height: 44px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-soft); display: inline-flex; justify-content: center; align-items: center; gap: 6px; text-decoration: none; font-size: 14px; font-weight: 600; }
+.trade-calendar-controls label { display: flex; flex-direction: column; gap: 4px; color: var(--ws-muted); font-size: 12px; min-width: 0; }
+.trade-calendar-controls input { color-scheme: light dark; min-height: 44px; width: 165px; max-width: 100%; padding: 8px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-surface); color: var(--ws-ink); font-size: 16px; }
+.trade-calendar-weekdays, .trade-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.trade-calendar-weekdays { margin-bottom: 6px; text-align: center; color: var(--ws-muted); font-size: 12px; }
+.trade-calendar-grid button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px; min-width: 0; gap: 5px; padding: 6px 2px; border: 1px solid transparent; border-radius: 10px; background: transparent; font-size: 14px; font-variant-numeric: tabular-nums; }
+.trade-calendar-grid button small { color: var(--ws-muted); font-size: 11px; max-width: 100%; overflow-wrap: anywhere; }
+.trade-calendar-grid button[data-active="true"] { background: var(--ws-soft); border-color: var(--ws-line); }
+.trade-calendar-grid button[data-active="true"] small { color: var(--ws-brand); font-weight: 700; }
+.trade-calendar-grid button[aria-pressed="true"] { outline: 2px solid var(--ws-brand); outline-offset: -2px; font-weight: 700; }
+.trade-calendar-selection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 12px; }
+.trade-calendar-selection h3 { margin: 0; font-size: 16px; line-height: 1.5; }
+.trade-calendar-summaries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.trade-calendar-summary { min-width: 0; }
+.trade-calendar-summary h4 { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin: 0 0 10px; font-size: 14px; }
+.trade-calendar-summary h4 span { color: var(--ws-muted); font-size: 13px; font-weight: 500; }
+.trade-calendar-summary dl { margin: 0; }
+.trade-calendar-summary dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 9px 0; font-size: 13px; line-height: 1.5; }
+.trade-calendar-summary dt { color: var(--ws-muted); }
+.trade-calendar-summary dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; overflow-wrap: anywhere; }
+html[data-private="true"] .trade-calendar-summary dd { filter: blur(7px); user-select: none; }
+.trade-calendar-pnl { border-top: 1px solid var(--ws-line); margin-top: 3px; }
+.trade-calendar [data-sign="up"] { color: var(--ws-up); }
+.trade-calendar [data-sign="down"] { color: var(--ws-down); }
+.trade-calendar-state, .trade-calendar-note { margin: 12px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere; }
+.trade-calendar-state { padding: 16px 0; font-size: 14px; }
+.trade-calendar-state p { margin: 0 0 12px; }
+.trade-calendar :is(button, input, a):focus-visible { outline: 2px solid var(--ws-brand); outline-offset: 3px; }
+@media (hover: hover) { .trade-calendar button:not(:disabled):hover { background: var(--ws-soft); } }
+@media (max-width: 600px) { .trade-calendar-summaries { grid-template-columns: 1fr; gap: 18px; } .trade-calendar-toggle small { flex-basis: 100%; margin-left: 31px; } .trade-calendar-controls input { width: 145px; } }
+@media (max-width: 380px) { .trade-calendar-body { padding: 0 12px 12px; } .trade-calendar-controls { gap: 5px; } .trade-calendar-controls button { padding: 8px; } .trade-calendar-controls input { width: 136px; } }
+@media (prefers-reduced-motion: reduce) { .trade-calendar-toggle > svg { transition: none; } }

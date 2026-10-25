@@ -2,6 +2,7 @@
 
 import { ArrowDownRight, ArrowUpRight, ChevronDown, ClipboardList, Download, Scale, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { signInHref } from "@/lib/identity";
 
@@ -21,6 +22,11 @@ type Statement = {
   rules: Rules;
   cash: Record<Currency, number>;
   equity: Record<Currency, number>;
+  positionsCount?: number;
+  positionsHasMore?: boolean;
+  estimatedPositions?: number;
+  ordersCount?: number;
+  ordersHasMore?: boolean;
   positions: Array<{
     symbol: string;
     name: string;
@@ -53,6 +59,8 @@ export function isStatementResponse(value: unknown): value is Statement {
   if (!object(value) || typeof value.authenticated !== "boolean") return false;
   if (!value.authenticated) return true;
   if (typeof value.asOf !== "string" || !Number.isFinite(Date.parse(value.asOf)) || !pair(value.cash) || !pair(value.equity)) return false;
+  if (![value.positionsCount,value.estimatedPositions,value.ordersCount].every(item=>item===undefined||count(item))
+    || ![value.positionsHasMore,value.ordersHasMore].every(item=>item===undefined||typeof item==="boolean")) return false;
   if (!Array.isArray(value.positions) || !value.positions.every(item => object(item)
     && [item.symbol, item.name].every(field => typeof field === "string" && field.trim().length > 0)
     && (item.currency === "KRW" || item.currency === "USD") && positive(item.quantity) && positive(item.marketValue) && finite(item.unrealizedPnl)
@@ -112,7 +120,7 @@ export default function SimulationControlCenter({
         setResult({ owner: authenticated, statement: payload, loading: false, error: "", unauthorized: false });
       } catch (error: unknown) {
         if (controller.signal.aborted) return;
-        const unauthorized = error instanceof ApiRequestError && error.status === 401;
+        const unauthorized = error instanceof ApiRequestError && [401,403].includes(error.status || 0);
         setResult(previous => ({ owner: authenticated, statement: !unauthorized && previous?.owner === authenticated ? previous.statement : null, loading: false, error: error instanceof Error ? error.message : "거래 명세서를 불러오지 못했어요.", unauthorized }));
       } finally { pending = null; }
     };
@@ -142,20 +150,25 @@ export default function SimulationControlCenter({
       ["종목", "수량", "통화", "평가금액", "미실현손익"],
       ...statement.positions.map((item) => [item.name, String(item.quantity), item.currency, String(item.marketValue), String(item.unrealizedPnl)]),
     ];
-    const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
+    const csv = rows.map((row) => row.map((value) => {
+      const safe = /^[\s]*[=+\-@\t\r\n]/.test(value) ? "'" + value : value;
+      return `"${safe.replaceAll('"', '""')}"`;
+    }).join(",")).join("\n");
+    try {
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `stockpilot-statement-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    onNotice("거래 명세서를 CSV로 저장했어요.");
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    onNotice(`표시된 보유 종목 ${statement.positions.length}개의 CSV를 만들었어요. 개인 기록이므로 안전하게 보관해 주세요.`);
+    } catch { onNotice("파일을 저장하지 못했어요. 브라우저 다운로드 설정을 확인해 주세요."); }
   }
 
   const rules = statement?.rules;
   const summary = statement?.summary;
   const rebalance = useMemo(() => {
-    if (!statement?.authenticated || statement.positions.length === 0) return null;
+    if (!statement?.authenticated || statement.positions.length === 0 || statement.positionsHasMore || statement.estimatedPositions) return null;
     const profile = REBALANCE_PROFILES[rebalanceProfile];
     const grouped = (Object.keys(statement.cash) as Currency[]).reduce<Record<Currency, typeof statement.positions>>(
       (result, currency) => {
@@ -202,8 +215,10 @@ export default function SimulationControlCenter({
                 <article><small>원화 총자산</small><b>{money(statement.equity.KRW, "KRW")}</b><span>현금 {money(statement.cash.KRW, "KRW")}</span></article>
                 <article><small>달러 총자산</small><b>{money(statement.equity.USD, "USD")}</b><span>현금 {money(statement.cash.USD, "USD")}</span></article>
                 <article><small>체결·대기 주문</small><b>{summary?.filledOrders ?? 0} · {summary?.openOrders ?? 0}</b><span>거절 {summary?.rejectedOrders ?? 0}건</span></article>
-                <article><small>보유 종목</small><b>{statement?.positions.length ?? 0}개</b><span>마지막 갱신 {updatedAt}</span></article>
+                <article><small>보유 종목</small><b>{statement.positionsCount ?? statement.positions.length}개</b><span>마지막 갱신 {updatedAt}</span></article>
               </div>
+              {Boolean(statement.estimatedPositions) && <p className="rebalance-note" role="status">시세를 확인하지 못한 {statement.estimatedPositions}종목은 매입금액으로 계산한 참고 평가예요. 이 경우 비중 조정 안내는 제공하지 않아요.</p>}
+              {statement.positionsHasMore && <p className="rebalance-note">전체 보유 {statement.positionsCount}종목으로 자산을 계산했어요. CSV에는 표시된 {statement.positions.length}종목만 포함돼요. <Link href="/#holdings">보유 종목 전체 보기</Link></p>}
               {rules && (
                 <div className="simulation-rule-grid">
                   <div><b>주문 체결 규칙</b><p>{rules.fees.slippage}</p><span>수수료 {rules.fees.commissionRate.toFixed(3)}% · 국내 매도세 {rules.fees.krSellTaxRate.toFixed(3)}%</span></div>
@@ -218,6 +233,8 @@ export default function SimulationControlCenter({
                 </div>
                 {!statement?.authenticated ? (
                   <p className="rebalance-empty"><Scale size={15} /> Google 로그인 후 보유자산이 생기면 목표 현금비중과 종목별 편차를 계산해요.</p>
+                ) : statement.positionsHasMore || statement.estimatedPositions ? (
+                  <p className="rebalance-empty"><Scale size={15} /> 일부 시세 또는 목록만으로 비중 조정을 제안하지 않아요. 내 자산에서 전체 보유 종목을 확인해 주세요.</p>
                 ) : !rebalance?.rows.length ? (
                   <p className="rebalance-empty"><Scale size={15} /> 종목을 한 개 이상 가상매수하면 분산 상태를 계산할 수 있어요.</p>
                 ) : (
@@ -237,7 +254,7 @@ export default function SimulationControlCenter({
                   </>
                 )}
               </section>
-              <div className="simulation-control-foot"><span><ClipboardList size={14} /> {rules?.disclaimer}</span><button type="button" onClick={downloadStatement}><Download size={14} /> 명세서 CSV</button></div>
+              <div className="simulation-control-foot"><span><ClipboardList size={14} /> {rules?.disclaimer}</span><button type="button" onClick={downloadStatement}><Download size={14} /> 보유 목록 CSV</button></div>
             </>
           ) : !loading && !current?.error ? <div className="analytics-recovery"><div><b>로그인 후 내 거래 명세서를 확인해요</b><p>개인 자산을 조회하기 전에는 예시 잔액을 표시하지 않아요.</p></div><a href={signInHref("/")}>Google 로그인</a></div> : null}
         </div>

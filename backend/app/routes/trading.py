@@ -42,6 +42,7 @@ from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.portfolio_snapshots import record_daily_snapshot
 from app.services.risk_engine import assess_pretrade, load_control, quote_age_seconds
+from app.services.statement_totals import holding_totals, order_totals
 
 router = APIRouter(prefix="/api/trading", tags=["trading"])
 router.include_router(order_history_router)
@@ -592,61 +593,20 @@ async def account_statement(
 
     await process_open_orders(session, owner)
     wallet = await account(session, owner)
-    positions = (
-        await session.execute(
-            sa.select(Position)
-            .where(Position.owner_id == owner, Position.quantity > 0)
-            .order_by(Position.symbol)
-            .limit(100)
-        )
-    ).scalars().all()
+    market_value, unrealized, position_rows, position_count, estimated_count = (
+        await holding_totals(session, owner)
+    )
     orders = (
         await session.execute(
             sa.select(TradeOrder)
             .where(TradeOrder.owner_id == owner)
-            .order_by(TradeOrder.created_at.desc())
+            .order_by(TradeOrder.created_at.desc(), TradeOrder.id.desc())
             .limit(100)
         )
     ).scalars().all()
-    market_value = {"KRW": Decimal("0"), "USD": Decimal("0")}
-    unrealized = {"KRW": Decimal("0"), "USD": Decimal("0")}
-    position_rows: list[dict] = []
-    for position in positions:
-        instrument = await instrument_catalog.get(position.symbol, exchange=position.exchange)
-        if not instrument:
-            continue
-        await kis_market.watch(instrument)
-        quote = kis_market.quote(position.symbol, instrument.market, position.exchange)
-        current = Decimal(str(quote["price"])) if quote and quote.get("price") is not None else Decimal(position.average_price)
-        quantity = Decimal(position.quantity)
-        average = Decimal(position.average_price)
-        value = quantity * current
-        profit = (current - average) * quantity
-        market_value[instrument.currency] += value
-        unrealized[instrument.currency] += profit
-        position_rows.append({
-            "symbol": position.symbol,
-            "name": instrument.name,
-            "market": instrument.market,
-            "exchange": position.exchange,
-            "currency": instrument.currency,
-            "quantity": float(quantity),
-            "averagePrice": float(average),
-            "currentPrice": float(current),
-            "marketValue": float(value),
-            "unrealizedPnl": float(profit),
-            "returnRate": float((profit / (average * quantity) * 100) if average and quantity else 0),
-        })
-
-    realized = {"KRW": Decimal("0"), "USD": Decimal("0")}
-    costs = {"KRW": Decimal("0"), "USD": Decimal("0")}
+    realized, costs, order_counts = await order_totals(session, owner)
     order_rows: list[dict] = []
     for order in orders:
-        instrument = await instrument_catalog.get(order.symbol, exchange=order.exchange)
-        currency = instrument.currency if instrument else "KRW"
-        if order.realized_pnl is not None:
-            realized[currency] += Decimal(order.realized_pnl)
-        costs[currency] += Decimal(order.fee or 0) + Decimal(order.tax or 0)
         order_rows.append({
             "id": str(order.id),
             "symbol": order.symbol,
@@ -663,7 +623,7 @@ async def account_statement(
         })
 
     cash = {"KRW": Decimal(wallet.cash_krw), "USD": Decimal(wallet.cash)}
-    open_orders = sum(1 for order in orders if order.status in {"OPEN", "TRIGGERED"})
+    open_orders = order_counts.get("OPEN", 0) + order_counts.get("TRIGGERED", 0)
     control = await load_control(session)
     return {
         "authenticated": True,
@@ -672,15 +632,20 @@ async def account_statement(
         "cash": {key: float(value) for key, value in cash.items()},
         "equity": {key: float(cash[key] + market_value[key]) for key in cash},
         "positions": position_rows,
+        "positionsCount": position_count,
+        "positionsHasMore": position_count > len(position_rows),
+        "estimatedPositions": estimated_count,
         "orders": order_rows,
+        "ordersCount": sum(order_counts.values()),
+        "ordersHasMore": sum(order_counts.values()) > len(order_rows),
         "summary": {
             "marketValue": {key: float(value) for key, value in market_value.items()},
             "unrealizedPnl": {key: float(value) for key, value in unrealized.items()},
             "realizedPnl": {key: float(value) for key, value in realized.items()},
             "costs": {key: float(value) for key, value in costs.items()},
-            "filledOrders": sum(1 for order in orders if order.status == "FILLED"),
+            "filledOrders": order_counts.get("FILLED", 0),
             "openOrders": open_orders,
-            "rejectedOrders": sum(1 for order in orders if order.status == "REJECTED"),
+            "rejectedOrders": order_counts.get("REJECTED", 0),
         },
         "riskLimits": {
             "maxOpenOrders": control.max_open_orders,

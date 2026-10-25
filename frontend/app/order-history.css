@@ -1,5 +1,8 @@
 /* Personal history uses the established StockPilot theme, never new brand tokens. */
 .investment-history { min-width:0; color:var(--ws-ink); padding-bottom:24px; }
+.history-view-switch { display:flex; gap:8px; margin-bottom:20px; }
+.history-view-switch button { flex:1; max-width:220px; }
+.history-view-switch button[aria-pressed="true"] { color:var(--ws-brand); border-color:var(--ws-brand); background:var(--ws-soft); }
 .history-heading { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:24px; }
 .history-heading h2 { display:flex; align-items:center; gap:8px; margin:0; font-size:22px; }
 .history-heading p { color:var(--ws-muted); font-size:14px; line-height:1.6; margin:8px 0 0; }

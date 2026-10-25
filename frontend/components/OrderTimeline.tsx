@@ -1,10 +1,11 @@
 "use client";
 import { orderMoney, orderStatusLabels, seoulDate, sideLabel, type HistoryOrder } from "@/lib/order-history";
 
-export default function OrderTimeline({orders}: {orders: HistoryOrder[]}) {
+export default function OrderTimeline({orders,dateBasis="created"}: {orders: HistoryOrder[];dateBasis?:"created"|"execution"}) {
+  const rowTime = (order: HistoryOrder) => dateBasis === "execution" ? order.executionAt || order.createdAt : order.createdAt;
   return <ol className="history-list">{orders.map((order,index) => {
-    const date = seoulDate(order.createdAt);
-    const newDay = index===0 || date!==seoulDate(orders[index-1].createdAt);
+    const date = seoulDate(rowTime(order));
+    const newDay = index===0 || date!==seoulDate(rowTime(orders[index-1]));
     const direction = order.side === "BUY" ? "buy" : order.side === "SELL" ? "sell" : "";
     const url = order.market ? "/?" + new URLSearchParams({symbol:order.symbol,market:order.market,exchange:order.exchange,view:"detail"}) + "#instrument-workspace" : null;
     return <li key={order.id}>
@@ -14,7 +15,7 @@ export default function OrderTimeline({orders}: {orders: HistoryOrder[]}) {
         <div className="history-identity">
           {url ? <a href={url}>{order.name || order.symbol}</a> : <b>{order.name || order.symbol}</b>}
           <span>{order.symbol} · {order.exchange}</span>
-          <small>{order.quantity.toLocaleString("ko-KR",{maximumFractionDigits:6})}주 · {new Date(order.createdAt).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit"})}</small>
+          <small>{order.quantity.toLocaleString("ko-KR",{maximumFractionDigits:6})}주 · {dateBasis==="execution" ? order.executionTimeEstimated || !order.executionAt ? "주문 시각 대체 " : "체결 " : "주문 "}{new Date(rowTime(order)).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit"})}</small>
         </div>
         <div className="history-result">
           <span className={`history-status ${order.status==="FILLED"?"filled":""}`}>{orderStatusLabels[order.status] || "상태 확인 중"}</span>
@@ -26,6 +27,8 @@ export default function OrderTimeline({orders}: {orders: HistoryOrder[]}) {
         <summary>{order.name || order.symbol} 주문 상세</summary>
         <dl>
           <div><dt>주문 방식</dt><dd>{{MARKET:"시장가",LIMIT:"지정가",STOP:"스톱",STOP_LIMIT:"스톱 지정가"}[order.orderType] || order.orderType}</dd></div>
+          <div><dt>주문 시각</dt><dd>{new Date(order.createdAt).toLocaleString("ko-KR",{timeZone:"Asia/Seoul"})}</dd></div>
+          {order.status === "FILLED" && <div><dt>체결 시각</dt><dd>{order.executionAt ? <>{new Date(order.executionAt).toLocaleString("ko-KR",{timeZone:"Asia/Seoul"})}{order.executionTimeEstimated ? " · 주문 시각 대체" : ""}</> : "별도 시각 기록 없음"}</dd></div>}
           <div><dt>1주 체결가</dt><dd>{order.status==="FILLED"?orderMoney(order.fillPrice,order.currency):"—"}</dd></div>
           <div><dt>수수료</dt><dd>{orderMoney(order.fee,order.currency)}</dd></div>
           <div><dt>세금</dt><dd>{orderMoney(order.tax,order.currency)}</dd></div>

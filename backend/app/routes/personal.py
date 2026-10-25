@@ -748,6 +748,19 @@ async def fx_quote(
 ):
     private(response)
     key = key_check(payload.requestKey)
+    fingerprint = request_fingerprint(payload.model_dump(exclude={"requestKey"}))
+    lookup = sa.select(MoneyEvent).where(
+        MoneyEvent.owner_id == owner,
+        MoneyEvent.kind == "FX",
+        MoneyEvent.request_key == key,
+    )
+    existing = await session.scalar(lookup)
+    if existing:
+        if existing.data["fingerprint"] != fingerprint:
+            raise HTTPException(409, "다른 금액에 같은 요청 번호를 사용할 수 없어요.")
+        # Re-reading an accepted quote must not need the external rate provider
+        # (or create a replacement quote after an uncertain network response).
+        return money_view(existing)
     await require_simulation(session)
     rate = await fx_rate()
     try:
@@ -755,14 +768,8 @@ async def fx_quote(
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     await account(session, owner, lock=True)
-    row = await session.scalar(
-        sa.select(MoneyEvent).where(
-            MoneyEvent.owner_id == owner,
-            MoneyEvent.kind == "FX",
-            MoneyEvent.request_key == key,
-        )
-    )
-    fingerprint = request_fingerprint(payload.model_dump(exclude={"requestKey"}))
+    # Recheck after the account lock in case another identical request won.
+    row = await session.scalar(lookup)
     if row:
         if row.data["fingerprint"] != fingerprint:
             raise HTTPException(409, "다른 금액에 같은 요청 번호를 사용할 수 없어요.")

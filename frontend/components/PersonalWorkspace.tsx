@@ -21,6 +21,7 @@ import StockLogo from "./StockLogo";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { usePersonalTab } from "@/lib/personal-navigation";
 import { personalTime, prepareKeyedWrite, writeAttempt, type PersonalRequestKey } from "@/lib/personal-write";
+import { recurringDraftError, validPersonalRead } from "@/lib/personal-response";
 import {
   isInstrument,
   type InstrumentIdentity,
@@ -92,7 +93,7 @@ type Action = {
 };
 type Disclosure = {
   instrument: InstrumentIdentity;
-  items: { title: string; date: string; url: string; receiptNo: string }[];
+  items: { title: string | null; date: string | null; url: string; receiptNo: string | null }[];
   source: string;
   asOf: string | null;
 };
@@ -143,15 +144,17 @@ export default function PersonalWorkspace({ mode }: { mode: Mode }) {
     void requestJson<{ id: string }>("/api/me", { signal: controller.signal })
       .then((data) => {
         if (!controller.signal.aborted) {
-          setIdentity(Boolean(data.id));
+          if (typeof data?.id !== "string" || !data.id) throw new Error("계정 응답을 확인하지 못했어요. 다시 확인해 주세요.");
+          setIdentity(true);
           setAuthError("");
         }
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
-        if (error instanceof ApiRequestError && error.status === 401)
+        if (error instanceof ApiRequestError && [401, 403].includes(error.status || 0)) {
           setIdentity(false);
-        else setAuthError(error.message);
+          setAuthError("");
+        } else setAuthError(error.message);
       });
     return () => controller.abort();
   }, [authAttempt]);
@@ -297,6 +300,9 @@ function useLoad<T>(url: string) {
     const controller = new AbortController();
     void requestJson<T>(url, { signal: controller.signal }, 25000)
       .then((value) => {
+        if (value && typeof value === "object" && "authenticated" in value && value.authenticated === false)
+          throw new ApiRequestError("로그인이 만료됐어요. 다시 로그인해 주세요.", 401, false);
+        if (!validPersonalRead(url, value)) throw new Error("기록 응답을 확인하지 못했어요. 잠시 후 다시 조회해 주세요.");
         if (!controller.signal.aborted)
           setResult({
             url,
@@ -312,13 +318,13 @@ function useLoad<T>(url: string) {
             url,
             revision,
             data:
-              e instanceof ApiRequestError && e.status === 401
+              e instanceof ApiRequestError && [401, 403].includes(e.status || 0)
                 ? null
                 : current?.url === url
                   ? current.data
                   : null,
-            error: e.message,
-            unauthorized: e instanceof ApiRequestError && e.status === 401,
+            error: `${e.message}${!(e instanceof ApiRequestError && [401, 403].includes(e.status || 0)) && current?.url === url && current.data ? " 이전에 불러온 기록이 표시되고 있어요." : ""}`,
+            unauthorized: e instanceof ApiRequestError && [401, 403].includes(e.status || 0),
           }));
       });
     return () => controller.abort();
@@ -517,6 +523,7 @@ function InboxFeed({ category }: { category: string }) {
   const grouped = new Map<string, Event[]>();
   for (const row of visible) {
     const day = new Date(row.at).toLocaleDateString("ko-KR", {
+      timeZone: "Asia/Seoul",
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -639,14 +646,14 @@ function Disclosures() {
             group.items.map((row) => (
               <a
                 className="personal-list-row"
-                key={row.receiptNo}
+                key={row.receiptNo || row.url}
                 href={row.url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <div>
-                  <b>{row.title}</b>
-                  <small>{row.date} · 공식 공시 열기</small>
+                  <b>{row.title || "제목 확인 필요"}</b>
+                  <small>{row.date || "날짜 확인 필요"} · 공식 공시 열기</small>
                 </div>
               </a>
             ))
@@ -873,8 +880,12 @@ function Account() {
 }
 function InstrumentPicker({
   onSelect,
+  onQueryChange,
+  disabled = false,
 }: {
   onSelect: (row: InstrumentIdentity) => void;
+  onQueryChange?: (query: string) => void;
+  disabled?: boolean;
 }) {
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<InstrumentIdentity[]>([]),
@@ -919,9 +930,12 @@ function InstrumentPicker({
         <input
           type="search"
           value={query}
+          disabled={disabled}
+          maxLength={100}
           placeholder="회사명·코드·티커"
           onChange={(e) => {
             setQuery(e.target.value);
+            onQueryChange?.(e.target.value);
             setResults([]);
             setError("");
             setResolvedQuery("");
@@ -933,6 +947,7 @@ function InstrumentPicker({
           <p>{error}</p>
           <button
             type="button"
+            disabled={disabled}
             onClick={() => {
               setError("");
               setResolvedQuery("");
@@ -955,8 +970,10 @@ function InstrumentPicker({
             <button
               type="button"
               key={row.id}
+              disabled={disabled || searching}
               onClick={() => {
                 onSelect(row);
+                onQueryChange?.("");
                 setQuery("");
                 setResults([]);
                 setError("");
@@ -987,9 +1004,15 @@ function Recurring() {
     [amount, setAmount] = useState(""),
     [weekday, setWeekday] = useState("0"),
     [time, setTime] = useState("10:00");
+  const [stockQuery, setStockQuery] = useState("");
+  const [formError, setFormError] = useState("");
+  const [registered, setRegistered] = useState("");
   const writes = useWrite(state.refresh);
   async function submit() {
-    if (!stock) return;
+    if (!stock || stockQuery.trim() || writes.busy) return;
+    const error = recurringDraftError(stock.market, amount, weekday, time);
+    setFormError(error);
+    if (error) return;
     const payload = {
       symbol: stock.symbol,
       market: stock.market,
@@ -1001,13 +1024,19 @@ function Recurring() {
     if (
       await writes.runKeyed("/api/personal/recurring", payload)
     ) {
+      setRegistered(`${stock.name} · 매주 ${["월", "화", "수", "목", "금"][Number(weekday)]}요일 ${time} · ${cash(amount, stock.currency)} 정기 매수를 등록했어요.`);
       setAmount("");
     }
   }
   return (
     <>
       <Panel title="매주 같은 예산으로 연습">
-        <InstrumentPicker onSelect={setStock} />
+        <InstrumentPicker disabled={writes.busy} onQueryChange={setStockQuery} onSelect={(selected) => {
+          if (stock?.id !== selected.id) setAmount("");
+          setStock(selected);
+          setFormError("");
+          setRegistered("");
+        }} />
         <form
           className="personal-form"
           onSubmit={(e) => {
@@ -1024,11 +1053,13 @@ function Recurring() {
               "정기 매수할 종목을 먼저 골라주세요."
             )}
           </p>
+          {stockQuery.trim() ? <p role="status">검색한 종목을 선택하거나 검색어를 지우면 등록할 수 있어요.</p> : null}
           <div className="personal-form-grid">
             <label>
               주간 예산 {stock?.currency || ""}
               <input
                 required
+                disabled={writes.busy}
                 type="number"
                 min={stock?.currency === "USD" ? "0.01" : "1"}
                 max={stock?.currency === "USD" ? "50000" : "50000000"}
@@ -1041,6 +1072,7 @@ function Recurring() {
               요일
               <select
                 value={weekday}
+                disabled={writes.busy}
                 onChange={(e) => setWeekday(e.target.value)}
               >
                 {["월", "화", "수", "목", "금"].map((day, index) => (
@@ -1055,6 +1087,9 @@ function Recurring() {
               <input
                 type="time"
                 required
+                disabled={writes.busy}
+                min={stock?.market === "US" ? "09:30" : "09:00"}
+                max={stock?.market === "US" ? "15:50" : "15:00"}
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
               />
@@ -1068,10 +1103,15 @@ function Recurring() {
             부족·휴장·시세 지연·워커 중단 시 건너뛰고 기록해요. 지난 회차를
             몰아서 실행하지 않아요.
           </p>
+          {stock && amount && !stockQuery.trim() && !recurringDraftError(stock.market, amount, weekday, time) ? (
+            <p className="personal-feedback">등록할 내용: <b>{stock.name}</b> · 매주 {["월", "화", "수", "목", "금"][Number(weekday)]}요일 {time} ({stock.market === "US" ? "뉴욕 시간" : "한국 시간"}) · 예산 <b>{cash(amount, stock.currency)}</b></p>
+          ) : null}
+          {formError ? <p role="alert">{formError}</p> : null}
+          {registered && !state.unauthorized ? <p role="status" className="personal-feedback">{registered}</p> : null}
           <button
             className="personal-primary"
             type="submit"
-            disabled={!stock || writes.busy}
+            disabled={!stock || Boolean(stockQuery.trim()) || writes.busy || state.unauthorized}
           >
             주간 모의 매수 등록
           </button>
@@ -1085,12 +1125,12 @@ function Recurring() {
         {writes.message ? <p role="alert">{writes.message}</p> : null}
         {state.data?.worker ? (
           <small>최근 실행 점검 {when(state.data.worker.at)}</small>
-        ) : (
+        ) : !state.loading && !state.error ? (
           <p className="personal-feedback">
             실행 워커의 최근 응답을 확인하지 못했어요. 예정 시간에 실행되지
             않으면 해당 회차는 건너뛰어요.
           </p>
-        )}
+        ) : null}
         {state.data?.items.map((row) => (
           <article className="personal-list-row" key={row.id}>
             <CalendarClock size={20} />
@@ -1110,7 +1150,7 @@ function Recurring() {
             </div>
             <button
               type="button"
-              disabled={writes.busy}
+              disabled={writes.busy || state.unauthorized}
               onClick={() =>
                 void writes.run(
                   `/api/personal/recurring/${row.id}`,
@@ -1144,9 +1184,9 @@ function Recurring() {
               {row.orderId ? <Link href="/#orders">주문 확인</Link> : null}
             </article>
           ))
-        ) : (
+        ) : !state.loading && !state.error ? (
           <p>아직 실행 기록이 없어요.</p>
-        )}
+        ) : null}
       </Panel>
     </>
   );
@@ -1251,7 +1291,7 @@ function Fx() {
               }}
             />
           </label>
-          <button type="submit" disabled={writes.busy || !rate.data}>
+          <button type="submit" disabled={writes.busy || !rate.data || Boolean(rate.error) || balance.unauthorized}>
             환전 금액 미리보기
           </button>
         </form>
@@ -1263,7 +1303,7 @@ function Fx() {
         </p>
         {writes.message ? <p role="alert">{writes.message}</p> : null}
       </Panel>
-      {quote ? (
+      {quote && !balance.unauthorized ? (
         <Panel
           title={
             quote.status === "BOOKED" ? "가상 환전 완료" : "최종 금액 확인"
@@ -1438,14 +1478,14 @@ function MoneyHistory() {
       <div className="personal-inline-actions">
         <button
           type="button"
-          disabled={!offset}
-          onClick={() => setOffset((v) => v - 20)}
+          disabled={!offset || state.loading}
+          onClick={() => setOffset((v) => Math.max(0, v - 20))}
         >
           이전
         </button>
         <button
           type="button"
-          disabled={!state.data?.hasMore}
+          disabled={!state.data?.hasMore || state.loading}
           onClick={() => setOffset((v) => v + 20)}
         >
           다음
@@ -1507,7 +1547,7 @@ function CorporateDetail({ stock }: { stock: InstrumentIdentity }) {
             </div>
           </article>
         ))
-      ) : !state.loading ? (
+      ) : !state.loading && !state.error ? (
         <p>조회된 참고 일정이 없어요.</p>
       ) : null}
       <h3>공식 자료 검증 완료 일정</h3>
@@ -1529,7 +1569,7 @@ function CorporateDetail({ stock }: { stock: InstrumentIdentity }) {
             </div>
           </article>
         ))
-      ) : !state.loading ? (
+      ) : !state.loading && !state.error ? (
         <p>검증 완료된 미래 일정이 아직 없어요. 자동 반영을 약속하지 않아요.</p>
       ) : null}
       <Link href="/support">권리 반영 관련 문의</Link>

@@ -126,6 +126,9 @@ def _row(row: TradeOrder) -> dict:
         else None,
         "status": row.status,
         "createdAt": _aware(row.created_at).isoformat(),
+        "executionAt": _aware(row.processed_at or row.created_at).isoformat()
+        if row.status == "FILLED" else None,
+        "executionTimeEstimated": row.status == "FILLED" and row.processed_at is None,
     }
 
 
@@ -140,10 +143,13 @@ async def order_history(
     market: Literal["KR", "US"] | None = None,
     from_day: str | None = Query(None, alias="from", max_length=10),
     to_day: str | None = Query(None, alias="to", max_length=10),
+    date_basis: Literal["created", "execution"] = Query("created", alias="dateBasis"),
     owner: UUID = Depends(require_practice_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
+    if date_basis == "execution" and status not in (None, "FILLED"):
+        raise HTTPException(422, "체결일 조회는 체결된 주문만 확인할 수 있어요.", headers={"Cache-Control": "private, no-store"})
     start = _day_boundary(from_day)
     end = _day_boundary(to_day, next_day=True)
     if start is not None and end is not None and start >= end:
@@ -155,7 +161,7 @@ async def order_history(
     needle = q.strip().casefold()
     filter_key = hashlib.sha256(
         json.dumps(
-            [str(owner), needle, side, status, market, from_day, to_day],
+            [str(owner), needle, side, status, market, from_day, to_day, date_basis],
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode()
@@ -177,10 +183,14 @@ async def order_history(
     if market:
         exchanges = DOMESTIC_EXCHANGES if market == "KR" else US_EXCHANGES
         conditions.append(TradeOrder.exchange.in_(exchanges))
+    date_column = TradeOrder.created_at
+    if date_basis == "execution":
+        date_column = sa.func.coalesce(TradeOrder.processed_at, TradeOrder.created_at)
+        conditions.extend((TradeOrder.status == "FILLED", date_column <= snapshot))
     if start is not None:
-        conditions.append(TradeOrder.created_at >= start)
+        conditions.append(date_column >= start)
     if end is not None:
-        conditions.append(TradeOrder.created_at < end)
+        conditions.append(date_column < end)
     if needle:
         # Escape LIKE metacharacters: a literal '%' must not reveal all results.
         escaped = needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

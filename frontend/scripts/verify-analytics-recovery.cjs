@@ -37,6 +37,8 @@ function harness(componentFile, props = {}) {
       return [slots[index].value, value => { if (!mounted) return; const next = typeof value === "function" ? value(slots[index].value) : value; if (!Object.is(next, slots[index].value)) { slots[index].value = next; dirty = true; } }];
     },
     useMemo(compute, deps) { const index = cursor++; if (!slots[index] || !sameDeps(slots[index].deps, deps)) slots[index] = { type: "memo", deps, value: compute() }; return slots[index].value; },
+    useCallback(callback,deps) { return react.useMemo(()=>callback,deps); },
+    useRef(initial) { const index=cursor++; if(!slots[index]) slots[index]={current:initial}; return slots[index]; },
     useEffect(effect, deps) { const index = cursor++, previous = slots[index]; if (!previous || !sameDeps(previous.deps, deps)) effects.push(() => { previous?.cleanup?.(); slots[index] = { type: "effect", deps, cleanup: effect() }; }); },
   };
   const clock = {
@@ -45,7 +47,7 @@ function harness(componentFile, props = {}) {
     setInterval(callback, delay) { const id = ++nextTimer; timers.set(id, { callback, delay, interval: true }); return id; },
     clearInterval(id) { timers.delete(id); },
   };
-  const context = vm.createContext({ AbortController, ...clock, window: clock,
+  const context = vm.createContext({ AbortController, URLSearchParams, ...clock, window: clock,
     fetch(url, init) {
       let resolve, reject;
       const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -66,6 +68,8 @@ function harness(componentFile, props = {}) {
       if (id === "@/lib/identity") return { signInHref: destination => `/api/auth/google/login?return_to=${encodeURIComponent(destination)}` };
       if (id === "@/lib/reliable-request") return load("lib/reliable-request.ts");
       if (id === "@/lib/analytics-response") return load("lib/analytics-response.ts");
+      if (id === "@/lib/order-history") return load("lib/order-history.ts");
+      if (["next/link","./OrderTimeline","./TradeCalendar"].includes(id)) return {default:id};
       throw new Error(`Unexpected dependency ${id}`);
     }, output);
     return output;
@@ -172,4 +176,35 @@ test("an in-flight statement is aborted when its authentication context changes"
   assert.equal(h.requests[0].init.signal.aborted, true);
   h.respond(0, statement()); h.respond(1, { authenticated: false }); await h.flush();
   assert.equal(h.text().includes("125,000"), false);
+});
+
+test("partial or cost-valued statement explains scope and never suggests incomplete rebalance", async t=>{
+  const h=harness("components/SimulationControlCenter.tsx",{authenticated:true,onNotice:()=>{}});t.after(h.unmount);
+  h.render();h.click("모의투자 운영센터 거래 가정·계좌 명세·리스크 한눈에 보기 SIMULATION");await h.flush();
+  h.respond(0,{...statement(),positionsCount:105,positionsHasMore:true,estimatedPositions:3});await h.flush();
+  assert(h.text().includes("105"));assert(h.text().includes("3 종목은 매입금액"));
+  assert(h.text().includes("일부 시세 또는 목록만으로 비중 조정을 제안하지"));
+  assert(!h.nodes().some(n=>n.props?.className==="rebalance-table"));
+  h.click("모의투자 운영센터 거래 가정·계좌 명세·리스크 한눈에 보기 SIMULATION");await h.flush();
+  h.click("모의투자 운영센터 거래 가정·계좌 명세·리스크 한눈에 보기 SIMULATION");await h.flush();
+  h.respond(1,{detail:"forbidden"},403);await h.flush();assert(!h.text().includes("125,000"));
+});
+
+test("calendar selection opens the same-day executed history with matching date basis and aborts old reads",async t=>{
+  const h=harness("components/InvestmentHistory.tsx",{authenticated:true});t.after(h.unmount);
+  h.render();await h.flush();assert.equal(h.requests.length,1);
+  h.click("매매 캘린더");await h.flush();assert(h.requests[0].init.signal.aborted);
+  const calendar=h.nodes().find(n=>n.type==="./TradeCalendar");assert(calendar);
+  calendar.props.onSelectDate("2026-10-25");await h.flush();
+  const url=new URL(h.requests[1].url,"https://local.test");
+  assert.equal(url.searchParams.get("dateBasis"),"execution");assert.equal(url.searchParams.get("status"),"FILLED");
+  assert.equal(url.searchParams.get("from"),"2026-10-25");assert.equal(url.searchParams.get("to"),"2026-10-25");
+  h.respond(1,{items:[],hasMore:false,nextCursor:null,asOf:"2026-10-25T01:00:00Z"});await h.flush();
+  assert(h.text().includes("체결일 기준"));assert(h.text().includes("조건에 맞는 주문이 없어요"));
+  assert(h.requests.every(r=>!r.init.method&&!r.init.body));
+});
+
+test("execution view labels the execution date rather than the earlier order date",()=>{
+  const h=harness("components/OrderTimeline.tsx",{orders:[{id:"local",symbol:"005930",name:"삼성전자",exchange:"KRX",market:"KR",currency:"KRW",side:"BUY",orderType:"LIMIT",quantity:1,status:"FILLED",grossAmount:100,fillPrice:100,fee:0,tax:0,realizedPnl:null,createdAt:"2026-10-21T01:00:00Z",executionAt:"2026-10-23T01:00:00Z",executionTimeEstimated:false}],dateBasis:"execution"});
+  h.render();assert(h.nodes().some(n=>n.type==="h3"&&text(n)==="2026.10.23"));assert(h.text().includes("체결"));
 });
