@@ -56,6 +56,7 @@ import HoldingsPanel from "./HoldingsPanel";
 import { portfolioRisk } from "@/lib/portfolio-insights";
 import { useCloudSaved } from "@/lib/cloud-saved";
 import { importWatchlist, watchlistImportMessage } from "@/lib/watchlist-import";
+import { useWorkspaceStart } from "@/lib/workspace-scroll";
 import AdSlot from "./AdSlot";
 import OrderResult, { type OrderResultState } from "./OrderResult";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
@@ -317,6 +318,7 @@ export default function TradingTerminal() {
   const [workspaceView, setWorkspaceView] = useState<
     "MARKET" | "DETAIL" | "WATCH" | "ASSETS" | "RECORDS"
   >("MARKET");
+  useWorkspaceStart(workspaceView);
   const showMarket = useCallback(() => {
     selectionRequest.current++;
     setSearching(false);

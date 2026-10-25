@@ -33,12 +33,13 @@ function harness(file, initialProps = {}, named = "default") {
     setInterval(fn, ms) { const id = ++timerId; timers.set(id, { fn, ms, interval: true }); return id; },
     clearInterval(id) { timers.delete(id); },
   };
-  const events = [], notices = [];
+  const events = [], notices = [], scrolls = [];
   const context = vm.createContext({ ...clock, AbortController, URLSearchParams, Intl, queueMicrotask,
+    requestAnimationFrame: fn => clock.setTimeout(fn, 16), cancelAnimationFrame: id => clock.clearTimeout(id),
     localStorage: { getItem() { throw new Error("storage blocked"); } },
     location: { href: "https://example.test/", assign() {} },
     document: { hidden: false, addEventListener() {}, removeEventListener() {}, getElementById: () => ({ scrollIntoView() {} }) },
-    window: { ...clock, confirm: () => false, addEventListener() {}, removeEventListener() {} },
+    window: { ...clock, scrollTo: value => scrolls.push(value), confirm: () => false, addEventListener() {}, removeEventListener() {} },
     fetch(url, init = {}) { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); requests.push({ url, init, resolve, reject }); init.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true }); return promise; },
   });
   function load(relative) {
@@ -63,7 +64,7 @@ function harness(file, initialProps = {}, named = "default") {
   const component = file ? load(file)[named] : null;
   const render = () => { cursor = 0; effects = []; dirty = false; tree = component(props); effects.forEach(effect => effect()); return tree; };
   const flush = async () => { for (let round = 0; round < 10; round++) { await new Promise(resolve => setImmediate(resolve)); if (dirty) render(); } };
-  return { load, render, flush, requests, notices, events, nodes: () => nodes(tree), tree: () => tree, text: () => text(tree),
+  return { load, render, flush, requests, notices, events, scrolls, nodes: () => nodes(tree), tree: () => tree, text: () => text(tree),
     props(next) { props = next; render(); },
     user(next) { user = next; render(); },
     tick(ms = 0) { for (const [id, timer] of [...timers]) if (timer.ms === ms) { if (!timer.interval) timers.delete(id); timer.fn(); } },
@@ -215,4 +216,13 @@ test("watchlist layout uses its own container and status row; no 112px phantom q
   assert(readability.includes("font-size: 12px"));
   const chart = fs.readFileSync(path.join(root, "components/StockTrendPanel.tsx"), "utf8");
   assert(chart.indexOf('className="broker-chart-canvas"') < chart.indexOf('className="broker-chart-inspection"'), "the price chart must precede its detailed inspection on mobile as well as in DOM order");
+});
+
+test("primary views start at the top after commit without jumping on same-view refreshes", () => {
+  const h = harness("lib/workspace-scroll.ts", "MARKET", "useWorkspaceStart"); h.render(); h.tick(16); assert.equal(h.scrolls.length, 0);
+  for (const view of ["WATCH", "ASSETS", "RECORDS"]) {
+    h.props(view); h.tick(16); const count = h.scrolls.length; assert.equal(h.scrolls.at(-1).top, 0);
+    h.props(view); h.tick(16); assert.equal(h.scrolls.length, count, "filtering or quote updates must not reset scroll");
+  }
+  h.props("WATCH"); h.unmount(); h.tick(16); assert.equal(h.scrolls.length, 3, "unmount cancels the queued frame");
 });
