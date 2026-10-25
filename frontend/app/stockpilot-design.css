@@ -777,7 +777,7 @@ body {
 .consumer-app .consumer-stock-row .stock-row-open {
   min-width: 0;
   min-height: 66px;
-  grid-template-columns: 28px 36px minmax(0, 1fr) minmax(112px, max-content) 112px;
+  grid-template-columns: 28px 36px minmax(0, 1fr) minmax(112px, max-content);
   align-items: center;
   gap: 12px;
   padding: 8px 4px 8px 17px;
@@ -785,7 +785,7 @@ body {
 }
 
 .consumer-app .consumer-stock-row .stock-row-open:has(.symbol-logo:first-child) {
-  grid-template-columns: 36px minmax(0, 1fr) minmax(112px, max-content) 112px;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(112px, max-content);
 }
 
 .consumer-app .consumer-stock-row.with-metric .stock-row-open {

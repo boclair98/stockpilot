@@ -15,16 +15,18 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
+  const readGeneration = useRef(0);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((v) => v + 1), []);
   useEffect(() => {
     const controller = new AbortController();
+    const generation = ++readGeneration.current;
     void requestJson<{ items: CloudItem<T>[]; owner: string }>(
       `/api/personal/saved?kind=${kind}`,
-      { signal: controller.signal },
+      { signal: controller.signal, cache: "no-store" },
     )
       .then((data) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
         if(!Array.isArray(data.items)||typeof data.owner!=="string") throw new Error("저장 기록의 응답을 확인하지 못했어요.");
         setItems(data.items);
         setOwner(data.owner);
@@ -32,7 +34,7 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
         setError("");
       })
       .catch((cause) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
         if (cause instanceof ApiRequestError && cause.status === 401) {
           setItems([]);
           setOwner(null);
@@ -58,9 +60,12 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
     async (key: string, data: T | null) => {
       if (locked.current || authenticated !== true) return false;
       locked.current = true;
+      // A pre-write read must never restore a deleted item or erase a new save.
+      readGeneration.current++;
       setBusy(true);
       setError("");
       const version = items.find((row) => row.key === key)?.version || 0;
+      let confirmed = false;
       try {
         const row = await requestJson<CloudItem<T>>(
           `/api/personal/saved/${kind}/${encodeURIComponent(key)}${data === null ? `?version=${version}` : ""}`,
@@ -72,10 +77,12 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
                 body: JSON.stringify({ data, version }),
               },
         );
+        if (!row || row.key !== key || !Number.isInteger(row.version) || row.version <= version || typeof row.deleted !== "boolean" || (data !== null && row.deleted)) throw new Error("저장 결과를 확인하지 못했어요. 다시 저장하기 전에 목록을 새로 조회해 주세요.");
         setItems((current) => [
           row,
           ...current.filter((item) => item.key !== key),
         ]);
+        confirmed = true;
         return true;
       } catch (cause) {
         if (cause instanceof ApiRequestError && cause.status === 401) {
@@ -100,11 +107,13 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
         );
         return false;
       } finally {
+        readGeneration.current++;
         locked.current = false;
         setBusy(false);
+        if (confirmed) refresh();
       }
     },
-    [authenticated, items, kind],
+    [authenticated, items, kind, refresh],
   );
   return { items, authenticated, owner, error, busy, refresh, save: mutate };
 }

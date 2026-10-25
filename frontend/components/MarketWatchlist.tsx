@@ -44,7 +44,7 @@ function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }
     return result;
   }, [items, market, sort, query]);
   return (
-    <section className="favorite-board" aria-labelledby="favorite-board-title">
+    <section className="favorite-board watchlist-board" aria-labelledby="favorite-board-title">
       <div className="favorite-board-head">
         <div>
           <span>MY WATCHLIST</span>
@@ -52,15 +52,19 @@ function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }
         </div>
         <small>{items.length}/{accountSaved?50:12} · {accountSaved?"내 계정":"이 브라우저"}</small>
       </div>
-      {items.length > 0 && <div className="record-filters">
-        <label>관심종목 찾기<input type="search" value={query} maxLength={100} placeholder="회사명·종목 코드" onChange={e=>setQuery(e.target.value)}/></label>
+      {items.length > 0 && <div className="watchlist-toolbar">
+        <div className="watchlist-fields">
+        <label className="watchlist-query">관심종목 찾기<input type="search" value={query} maxLength={100} placeholder="회사명·종목 코드" onChange={e=>setQuery(e.target.value)}/></label>
         <label>시장<select value={market} onChange={e => setMarket(e.target.value)}><option value="ALL">전체</option><option value="KR">한국</option><option value="US">미국</option></select></label>
         <label>정렬<select value={sort} onChange={e => setSort(e.target.value)}><option value="saved">저장 순서</option><option value="name">이름순</option><option value="change">등락률 높은순</option><option value="decline">등락률 낮은순</option></select></label>
+        </div>
+        <div className="watchlist-scope">
+        <small role="status" aria-live="polite">{visible.length === items.length ? `${visible.length}개 표시` : `전체 ${items.length}개 중 ${visible.length}개 표시`}</small>
         {(query || market!=="ALL" || sort!=="saved") && <button type="button" onClick={()=>{setQuery("");setMarket("ALL");setSort("saved");}}>조건 초기화</button>}
-        <small role="status">{visible.length}개 표시</small>
+        </div>
       </div>}
       {items.length ? (
-        <div className="favorite-strip">
+        <div className="favorite-strip watchlist-rows">
           {visible.length === 0 && <p role="status">조건에 맞는 관심종목이 없어요. 검색어나 시장을 바꿔보세요.</p>}
           {visible.map((item) => (
             <StockRow

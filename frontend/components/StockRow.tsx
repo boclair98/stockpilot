@@ -44,7 +44,7 @@ export default function StockRow({
   const change = stock.changePercent;
   return (
     <div
-      className={`consumer-stock-row${metric ? " with-metric" : ""}${active ? " selected" : ""}${onCompare ? " with-comparison" : ""}`}
+      className={`consumer-stock-row${rank !== undefined ? " has-rank" : " without-rank"}${metric ? " with-metric" : ""}${active ? " selected" : ""}${onCompare ? " with-comparison" : ""}`}
     >
       <button
         className="stock-row-open"
@@ -79,7 +79,7 @@ export default function StockRow({
           </b>
           <small
             className={
-              typeof change === "number" ? (change >= 0 ? "up" : "down") : ""
+              typeof change === "number" && Number.isFinite(change) ? (change > 0 ? "up" : change < 0 ? "down" : "") : ""
             }
           >
             {typeof change === "number" && Number.isFinite(change)

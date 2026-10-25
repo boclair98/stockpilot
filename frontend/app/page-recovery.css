@@ -1,0 +1,49 @@
+/* Shared recovery controls use existing themes; no visual rebrand. */
+:is(.league-read-error, .tool-read-error) {
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  color: var(--ws-ink);
+  background: var(--ws-soft);
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+:is(.league-read-error, .tool-read-error) p { margin: 0 0 8px; }
+:is(.league-read-error, .tool-read-error, .lounge-message) button,
+.audit-retry, .profile-retry {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--ws-line);
+  border-radius: 10px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+:is(.league-read-error, .tool-read-error, .lounge-message) button:focus-visible,
+.audit-retry:focus-visible, .profile-retry:focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 3px;
+}
+.practice-app .practice-loading:has(button) { display: grid; justify-items: center; text-align: center; gap: 12px; }
+.practice-app .practice-loading p { margin: 0; line-height: 1.7; word-break: keep-all; }
+.service-document :is(input, button, a) { overflow-wrap: anywhere; }
+@media (min-width: 768px) {
+  /* Recent instruments span the search surface, not one implicit grid cell. */
+  .consumer-app .search-card .recent-stocks { grid-column: 1 / -1; }
+  .consumer-app .search-card .recent-stocks > div {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 8px;
+  }
+  .consumer-app .search-card .recent-stocks button { min-width: 0; width: 100%; }
+  .consumer-app .search-card .recent-stocks button > span:not(.symbol-logo) { min-width: 0; }
+}
+@media (max-width: 479px) {
+  .personal-page .personal-inline-actions > button { flex: 1 1 160px; }
+  .consumer-personal .personal-inline-actions > button { flex: 1 1 160px; }
+}

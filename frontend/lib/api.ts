@@ -9,6 +9,7 @@
  */
 
 import { tracked } from "./warming";
+import { requestJson } from "./reliable-request";
 
 export type Post = {
   id: string;
@@ -18,21 +19,22 @@ export type Post = {
   created_at: string;
 };
 
-export async function fetchFeed(): Promise<Post[]> {
+function checkedPosts(value: unknown): Post[] {
+  if (!Array.isArray(value) || !value.every(row => row && [row.id, row.body, row.author_id, row.author_name, row.created_at].every(field => typeof field === "string") && Number.isFinite(Date.parse(row.created_at)))) {
+    throw new Error("게시글 응답을 확인하지 못했어요. 다시 조회해 주세요.");
+  }
+  return value;
+}
+
+export async function fetchFeed(signal?: AbortSignal): Promise<Post[]> {
   return tracked(async () => {
-    const r = await fetch("/api/feed", { credentials: "include" });
-    if (!r.ok) return [];
-    return r.json();
+    return checkedPosts(await requestJson<unknown>("/api/feed", { credentials: "include", signal, cache: "no-store" }));
   });
 }
 
-export async function fetchUserPosts(userId: string): Promise<Post[]> {
+export async function fetchUserPosts(userId: string, signal?: AbortSignal): Promise<Post[]> {
   return tracked(async () => {
-    const r = await fetch(`/api/users/${userId}/posts`, {
-      credentials: "include",
-    });
-    if (!r.ok) return [];
-    return r.json();
+    return checkedPosts(await requestJson<unknown>(`/api/users/${encodeURIComponent(userId)}/posts`, { credentials: "include", signal, cache: "no-store" }));
   });
 }
 

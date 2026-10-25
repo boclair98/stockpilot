@@ -13,11 +13,19 @@ export function Profile() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [postError, setPostError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!me) return;
-    fetchUserPosts(me.id).then(setPosts);
-  }, [me]);
+    const controller = new AbortController();
+    void fetchUserPosts(me.id, controller.signal).then(items => {
+      if (!controller.signal.aborted) { setPosts(items); setPostError(""); }
+    }).catch(reason => {
+      if (!controller.signal.aborted) setPostError(reason instanceof Error ? reason.message : "게시글을 불러오지 못했어요.");
+    });
+    return () => controller.abort();
+  }, [me, attempt]);
 
   async function removeAccount() {
     if (deleting) return;
@@ -48,11 +56,9 @@ export function Profile() {
   if (me === null) {
     return (
       <div className="space-y-4 pt-4">
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-          Profile
-        </h1>
+        <h2>내 계정을 연결해 주세요</h2>
         <p className="text-[15px] text-muted-foreground">
-          You need to sign in to see this page.
+          로그인하면 내 프로필과 작성한 글을 확인할 수 있어요.
         </p>
         <SignInLink returnTo="/profile" />
       </div>
@@ -62,23 +68,21 @@ export function Profile() {
   return (
     <div className="space-y-12">
       <header className="pt-4">
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+        <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           {me.display_name}
-        </h1>
+        </h2>
         <p className="mt-2 text-[15px] text-muted-foreground">
-          Your app-local profile, mirrored from the coders.kr platform
-          identity on first sight.
+          StockPilot에 연결된 내 계정 정보예요.
         </p>
       </header>
 
       <section className="space-y-4">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Identity
+          계정 정보
         </h2>
         <dl className="divide-y rounded-md border text-[14px]">
-          <Row label="display name">{me.display_name}</Row>
-          <Row label="coders.kr id" mono>{me.coders_id}</Row>
-          <Row label="first seen">
+          <Row label="이름">{me.display_name}</Row>
+          <Row label="처음 이용한 날">
             {new Date(me.first_seen_at).toLocaleString()}
           </Row>
         </dl>
@@ -86,24 +90,25 @@ export function Profile() {
 
       <section className="space-y-4">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Your posts
+          내가 작성한 글
         </h2>
         <ul className="space-y-1">
-          {posts === null && (
+          {postError && <li role="alert"><p>{postError}</p><button type="button" className="profile-retry" onClick={() => setAttempt(value => value + 1)}>다시 조회</button></li>}
+          {posts === null && !postError && (
             <li>
               <Skeleton className="h-16 w-full" />
             </li>
           )}
           {posts && posts.length === 0 && (
             <li className="rounded-md border border-dashed bg-muted/40 px-5 py-6 text-center text-[13px] text-muted-foreground">
-              None yet — head to{" "}
+              아직 작성한 글이 없어요.{" "}
               <Link
-                href="/"
+                href="/lounge"
                 className="font-medium text-foreground underline-offset-4 hover:underline"
               >
-                the feed
+                투자 라운지
               </Link>{" "}
-              and write one.
+              에서 투자 생각을 나눠보세요.
             </li>
           )}
           {posts?.map((p) => (
@@ -124,7 +129,7 @@ export function Profile() {
 
       <section className="space-y-4">
         <h2 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Privacy controls
+          내 데이터 관리
         </h2>
         <div className="rounded-md border bg-muted/20 px-4 py-4">
           <p className="text-[13px] leading-relaxed text-muted-foreground">

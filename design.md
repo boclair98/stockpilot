@@ -262,3 +262,37 @@ Output: integrated production-ready React/CSS/helpers/tests in the existing proj
 ### 실행·검증
 
 기존 build/TypeScript/ESLint·안전성10종에 새 지표/차트/비교 회귀를 더한다. 운영 API는 읽기 전용으로 확인하고 쓰기는 격리 테스트만 한다. 360×800/390×844/768×1024/1440×900 양 테마의 실제 StockPilot 화면을 관찰한다. 참고 사이트 차단을 우회하지 않는다. 공개 전 민감값/기존 사용자 변경 제외를 재확인하며, 게시 권한이 확인된 범위에서만 upstream→fork→Coders→운영검증 순서로 진행한다.
+
+# 2026-10-25 · 전체 페이지 안정성·컨테이너 레이아웃 감사
+
+## 실제 문제·목적과 범위
+- 사용자 제공 운영 스크린샷에서 관심종목 검색/시장/정렬/개수 표시가 좁은 사이드 패널에 맞지 않고, 종목명·가격 행도 어긋난다. `MarketWatchlist`가 전역 `.record-filters` flex 규칙을 사용하며, 공통 `StockRow`에 viewport 기반 grid 규칙과 오래된 sidebar 규칙이 중첩돼 있다.
+- 기존 디자인·인디고 색상·다크 기본값·모의투자 계산·계좌·API는 유지한다. 새 기능을 늘리기보다 시장/관심/상세/주문/자산/기록과 비교·알림·계좌 도구·리그·학습·보조 페이지의 실제 오류를 수정한다. 사용자 `LeagueRooms.tsx` 변경과 artifacts는 건드리지 않는다.
+- 이번 기준 자료는 사용자 스크린샷, 실제 컴포넌트/CSS/테스트, 열려 있는 운영 페이지다. 로컬 브라우저 접근을 막는 기존 저장 정책은 우회하지 않는다. 현재 운영 페이지를 읽고 조작하는 것은 가능하지만, 새 로컬 코드의 시각 검증 가능 여부는 별도로 보고한다.
+
+## OpenUI resolved inputs · 1개 방향
+- Topic: StockPilot 전 페이지의 안정적인 투자 탐색/기록.
+- Offer: 기존 서비스의 필터·금액·상태·이동을 화면 너비에 맞게 정확하게 사용.
+- Audience: 모바일 초보 사용자와 좁은 개인 패널을 병행하는 데스크톱 사용자.
+- Primary user action: 회사명 검색 또는 필터로 종목을 찾고 실제 상세 화면을 연다.
+- Deliverable: 기존 제품 전체 감사 및 실제 재사용 컴포넌트/스타일/동작 회귀 수정. 랜딩 추가 없음.
+- Style direction: 기존 StockPilot 유지, container-aware clear consumer finance.
+- Tonal key: 현재 다크/라이트 모두 읽기 쉬운 명료함.
+- Icon policy: 기존 Lucide.
+- Proof assets: 실제 사용자 스크린샷·운영 DOM·검증된 API 계약. 허구 가격/후기/성과 없음.
+- Motion intensity: 기존 피드백만 유지, reduced-motion 존중.
+
+## Composition contract와 시각 규칙
+- Hero archetype: 기존 작업형 홈 유지. First viewport: 시장 문맥/자산 요약→검색·순위, 관심종목 보조 패널은 독립적인 container.
+- Primary artifact: 실제 종목 행/계좌/기록. Interaction: 검색·시장·정렬·초기화·표시 개수를 각기 안정된 행에 놓고 폭에 따라 재배치. Reuse boundary: 폼과 종목 행의 의미 기반 class만 보완하고 기존 데이터/인증/주문 계약은 보존.
+- 기존 `--ws-*` 의미 토큰, Pretendard, tabular 숫자, 본문14~16px, 입력16px, 44px 조작을 재사용. 인디고 브랜드·빨강 상승·파랑 하락 유지. 카드 padding16~20px, gap8/12/16px. 넘침 숨김/극소 글자로 해결하지 않는다.
+- 좁은 컴포넌트는 검색 한 줄, 시장/정렬 다음 줄, 개수·초기화 별도 줄. 종목 행은 identity와 가격의 공간을 보장하고 필요 시 두 줄로 전환. viewport가 커도 sidebar는 compact 상태여야 한다.
+- 페이지별 CTA는 기존 목적지/처리 함수를 그대로 유지한다. 숫자·통화·잔고·매수/매도·접수/체결 구분과 실패 복구 문구는 삭제하지 않는다.
+
+## Filled master prompt / output target
+Create one integrated repair of StockPilot's existing responsive product, not a new landing page. Topic: real-market simulated-investing discovery, assets and history. Offer: reliable controls and readable rows across narrow desktop panels and mobile screens. Audience: Korean beginner investors and returning desktop users. Primary action: search/filter an instrument and open its working detail. Deliverable: scoped React/CSS and regression tests in the current Next.js stack. Style: preserve StockPilot's current indigo/neutral identity, dark default and accessible light theme. Icons: existing Lucide only. Proof: actual screenshot, operating application DOM and existing API contracts. Motion: feedback only with reduced-motion support. Preserve accounts, data, routes and order rules. Fix layout at the actual component width, separate filter status/actions from fields, maintain readable numbers and long Korean names, and audit all existing destinations for functional errors, empty/loading/error states and navigation. Never fabricate data, hide critical content, overclaim testing or bypass blocked browser permissions. Output the real integrated fixes plus an evidence-based page checklist, build/tests and remaining validation limits.
+
+## 실행·검증
+- 실제 route inventory와 핵심 흐름별 검사표를 작성한다. 공통 관심종목/행/필터/개인 도구 및 확인된 요청 상태 버그를 먼저 해결한다.
+- 격리된 컴포넌트 테스트로 검색·정렬·빈 결과·초기화·저장/삭제 분리·실패/오래된 응답 처리를 검증한다. 운영 쓰기/계좌 초기화는 하지 않는다.
+- 기존 안전성 스크립트 전체, 변경 파일 lint, production build 수행. 운영은 360/390/768/1440px와 양 테마를 실제 관찰하고 새 코드의 미확인 시각 검증은 구분한다.

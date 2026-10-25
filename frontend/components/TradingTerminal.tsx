@@ -55,6 +55,7 @@ import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
 import HoldingsPanel from "./HoldingsPanel";
 import { portfolioRisk } from "@/lib/portfolio-insights";
 import { useCloudSaved } from "@/lib/cloud-saved";
+import { importWatchlist, watchlistImportMessage } from "@/lib/watchlist-import";
 import AdSlot from "./AdSlot";
 import OrderResult, { type OrderResultState } from "./OrderResult";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
@@ -295,6 +296,8 @@ export default function TradingTerminal() {
   const [recentStocks, setRecentStocks] = useState<SearchItem[]>([]);
   const [browserFavorites, setFavoriteStocks] = useState<SearchItem[]>([]);
   const cloudFavorites = useCloudSaved<SearchItem>("FAVORITE");
+  const [importingFavorites, setImportingFavorites] = useState(false);
+  const importFavoritesLock = useRef(false);
   const favoriteStocks=useMemo(()=>cloudFavorites.authenticated===true?cloudFavorites.items.filter(row=>!row.deleted&&isInstrument(row.data)).map(row=>({...row.data,englishName:row.data.englishName||""})):cloudFavorites.authenticated===false?browserFavorites:[],[cloudFavorites.items,cloudFavorites.authenticated,browserFavorites]);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [orderSafetyChecks, setOrderSafetyChecks] = useState<OrderSafetyChecks>(
@@ -1956,7 +1959,20 @@ export default function TradingTerminal() {
               }}
               onRemove={(item) => toggleFavorite({ ...item, englishName: "" })}
             />
-            {cloudFavorites.authenticated===true?<div className="personal-inline-actions"><button type="button" disabled={cloudFavorites.busy} onClick={async()=>{try{const raw=JSON.parse(localStorage.getItem("stockpilot_favorite_stocks_v1")||"[]");if(!Array.isArray(raw)) return;for(const entry of raw.filter(isInstrument).slice(0,12)) {if(!favoriteStocks.some(item=>item.id===entry.id)&&!(await cloudFavorites.save(entry.id,{...entry,englishName:""}))) break;}notify("브라우저 관심종목 가져오기를 마쳤어요. 목록을 확인해 주세요.");}catch{notify("브라우저 저장 기록을 확인하지 못했어요.");}}}>이 브라우저의 관심종목 가져오기</button><button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></div>:null}
+            {cloudFavorites.authenticated === true ? <div className="personal-inline-actions">
+              <button type="button" disabled={cloudFavorites.busy || importingFavorites} onClick={async () => {
+                if (importFavoritesLock.current || cloudFavorites.busy) return;
+                importFavoritesLock.current = true;
+                setImportingFavorites(true);
+                try {
+                  const raw: unknown = JSON.parse(localStorage.getItem("stockpilot_favorite_stocks_v1") || "[]");
+                  const result = await importWatchlist(raw, favoriteStocks.map(item => item.id), item => cloudFavorites.save(item.id, { ...item, englishName: "" }));
+                  notify(watchlistImportMessage(result));
+                } catch { notify("브라우저 저장 기록을 확인하지 못했어요. 기존 기록은 그대로 유지돼요."); }
+                finally { importFavoritesLock.current = false; setImportingFavorites(false); }
+              }}>{importingFavorites ? "관심종목 가져오는 중…" : "이 브라우저의 관심종목 가져오기"}</button>
+              <button type="button" disabled={cloudFavorites.busy || importingFavorites} onClick={cloudFavorites.refresh}>다시 조회</button>
+            </div> : null}
             {cloudFavorites.error?<p className="personal-inline-error" role="alert">{cloudFavorites.error}<button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></p>:null}
             <section className="continue-section">
               <span className="workspace-eyebrow">투자 연습 이어하기</span>

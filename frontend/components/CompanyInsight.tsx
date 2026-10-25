@@ -14,6 +14,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { requestJson } from "@/lib/reliable-request";
 
 type Metric = {
   key: string;
@@ -115,15 +116,16 @@ export default function CompanyInsight({
       setLoading(true);
       setFailed(false);
       const endpoint = market === "US" ? `/api/company/us/${encodeURIComponent(symbol)}` : `/api/company/${symbol}`;
-      fetch(endpoint, {
+      requestJson<CompanyData>(endpoint, {
         cache: "no-store",
         signal: controller.signal,
       })
-        .then(async (response) => {
-          if (!response.ok) throw new Error("company");
-          return response.json();
+        .then((body) => {
+          if (!body || body.symbol !== symbol || typeof body.available !== "boolean"
+            || (body.financials && (!Array.isArray(body.financials.metrics) || !body.financials.metrics.every(metric => metric && Number.isFinite(metric.value) && ["KRW", "USD"].includes(metric.currency) && typeof metric.label === "string")))
+            || (body.disclosures && (!Array.isArray(body.disclosures) || !body.disclosures.every(item => item && [item.title, item.date, item.receiptNo, item.url].every(field => typeof field === "string") && /^https?:\/\//i.test(item.url))))) throw new Error("company");
+          if (!controller.signal.aborted) setData(body);
         })
-        .then(setData)
         .catch(() => {
           if (!controller.signal.aborted) setFailed(true);
         })
@@ -180,7 +182,7 @@ export default function CompanyInsight({
             <article><span><UserRound size={15} /></span><div><small>대표자</small><b>{data.profile?.ceo || "—"}</b></div></article>
             <article><span><CalendarDays size={15} /></span><div><small>설립일</small><b>{dateText(data.profile?.establishedAt)}</b></div></article>
             <article><span><WalletCards size={15} /></span><div><small>결산월</small><b>{data.profile?.fiscalMonth ? `${Number(data.profile.fiscalMonth)}월` : "—"}</b></div></article>
-            {data.profile?.homepage && (
+            {data.profile?.homepage && /^https?:\/\//i.test(data.profile.homepage) && (
               <a className="company-homepage" href={data.profile.homepage} target="_blank" rel="noreferrer">
                 <Globe2 size={14} /> 공식 홈페이지 <ExternalLink size={12} />
               </a>

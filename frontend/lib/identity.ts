@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 
 import { tracked } from "./warming";
+import { requestJson } from "./reliable-request";
 
 export type Me = {
   id: string;
@@ -27,17 +28,16 @@ export type MeState = Me | null | undefined;
 export function useMe(): MeState {
   const [me, setMe] = useState<MeState>(undefined);
   useEffect(() => {
-    let alive = true;
+    const controller = new AbortController();
     tracked(async () => {
-      const r = await fetch("/api/me", { credentials: "include" });
-      if (!alive) return;
-      if (r.ok) setMe(await r.json());
-      else setMe(null);
+      const user = await requestJson<Me>("/api/me", { credentials: "include", signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setMe(user && typeof user.id === "string" && typeof user.display_name === "string" ? user : null);
     }).catch(() => {
-      if (alive) setMe(null);
+      if (!controller.signal.aborted) setMe(null);
     });
     return () => {
-      alive = false;
+      controller.abort();
     };
   }, []);
   return me;

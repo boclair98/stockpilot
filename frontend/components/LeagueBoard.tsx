@@ -18,10 +18,11 @@ import {
   Users,
   Gauge,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { signInHref, useMe } from "@/lib/identity";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import LeagueRooms from "./LeagueRooms";
 import AdSlot from "./AdSlot";
 
@@ -57,6 +58,19 @@ type LeagueData = {
 
 const rate = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
+function validLeague(value: unknown): value is LeagueData {
+  if (!value || typeof value !== "object") return false;
+  const body = value as LeagueData;
+  const validRank = (row: Ranking) => row && Number.isInteger(row.rank) && row.rank > 0
+    && typeof row.nickname === "string" && Number.isFinite(row.returnRate)
+    && Number.isInteger(row.rankChange) && typeof row.isMe === "boolean";
+  return typeof body.title === "string" && Number.isInteger(body.participantCount) && body.participantCount >= 0
+    && typeof body.asOf === "string" && Number.isFinite(Date.parse(body.asOf))
+    && Array.isArray(body.rankings) && body.rankings.length <= 100 && body.rankings.every(validRank)
+    && Boolean(body.me && typeof body.me.joined === "boolean" && (!body.me.joined || validRank({ ...body.me, isMe: true })))
+    && Boolean(body.rules && [body.rules.startingCapital, body.rules.scoring, body.rules.privacy, body.rules.trading].every(text => typeof text === "string"));
+}
+
 function RankChange({ value }: { value: number }) {
   if (value > 0) {
     return <span className="rank-change up-rank"><ChevronUp size={13} />{value}</span>;
@@ -73,66 +87,93 @@ export default function LeagueBoard() {
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [readError, setReadError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const active = useRef<AbortController | null>(null);
+  const mutationLock = useRef(false);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/league/rankings", {
-      credentials: "include",
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error("리그 순위를 불러오지 못했습니다.");
-    setData(await response.json());
+    if (mutationLock.current) return;
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setRefreshing(true);
+    try {
+      const body = await requestJson<unknown>("/api/league/rankings", { credentials: "include", cache: "no-store", signal: controller.signal });
+      if (!validLeague(body)) throw new Error("순위 응답을 확인하지 못했어요. 다시 조회해 주세요.");
+      if (!controller.signal.aborted) { setData(body); setReadError(""); }
+    } catch (reason) {
+      if (!controller.signal.aborted) setReadError(reason instanceof Error ? reason.message : "순위를 불러오지 못했어요.");
+    } finally {
+      if (active.current === controller) { active.current = null; setRefreshing(false); }
+    }
   }, []);
 
   useEffect(() => {
     const initial = window.setTimeout(() => {
-      load().catch((reason) => setError(reason.message));
+      void load();
     }, 0);
     const timer = window.setInterval(() => {
-      load().catch(() => undefined);
+      if (!document.hidden && !active.current) void load();
     }, 15_000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
+      active.current?.abort();
     };
   }, [load]);
 
   async function join(event: FormEvent) {
     event.preventDefault();
+    if (mutationLock.current) return;
+    mutationLock.current = true;
+    active.current?.abort();
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/league/join", {
+      const body = await requestJson<unknown>("/api/league/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ nickname: nickname.trim() || null }),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || "리그 참여에 실패했습니다.");
+      if (!validLeague(body)) throw new Error("참여 결과를 확인하지 못했어요. 순위를 새로 조회해 주세요.");
       setData(body);
+      setReadError("");
       setNickname("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "다시 시도해 주세요.");
+      setError(reason instanceof ApiRequestError && reason.uncertain ? "참여 결과를 확인하지 못했어요. 다시 참여하기 전에 순위를 새로 조회해 주세요." : reason instanceof Error ? reason.message : "다시 시도해 주세요.");
     } finally {
       setBusy(false);
+      mutationLock.current = false;
     }
   }
 
   async function leave() {
+    if (mutationLock.current) return;
     if (!window.confirm("리그에서 나갈까요? 가상투자 기록은 그대로 유지됩니다.")) return;
+    mutationLock.current = true;
+    active.current?.abort();
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/league/join", {
+      // DELETE may return an empty body. The GET below confirms the new state.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      let response: Response;
+      try { response = await fetch("/api/league/join", {
         method: "DELETE",
         credentials: "include",
-      });
+        signal: controller.signal,
+      }); } finally { clearTimeout(timeout); }
       if (!response.ok) throw new Error("리그 나가기에 실패했습니다.");
+      mutationLock.current = false;
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "다시 시도해 주세요.");
     } finally {
       setBusy(false);
+      mutationLock.current = false;
     }
   }
 
@@ -180,14 +221,15 @@ export default function LeagueBoard() {
               <p>LIVE RANKING</p>
               <h2>실시간 수익률 순위</h2>
             </div>
-            <button onClick={() => load().catch(() => undefined)} aria-label="순위 새로고침">
+            <button onClick={() => void load()} disabled={refreshing || busy} aria-label="순위 새로고침">
               <RefreshCw size={16} />
             </button>
           </div>
 
-          {!data ? (
+          {readError && <div className="league-read-error" role="alert"><p>{readError}</p>{data && <p>이전 조회 결과를 유지하고 있어요. 아래 기준 시각을 확인해 주세요.</p>}<button type="button" disabled={refreshing || busy} onClick={() => void load()}>다시 조회</button></div>}
+          {!data && !readError ? (
             <div className="league-loading"><RefreshCw className="spin" size={20} /> 순위를 계산하고 있어요</div>
-          ) : data.rankings.length === 0 ? (
+          ) : !data ? null : data.rankings.length === 0 ? (
             <div className="league-empty">
               <span>🏁</span>
               <b>아직 첫 참가자를 기다리고 있어요</b>

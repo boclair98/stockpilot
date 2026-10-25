@@ -19,10 +19,18 @@ export function Feed() {
   const [postError, setPostError] = useState<string | null>(null);
   const [bodyLen, setBodyLen] = useState(0);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const [readError, setReadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetchFeed().then(setFeed);
-  }, []);
+    const controller = new AbortController();
+    void fetchFeed(controller.signal).then(items => {
+      if (!controller.signal.aborted) { setFeed(items); setReadError(""); }
+    }).catch(reason => {
+      if (!controller.signal.aborted) setReadError(reason instanceof Error ? reason.message : "게시글을 불러오지 못했어요.");
+    });
+    return () => controller.abort();
+  }, [attempt]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -109,7 +117,8 @@ export function Feed() {
           Recent
         </h2>
         <ul className="space-y-1">
-          {feed === null && <FeedLoading />}
+          {readError && <li role="alert"><p>{readError}</p><Button type="button" onClick={() => setAttempt(value => value + 1)}>다시 조회</Button></li>}
+          {feed === null && !readError && <FeedLoading />}
           {feed && feed.length === 0 && (
             <li className="rounded-md border border-dashed bg-muted/40 px-5 py-8 text-center">
               <MessageSquare className="mx-auto size-5 text-muted-foreground" />

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Ban, Clock3, Flag, LogIn, MessageCircle, RefreshCw, Send, ShieldCheck, Sparkles, Trash2, Users } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { blockUser, createPost, deletePost, fetchFeed, reportPost, type Post } from "@/lib/api";
 import { signInHref, useMe } from "@/lib/identity";
@@ -30,33 +30,35 @@ export default function CommunityLounge() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [readError, setReadError] = useState("");
+  const activeRead = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    activeRead.current?.abort();
+    const controller = new AbortController();
+    activeRead.current = controller;
     setLoading(true);
     try {
-      setPosts(await fetchFeed());
+      const items = await fetchFeed(controller.signal);
+      if (!controller.signal.aborted) { setPosts(items); setReadError(""); }
+    } catch (reason) {
+      if (!controller.signal.aborted) setReadError(reason instanceof Error ? reason.message : "이야기를 불러오지 못했어요.");
     } finally {
-      setLoading(false);
+      if (activeRead.current === controller) { activeRead.current = null; setLoading(false); }
     }
   }, []);
 
   useEffect(() => {
-    let active = true;
-    void fetchFeed()
-      .then((items) => {
-        if (active) setPosts(items);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const initial = window.setTimeout(() => void load(), 0);
     const timer = window.setInterval(() => {
-      if (!document.hidden) void fetchFeed().then(setPosts);
+      if (!document.hidden && !activeRead.current) void load();
     }, 30_000);
     return () => {
-      active = false;
+      activeRead.current?.abort();
+      window.clearTimeout(initial);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [load]);
 
   const writers = useMemo(() => new Set(posts.map((post) => post.author_id)).size, [posts]);
 
@@ -186,9 +188,10 @@ export default function CommunityLounge() {
             <button type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? "spin" : ""} /> 새로고침</button>
           </div>
           {message && <p className="lounge-message" role="status">{message}</p>}
+          {readError && <div className="lounge-message" role="alert"><p>{readError}</p>{posts.length > 0 && <p>이전 조회 결과를 표시하고 있어요.</p>}<button type="button" disabled={loading} onClick={() => void load()}>다시 불러오기</button></div>}
           <div className="lounge-feed">
             {loading && posts.length === 0 ? [1, 2, 3].map((item) => <div className="lounge-post lounge-post-skeleton" key={item} />) : null}
-            {!loading && posts.length === 0 ? (
+            {!loading && !readError && posts.length === 0 ? (
               <div className="lounge-empty"><MessageCircle size={30} /><b>첫 번째 이야기를 기다리고 있어요</b><p>오늘의 투자 원칙이나 배운 점을 가볍게 남겨 보세요.</p></div>
             ) : null}
             {posts.map((post) => (

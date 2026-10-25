@@ -1,0 +1,141 @@
+/* The same watchlist appears in a narrow desktop sidebar and a full page.
+   Its container, not the device viewport, decides the composition. */
+.consumer-app .watchlist-board {
+  container: watchlist / inline-size;
+  min-width: 0;
+}
+.consumer-app .watchlist-board .favorite-board-head {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.consumer-app .watchlist-board .favorite-board-head > div { min-width: 0; }
+.consumer-app .watchlist-board .favorite-board-head > small {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--ws-muted);
+  background: var(--ws-soft);
+}
+.watchlist-toolbar { min-width: 0; padding: 8px 16px 12px; }
+.watchlist-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 12px;
+}
+.watchlist-fields label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ws-ink);
+}
+.watchlist-fields .watchlist-query { grid-column: 1 / -1; }
+.watchlist-fields :is(input, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+  font: inherit;
+  font-size: 16px;
+}
+.watchlist-scope {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+  min-height: 32px;
+}
+.watchlist-scope small { font-size: 13px; line-height: 1.6; color: var(--ws-muted); }
+.watchlist-scope button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+  background: transparent;
+  color: var(--ws-brand);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.watchlist-toolbar :is(input, select, button):focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 3px;
+}
+.consumer-app .watchlist-board .watchlist-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  overflow: visible;
+  padding: 0;
+  gap: 0;
+}
+.consumer-app .watchlist-board .watchlist-rows > p {
+  padding: 16px;
+  margin: 0;
+  color: var(--ws-muted);
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+/* Explicit identity/quote placement also cancels legacy viewport grid columns. */
+.consumer-app .consumer-personal .watchlist-board .watchlist-rows .stock-row-open {
+  grid-template-columns: 32px minmax(0, 1fr) minmax(90px, max-content);
+  gap: 10px;
+  padding: 12px 4px 12px 16px;
+  min-height: 76px;
+}
+.consumer-app .watchlist-board .watchlist-rows .rank-identity { grid-column: 2; grid-row: 1; }
+.consumer-app .watchlist-board .watchlist-rows .rank-identity b {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.consumer-app .watchlist-board .watchlist-rows .rank-identity small { font-size: 12px; }
+.consumer-app .watchlist-board .watchlist-rows .rank-price {
+  grid-column: 3;
+  grid-row: 1;
+  display: grid;
+  text-align: right;
+  gap: 4px;
+}
+.consumer-app .watchlist-board .stock-row-save {
+  flex: 0 0 44px;
+  width: 44px;
+  min-height: 44px;
+  margin-right: 4px;
+}
+@container watchlist (min-width: 650px) {
+  .watchlist-fields { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.35fr); }
+  .watchlist-fields .watchlist-query { grid-column: auto; }
+}
+@container watchlist (max-width: 430px) {
+  .consumer-app .consumer-personal .watchlist-board .watchlist-rows .stock-row-open {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 4px 10px;
+  }
+  .consumer-app .watchlist-board .watchlist-rows .symbol-logo { grid-column: 1; grid-row: 1 / 3; }
+  .consumer-app .watchlist-board .watchlist-rows .rank-price {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    text-align: left;
+    gap: 4px 10px;
+  }
+}
+@container watchlist (max-width: 300px) {
+  .watchlist-fields { grid-template-columns: minmax(0, 1fr); }
+}

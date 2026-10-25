@@ -19,13 +19,14 @@ import {
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { signInHref } from "@/lib/identity";
 import FinancialSafetyReport, { type FinancialSafetyData } from "@/components/FinancialSafetyReport";
 import InvestmentLicense, { type InvestmentLicenseData } from "@/components/InvestmentLicense";
 import PortfolioAnalytics from "@/components/PortfolioAnalytics";
 import AdSlot from "@/components/AdSlot";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 
 type Choice = "BUY" | "HOLD" | "SELL";
 type Challenge = {
@@ -142,6 +143,9 @@ export default function GrowthHub() {
   const [data, setData] = useState<GrowthData | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [readError, setReadError] = useState("");
+  const activeRead = useRef<AbortController | null>(null);
+  const writing = useRef(false);
   const [journalStock, setJournalStock] = useState("");
   const [thesis, setThesis] = useState("");
   const [horizon, setHorizon] = useState<"DAY" | "WEEK" | "MONTH" | "LONG">("WEEK");
@@ -153,21 +157,30 @@ export default function GrowthHub() {
   const [outcome, setOutcome] = useState<"WIN" | "LOSS" | "EVEN" | "OPEN">("OPEN");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/growth/overview", {
+    activeRead.current?.abort();
+    const controller = new AbortController();
+    activeRead.current = controller;
+    try {
+    const next = await requestJson<GrowthData>("/api/growth/overview", {
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
-    if (!response.ok) throw new Error("성장 허브를 불러오지 못했습니다.");
-    const next: GrowthData = await response.json();
+    if (!next || !next.challenge || typeof next.challenge.available !== "boolean" || ![next.recentOrders,next.journals,next.badges].every(Array.isArray)) throw new Error("성장 기록의 응답을 확인하지 못했어요.");
+    if (controller.signal.aborted) return;
     setData(next);
+    setReadError("");
     if (next.recentOrders[0]) {
       setJournalStock((current) => current || `${next.recentOrders[0].symbol}|${next.recentOrders[0].exchange}`);
     }
+    } catch (reason) {
+      if (!controller.signal.aborted) setReadError(reason instanceof Error ? reason.message : "성장 기록을 불러오지 못했어요.");
+    } finally { if (activeRead.current === controller) activeRead.current = null; }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load().catch((error) => setNotice(error.message)), 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); activeRead.current?.abort(); };
   }, [load]);
 
   async function request(url: string, options: RequestInit) {
@@ -175,24 +188,25 @@ export default function GrowthHub() {
       window.location.assign(signInHref("/growth"));
       return null;
     }
+    if (writing.current) return null;
+    writing.current = true;
     setBusy(true);
     setNotice("");
     try {
-      const response = await fetch(url, {
+      const body = await requestJson<GrowthData>(url, {
         ...options,
         credentials: "include",
         headers: { "Content-Type": "application/json", ...options.headers },
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || "요청을 처리하지 못했습니다.");
-      if (body.challenge) setData(body);
+      if (body.challenge && Array.isArray(body.journals) && Array.isArray(body.recentOrders)) setData(body);
       else await load();
       return body;
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
+      setNotice(error instanceof ApiRequestError && error.uncertain ? "처리 결과를 확인하지 못했어요. 같은 요청을 다시 보내기 전에 기록을 새로 조회해 주세요." : error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
       return null;
     } finally {
       setBusy(false);
+      writing.current = false;
     }
   }
 
@@ -294,6 +308,7 @@ export default function GrowthHub() {
       </section>
 
       {notice && <div className="growth-notice">{notice}</div>}
+      {readError && <div className="growth-notice" role="alert"><p>{readError}</p>{data && <p>이전에 불러온 기록을 표시하고 있어요.</p>}<button type="button" className="audit-retry" onClick={() => void load()}>다시 조회</button></div>}
 
       {data?.license && (
         <InvestmentLicense authenticated={data.authenticated} data={data.license} />
@@ -316,9 +331,9 @@ export default function GrowthHub() {
             <div><p>TODAY&apos;S 5 MIN</p><h2>오늘의 익명 차트</h2></div>
             <em>{data?.challenge.market === "US" ? "미국 시장" : "한국 시장"}</em>
           </div>
-          {!data ? (
+          {!data && !readError ? (
             <div className="growth-loading"><RefreshCw className="spin" size={19} /> 문제를 준비하고 있어요</div>
-          ) : !data.challenge.available ? (
+          ) : !data ? null : !data.challenge.available ? (
             <div className="growth-loading">KIS 과거 시세를 준비하고 있어요. 잠시 후 다시 확인해 주세요.</div>
           ) : (
             <>

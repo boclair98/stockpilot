@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { requestJson } from "@/lib/reliable-request";
+import { parseStockHistory, type StockHistoryPoint } from "@/lib/stock-chart";
+import { practiceQuantity } from "@/lib/practice-validation";
 
 type Currency = "KRW" | "USD";
 type Preset = {
@@ -20,14 +23,7 @@ type Preset = {
   currency: Currency;
   exchange: string;
 };
-type Candle = {
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
+type Candle = StockHistoryPoint;
 type Trade = {
   side: "BUY" | "SELL";
   date: string;
@@ -60,41 +56,55 @@ export default function PracticeLab() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [loadedPreset, setLoadedPreset] = useState("");
+  const presetId = `${preset.market}:${preset.exchange}:${preset.symbol}`;
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoading(true);
+      setLoadError("");
       try {
         const params = new URLSearchParams({
           symbol: preset.symbol,
           market: preset.market,
           exchange: preset.exchange,
         });
-        const response = await fetch(`/api/features/history?${params}`, {
+        const body = await requestJson<unknown>(`/api/features/history?${params}`, {
           cache: "no-store",
           signal: controller.signal,
         });
-        const body = response.ok ? await response.json() : { items: [] };
+        const history = parseStockHistory(body, preset);
         if (controller.signal.aborted) return;
-        setItems(body.items);
-        setIndex(Math.min(9, Math.max(body.items.length - 1, 0)));
+        setItems(history.points);
+        setIndex(Math.min(9, Math.max(history.points.length - 1, 0)));
         setCash(preset.currency === "KRW" ? 10_000_000 : 10_000);
         setPosition(0);
         setAveragePrice(0);
         setTrades([]);
         setNotice("");
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          setItems([]);
+          setLoadError(reason instanceof Error ? reason.message : "과거 시세를 불러오지 못했어요.");
+        }
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoadedPreset(presetId);
+          setLoading(false);
+        }
       }
     }, 0);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [preset]);
+  }, [preset, presetId, attempt]);
 
-  const current = items[index];
+  const pending = loading || loadedPreset !== presetId;
+  const current = pending ? undefined : items[index];
   const visible = useMemo(() => items.slice(0, index + 1), [items, index]);
   const chartPoints = useMemo(() => {
     if (!visible.length) return "";
@@ -114,8 +124,12 @@ export default function PracticeLab() {
   const finished = Boolean(items.length && index >= items.length - 1);
 
   function trade(side: "BUY" | "SELL") {
-    if (!current) return;
-    const count = Math.max(1, Number(quantity) || 1);
+    if (!current || pending) return;
+    const count = practiceQuantity(quantity);
+    if (count === null) {
+      setNotice("수량은 1주부터 10,000주까지 정수로 입력해 주세요.");
+      return;
+    }
     const total = current.close * count;
     const fee = total * 0.00015;
     const tax = side === "SELL" && preset.currency === "KRW" ? total * 0.002 : 0;
@@ -176,15 +190,15 @@ export default function PracticeLab() {
         {presets.map((item) => <button className={preset.symbol === item.symbol ? "active" : ""} key={item.symbol} onClick={() => setPreset(item)}><b>{item.name}</b><small>{item.symbol} · {item.market}</small></button>)}
       </section>
 
-      {loading ? (
+      {pending ? (
         <div className="practice-loading"><RefreshCw className="spin" size={20} /> 과거 시세를 준비하고 있어요</div>
       ) : !current ? (
-        <div className="practice-loading">KIS에서 연습용 과거 시세를 불러오지 못했어요.</div>
+        <div className="practice-loading" role={loadError ? "alert" : "status"}><p>{loadError || "이 종목의 과거 시세가 아직 없어요."}</p><button type="button" className="reset-replay" onClick={() => setAttempt(value => value + 1)}>다시 불러오기</button></div>
       ) : (
         <section className="practice-grid">
           <div className="replay-market">
             <div className="replay-head">
-              <span><small>현재 공개된 날짜</small><b>{current.date.slice(0, 4)}.{current.date.slice(4, 6)}.{current.date.slice(6, 8)}</b></span>
+              <span><small>현재 공개된 날짜</small><b>{current.date.replaceAll("-", ".")}</b></span>
               <span><small>종가</small><strong>{money(current.close, preset.currency)}</strong></span>
             </div>
             <div className="replay-chart">
@@ -192,10 +206,10 @@ export default function PracticeLab() {
               <span>이후 가격은 아직 공개되지 않았어요</span>
             </div>
             <div className="ohlc">
-              <span>시가 <b>{money(current.open, preset.currency)}</b></span>
-              <span>고가 <b>{money(current.high, preset.currency)}</b></span>
-              <span>저가 <b>{money(current.low, preset.currency)}</b></span>
-              <span>거래량 <b>{new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(current.volume)}</b></span>
+              <span>시가 <b>{current.open === null ? "—" : money(current.open, preset.currency)}</b></span>
+              <span>고가 <b>{current.high === null ? "—" : money(current.high, preset.currency)}</b></span>
+              <span>저가 <b>{current.low === null ? "—" : money(current.low, preset.currency)}</b></span>
+              <span>거래량 <b>{current.volume === null ? "—" : new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(current.volume)}</b></span>
             </div>
             <button className="next-day" disabled={finished} onClick={nextDay}>{finished ? "연습 종료" : "다음 거래일 공개"} <ArrowRight size={15} /></button>
           </div>
@@ -211,9 +225,9 @@ export default function PracticeLab() {
               <span><small>보유 수량</small><b>{position}주</b></span>
               <span><small>평균 단가</small><b>{position ? money(averagePrice, preset.currency) : "—"}</b></span>
             </div>
-            <label>연습 주문 수량<input type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+            <label>연습 주문 수량<input type="number" min="1" max="10000" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
             <div className="replay-actions"><button onClick={() => trade("BUY")}>가상매수</button><button onClick={() => trade("SELL")}>가상매도</button></div>
-            {notice && <p className="replay-notice">{notice}</p>}
+            {notice && <p className="replay-notice" role="status">{notice}</p>}
             <button className="reset-replay" onClick={reset}><RotateCcw size={13} /> 처음부터 다시</button>
             <div className="replay-trades">
               <b>연습 거래 기록</b>

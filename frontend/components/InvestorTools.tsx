@@ -28,6 +28,7 @@ import {
   listenForForegroundPush,
   restoreBrowserPush,
 } from "@/lib/firebase-push";
+import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -119,9 +120,10 @@ function Sparkline({ values }: { values: number[] }) {
       })
       .join(" ");
   }, [values]);
+  if (!values.length) return <p className="tool-empty">기록이 쌓이면 수익률 흐름을 확인할 수 있어요.</p>;
   return (
     <svg className="report-sparkline" viewBox="0 0 100 48" preserveAspectRatio="none">
-      <polyline points={points || "0,40 100,40"} />
+      <polyline points={points} />
     </svg>
   );
 }
@@ -145,6 +147,10 @@ export default function InvestorTools({
   focusAlertsKey: number;
 }) {
   const [data, setData] = useState<Dashboard | null>(null);
+  const [dashboardError, setDashboardError] = useState("");
+  const [newsError, setNewsError] = useState("");
+  const dashboardRead = useRef<AbortController | null>(null);
+  const writeLock = useRef(false);
   const [activeTab, setActiveTab] = useState<"WATCH" | "REPORT" | "MISSION" | "NEWS">("WATCH");
   const [targetPrice, setTargetPrice] = useState("");
   const [direction, setDirection] = useState<"ABOVE" | "BELOW">("ABOVE");
@@ -160,6 +166,8 @@ export default function InvestorTools({
   const [thisDeviceEnabled, setThisDeviceEnabled] = useState(false);
   const seenTriggered = useRef<Set<string> | null>(null);
   const alertSelectionKey = useRef("");
+  const alertSelection = useRef(selected);
+  const selectedAlertIdentity = selected ? `${selected.market}:${selected.exchange}:${selected.symbol}` : "";
   const newsSelectionKey = useRef("");
   const onNoticeRef = useRef(onNotice);
   const onAlertSummaryRef = useRef(onAlertSummary);
@@ -170,13 +178,19 @@ export default function InvestorTools({
   }, [onAlertSummary, onNotice]);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/features/dashboard", {
+    dashboardRead.current?.abort();
+    const controller = new AbortController();
+    dashboardRead.current = controller;
+    try {
+    const next = await requestJson<Dashboard>("/api/features/dashboard", {
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
-    if (!response.ok) return;
-    const next: Dashboard = await response.json();
+    if (!next || typeof next.authenticated !== "boolean" || ![next.alerts,next.watchlist,next.missions].every(Array.isArray) || !next.push || !Number.isFinite(next.unreadAlerts)) throw new Error("투자 도구 응답을 확인하지 못했어요. 다시 조회해 주세요.");
+    if (controller.signal.aborted) return;
     setData(next);
+    setDashboardError("");
     onAlertSummaryRef.current({
       unread: next.unreadAlerts,
       pushConfigured: next.push.configured,
@@ -196,14 +210,20 @@ export default function InvestorTools({
       }
     }
     seenTriggered.current = new Set(triggered.map((item) => item.id));
+    } catch (reason) {
+      if (!controller.signal.aborted) setDashboardError(reason instanceof Error ? reason.message : "투자 도구를 불러오지 못했어요.");
+    } finally {
+      if (dashboardRead.current === controller) dashboardRead.current = null;
+    }
   }, []);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => void load(), 15_000);
+    const timer = window.setInterval(() => { if (!document.hidden && !dashboardRead.current) void load(); }, 15_000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
+      dashboardRead.current?.abort();
     };
   }, [load]);
 
@@ -226,7 +246,7 @@ export default function InvestorTools({
     }).then((stop) => {
       if (active) unsubscribe = stop;
       else stop();
-    });
+    }).catch(() => { /* Missing browser messaging support must not break the page. */ });
     return () => {
       active = false;
       unsubscribe();
@@ -234,26 +254,18 @@ export default function InvestorTools({
   }, [load]);
 
   const registerToken = useCallback(async (token: string) => {
-    const response = await fetch("/api/features/push/devices", {
+    await requestJson<unknown>("/api/features/push/devices", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.detail || "푸시 알림 기기를 등록하지 못했어요.");
-    }
   }, []);
 
   useEffect(() => {
-    if (
-      !authenticated ||
-      typeof window === "undefined" ||
-      localStorage.getItem("stockpilot_push_enabled") !== "1"
-    ) {
-      return;
-    }
+    if (!authenticated || typeof window === "undefined") return;
+    try { if (localStorage.getItem("stockpilot_push_enabled") !== "1") return; }
+    catch { return; } // Storage may be blocked; the user can enable push manually.
     let active = true;
     void restoreBrowserPush()
       .then(async (token) => {
@@ -281,23 +293,23 @@ export default function InvestorTools({
         .getElementById("investor-tools")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
       if (!authenticated || !data?.unreadAlerts) return;
-      void fetch("/api/features/alerts/read", {
+      void requestJson<unknown>("/api/features/alerts/read", {
         method: "POST",
         credentials: "include",
-      }).then(() => void load());
+      }).then(() => void load()).catch(() => onNoticeRef.current("알림 읽음 상태를 저장하지 못했어요. 다시 확인해 주세요."));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [authenticated, data?.unreadAlerts, focusAlertsKey, load]);
 
+  useEffect(() => { alertSelection.current = selected; }, [selected]);
   useEffect(() => {
-    if (!selected) return;
-    const nextKey = `${selected.market}:${selected.exchange}:${selected.symbol}`;
-    if (alertSelectionKey.current === nextKey) return;
-    alertSelectionKey.current = nextKey;
-    const initialPrice = selected.price;
+    if (!selectedAlertIdentity || !alertSelection.current) return;
+    if (alertSelectionKey.current === selectedAlertIdentity) return;
+    alertSelectionKey.current = selectedAlertIdentity;
+    const initialPrice = alertSelection.current.price;
     const timer = window.setTimeout(() => setTargetPrice(String(initialPrice)), 0);
     return () => window.clearTimeout(timer);
-  }, [selected]);
+  }, [selectedAlertIdentity]);
 
   const newsSymbol = selected?.symbol;
   const newsMarket = selected?.market;
@@ -316,11 +328,13 @@ export default function InvestorTools({
     if (selectionChanged) {
       setNews([]);
       setNewsUpdatedAt(null);
+      setNewsError("");
     }
 
     const loadNews = async (initial: boolean) => {
       controller?.abort();
-      controller = new AbortController();
+      const request = new AbortController();
+      controller = request;
       if (initial) setNewsLoading(true);
       else setNewsRefreshing(true);
       try {
@@ -329,26 +343,26 @@ export default function InvestorTools({
           market: newsMarket,
           exchange: newsExchange,
         });
-        const response = await fetch(`/api/features/news?${params}`, {
+        const body = await requestJson<{items: NewsItem[]; refreshedAt?: string | null}>(`/api/features/news?${params}`, {
           cache: "no-store",
-          signal: controller.signal,
+          signal: request.signal,
         });
-        const body = response.ok
-          ? await response.json()
-          : { items: [], refreshedAt: null };
-        if (active && !controller.signal.aborted) {
+        if (!Array.isArray(body?.items) || !body.items.every(item => item && typeof item.id === "string" && typeof item.title === "string")) throw new Error("뉴스 응답을 확인하지 못했어요.");
+        if (active && !request.signal.aborted) {
           setNews(body.items);
-          setNewsUpdatedAt(body.refreshedAt || new Date().toISOString());
+          setNewsUpdatedAt(typeof body.refreshedAt === "string" && Number.isFinite(Date.parse(body.refreshedAt)) ? body.refreshedAt : null);
+          setNewsError("");
         }
-      } catch (reason) {
+      } catch {
         if (
           active &&
-          !(reason instanceof DOMException && reason.name === "AbortError")
+          !request.signal.aborted
         ) {
+          setNewsError("뉴스를 갱신하지 못했어요. 다시 갱신해 주세요.");
           onNoticeRef.current("뉴스를 갱신하지 못했어요. 잠시 후 다시 시도할게요.");
         }
       } finally {
-        if (active && !controller.signal.aborted) {
+        if (active && !request.signal.aborted) {
           setNewsLoading(false);
           setNewsRefreshing(false);
         }
@@ -369,21 +383,22 @@ export default function InvestorTools({
       location.href = "/api/auth/google/login?return_to=%2F";
       return;
     }
+    if (writeLock.current) return;
+    writeLock.current = true;
     setBusy(true);
     try {
-      const response = await fetch(url, {
+      await requestJson<unknown>(url, {
         ...options,
         credentials: "include",
         headers: { "Content-Type": "application/json", ...options.headers },
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || "요청을 처리하지 못했어요.");
       await load();
       onNotice(message);
     } catch (reason) {
-      onNotice(reason instanceof Error ? reason.message : "잠시 후 다시 시도해 주세요.");
+      onNotice(reason instanceof ApiRequestError && reason.uncertain ? "처리 결과를 확인하지 못했어요. 같은 요청을 다시 보내기 전에 목록을 확인해 주세요." : reason instanceof Error ? reason.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 
@@ -406,6 +421,12 @@ export default function InvestorTools({
   async function addAlert(event: FormEvent) {
     event.preventDefault();
     if (!selected || !targetPrice) return;
+    const target = Number(targetPrice);
+    const scaled = target * (selected.currency === "KRW" ? 1 : 100);
+    if (!Number.isFinite(target) || target <= 0 || target > 1_000_000_000_000 || Math.abs(scaled - Math.round(scaled)) > 0.000001) {
+      onNotice(selected.currency === "KRW" ? "목표가는 0원보다 큰 정수로 입력해 주세요." : "목표가는 0달러보다 크고 소수점 둘째 자리까지 입력해 주세요.");
+      return;
+    }
     await mutate(
       "/api/features/alerts",
       {
@@ -415,7 +436,7 @@ export default function InvestorTools({
           market: selected.market,
           exchange: selected.exchange,
           direction,
-          targetPrice: Number(targetPrice),
+          targetPrice: target,
         }),
       },
       `${selected.name} 가격 알림을 만들었어요.`,
@@ -423,6 +444,7 @@ export default function InvestorTools({
   }
 
   async function togglePush() {
+    if (writeLock.current) return;
     if (!authenticated) {
       location.href = "/api/auth/google/login?return_to=%2F";
       return;
@@ -432,24 +454,25 @@ export default function InvestorTools({
       return;
     }
     setBusy(true);
+    writeLock.current = true;
     try {
       if (thisDeviceEnabled) {
         const token = await disableBrowserPush();
         if (token) {
-          await fetch("/api/features/push/devices/remove", {
+          await requestJson<unknown>("/api/features/push/devices/remove", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ token }),
           });
         }
-        localStorage.removeItem("stockpilot_push_enabled");
+        try { localStorage.removeItem("stockpilot_push_enabled"); } catch { /* The server/device result remains authoritative. */ }
         setThisDeviceEnabled(false);
         onNotice("이 브라우저의 푸시 알림을 껐어요.");
       } else {
         const token = await enableBrowserPush();
         await registerToken(token);
-        localStorage.setItem("stockpilot_push_enabled", "1");
+        try { localStorage.setItem("stockpilot_push_enabled", "1"); } catch { /* This session can still receive notifications. */ }
         setPushPermission("granted");
         setThisDeviceEnabled(true);
         onNotice("푸시 알림을 켰어요. 목표가에 도달하면 알려드릴게요.");
@@ -464,6 +487,7 @@ export default function InvestorTools({
       );
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 
@@ -496,15 +520,16 @@ export default function InvestorTools({
         </button>
       </div>
 
+      {dashboardError && <div className="tool-read-error" role="alert"><p>{dashboardError}</p>{data && <p>이전에 불러온 기록을 표시하고 있어요.</p>}<button type="button" disabled={busy} onClick={() => void load()}>다시 조회</button></div>}
       {!authenticated ? (
         <div className="tools-login">
           <span>🧭</span>
           <div><b>로그인하면 나만의 투자 도구가 열려요</b><p>관심종목, 가격 알림, 리포트와 미션이 계정에 저장됩니다.</p></div>
           <a href="/api/auth/google/login?return_to=%2F">Google로 시작하기</a>
         </div>
-      ) : !data ? (
+      ) : !data && !dashboardError ? (
         <div className="company-loading"><RefreshCw className="spin" size={18} /> 투자 도구를 준비하고 있어요</div>
-      ) : activeTab === "WATCH" ? (
+      ) : !data ? null : activeTab === "WATCH" ? (
         <div className="watch-tools-grid">
           <div className="saved-watchlist">
             <div className="tool-card-title">
@@ -636,6 +661,7 @@ export default function InvestorTools({
               </button>
             </span>
           </div>
+          {newsError && <p role="alert" className="tool-read-error">{newsError}{news.length ? " 이전 뉴스는 아래에 유지하고 있어요." : ""}</p>}
           {newsLoading ? (
             <div className="company-loading"><RefreshCw className="spin" size={16} /> 뉴스를 불러오고 있어요</div>
           ) : news.length ? (
@@ -647,9 +673,9 @@ export default function InvestorTools({
                 </article>
               ))}
             </div>
-          ) : (
+          ) : !newsError ? (
             <p className="tool-empty">현재 KIS에서 조회된 이 종목의 뉴스가 없어요.</p>
-          )}
+          ) : null}
           <p className="news-note">한국투자증권 KIS 제공 · 뉴스 제목은 정보 확인용이며 투자 권유가 아닙니다.</p>
         </div>
       ) : (
