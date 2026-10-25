@@ -36,6 +36,7 @@ html[data-private="true"] .trade-calendar-summary dd { filter: blur(7px); user-s
 .trade-calendar [data-sign="down"] { color: var(--ws-down); }
 .trade-calendar-state, .trade-calendar-note { margin: 12px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere; }
 .trade-calendar-state { padding: 16px 0; font-size: 14px; }
+.trade-calendar > .trade-calendar-body.trade-calendar-state { margin: 0; padding: 20px 16px; }
 .trade-calendar-state p { margin: 0 0 12px; }
 .trade-calendar :is(button, input, a):focus-visible { outline: 2px solid var(--ws-brand); outline-offset: 3px; }
 @media (hover: hover) { .trade-calendar button:not(:disabled):hover { background: var(--ws-soft); } }
