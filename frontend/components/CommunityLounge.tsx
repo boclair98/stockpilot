@@ -32,8 +32,10 @@ export default function CommunityLounge() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [readError, setReadError] = useState("");
   const activeRead = useRef<AbortController | null>(null);
+  const writeLock = useRef(false);
 
   const load = useCallback(async () => {
+    if (writeLock.current) return;
     activeRead.current?.abort();
     const controller = new AbortController();
     activeRead.current = controller;
@@ -65,11 +67,13 @@ export default function CommunityLounge() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     const clean = body.trim();
-    if (!clean || busy) return;
+    if (!clean || writeLock.current) return;
     if (!termsAccepted) {
       setMessage("게시하기 전에 라운지 이용약관에 동의해 주세요.");
       return;
     }
+    writeLock.current = true;
+    activeRead.current?.abort();
     setBusy(true);
     setMessage("");
     try {
@@ -81,11 +85,15 @@ export default function CommunityLounge() {
       setMessage(error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.");
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 
   async function remove(post: Post) {
+    if (writeLock.current) return;
     if (!window.confirm("이 글을 삭제할까요?")) return;
+    writeLock.current = true;
+    activeRead.current?.abort();
     setBusy(true);
     try {
       await deletePost(post.id);
@@ -95,17 +103,20 @@ export default function CommunityLounge() {
       setMessage(error instanceof Error ? error.message : "삭제하지 못했어요.");
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 
   async function report(post: Post) {
-    if (busy) return;
+    if (writeLock.current) return;
     const answer = window.prompt(
       "신고 사유를 선택해 주세요.\n1 스팸\n2 괴롭힘·혐오\n3 오해를 부르는 정보\n4 개인정보 노출\n5 기타",
       "1",
     );
     const reason = ({ "1": "SPAM", "2": "HARASSMENT", "3": "MISLEADING", "4": "PERSONAL_DATA", "5": "OTHER" } as const)[answer?.trim() as "1" | "2" | "3" | "4" | "5"];
     if (!reason) return;
+    writeLock.current = true;
+    activeRead.current?.abort();
     setBusy(true);
     try {
       await reportPost(post.id, reason);
@@ -114,11 +125,14 @@ export default function CommunityLounge() {
       setMessage(error instanceof Error ? error.message : "신고하지 못했어요.");
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 
   async function block(post: Post) {
-    if (busy || !window.confirm(`${post.author_name}님의 글을 앞으로 숨길까요?`)) return;
+    if (writeLock.current || !window.confirm(`${post.author_name}님의 글을 앞으로 숨길까요?`)) return;
+    writeLock.current = true;
+    activeRead.current?.abort();
     setBusy(true);
     try {
       await blockUser(post.author_id);
@@ -128,6 +142,7 @@ export default function CommunityLounge() {
       setMessage(error instanceof Error ? error.message : "차단하지 못했어요.");
     } finally {
       setBusy(false);
+      writeLock.current = false;
     }
   }
 

@@ -18,7 +18,7 @@ const stamp = "2026-10-25T01:00:00Z";
 
 function harness(file, initialProps = {}, named = "default") {
   const slots = [], timers = new Map(), requests = [], modules = new Map();
-  let cursor = 0, effects = [], dirty = false, tree, props = initialProps, timerId = 0;
+  let cursor = 0, effects = [], dirty = false, tree, props = initialProps, timerId = 0, user = null;
   const react = {
     memo: component => component,
     useState(initial) { const i = cursor++; if (!slots[i]) slots[i] = { value: typeof initial === "function" ? initial() : initial }; return [slots[i].value, value => { const next = typeof value === "function" ? value(slots[i].value) : value; if (!Object.is(next, slots[i].value)) { slots[i].value = next; dirty = true; } }]; },
@@ -50,7 +50,7 @@ function harness(file, initialProps = {}, named = "default") {
       if (id === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (id === "lucide-react") return new Proxy({}, { get: () => "icon" });
       if (id === "next/link") return { default: "a" };
-      if (id.includes("/identity") || id === "./identity") return { useMe: () => null, signInHref: () => "/login" };
+      if (id.includes("/identity") || id === "./identity") return { useMe: () => user, signInHref: () => "/login" };
       if (id.includes("firebase-push")) return { browserPushState: () => "unsupported", listenForForegroundPush: async () => () => {}, restoreBrowserPush: async () => null };
       if (id === "./warming") return { tracked: fn => fn() };
       let target = id.startsWith("@/") ? id.slice(2) : path.posix.join(path.posix.dirname(relative), id);
@@ -65,6 +65,7 @@ function harness(file, initialProps = {}, named = "default") {
   const flush = async () => { for (let round = 0; round < 10; round++) { await new Promise(resolve => setImmediate(resolve)); if (dirty) render(); } };
   return { load, render, flush, requests, notices, events, nodes: () => nodes(tree), tree: () => tree, text: () => text(tree),
     props(next) { props = next; render(); },
+    user(next) { user = next; render(); },
     tick(ms = 0) { for (const [id, timer] of [...timers]) if (timer.ms === ms) { if (!timer.interval) timers.delete(id); timer.fn(); } },
     button(label) { return nodes(tree).find(node => node.type === "button" && (node.props["aria-label"] === label || text(node).replace(/\s+/g, " ").trim() === label)); },
     click(label) { const button = this.button(label); assert(button, `missing button: ${label}`); return button.props.onClick(); },
@@ -133,6 +134,11 @@ test("feed rejects a failed or malformed response instead of presenting false em
   const failed = api.fetchFeed(); h.respond(0, {}, 503); await assert.rejects(failed);
   const malformed = api.fetchFeed(); h.respond(1, {}); await assert.rejects(malformed);
   const empty = api.fetchFeed(); h.respond(2, []); assert.equal((await empty).length, 0);
+  const removed = api.deletePost("isolated"); h.respond(3, null, 204); await removed;
+  const request = h.load("lib/reliable-request.ts");
+  const uncertain = request.requestVoid("/isolated", { method: "DELETE" }); h.tick(15000);
+  await assert.rejects(uncertain, reason => reason.uncertain === true);
+  assert.equal(h.requests.length, 5, "void writes also have a deadline and no automatic retry");
 });
 
 test("lounge distinguishes offline from empty and recovers without an unhandled rejection", async t => {
@@ -144,6 +150,16 @@ test("lounge distinguishes offline from empty and recovers without an unhandled 
 test("growth failed reads show recovery instead of an endless challenge loader", async t => {
   const h = harness("components/GrowthHub.tsx"); t.after(h.unmount); h.render(); h.tick(); await h.flush();
   h.respond(0, {}, 503); await h.flush(); assert(h.button("다시 조회")); assert(!h.text().includes("문제를 준비하고 있어요"));
+});
+
+test("lounge posting cancels stale reads, blocks overlapping refresh, and keeps the confirmed new post", async t => {
+  const h = harness("components/CommunityLounge.tsx"); t.after(h.unmount); h.user({ id: "isolated", display_name: "테스트" }); h.tick(); await h.flush();
+  h.nodes().find(node => node.type === "textarea").props.onChange({ target: { value: "격리 테스트 게시글" } });
+  h.nodes().find(node => node.type === "input" && node.props.type === "checkbox").props.onChange({ target: { checked: true } }); await h.flush();
+  const write = h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await h.flush();
+  assert(h.requests[0].init.signal.aborted); h.tick(30000); await h.flush(); assert.equal(h.requests.length, 2, "polling must not replace a post being created");
+  h.respond(1, { id: "new", author_id: "isolated", author_name: "테스트", body: "격리 테스트 게시글", created_at: stamp }, 201); await write; await h.flush();
+  assert(h.text().includes("격리 테스트 게시글")); assert(h.text().includes("라운지에 공유했어요"));
 });
 
 test("investor dashboard and news recover; quote ticks never replace a user's alert draft", async t => {
@@ -191,5 +207,12 @@ test("watchlist layout uses its own container and status row; no 112px phantom q
   const css = fs.readFileSync(path.join(root, "app/watchlist-layout.css"), "utf8");
   assert(css.includes("container: watchlist / inline-size")); assert(css.includes("@container watchlist (max-width: 430px)"));
   assert(css.includes(".watchlist-scope")); assert(css.includes("grid-auto-flow: row"));
+  assert(css.includes(".consumer-app.view-watch .instrument-browser { display: none; }"));
   assert(!css.includes("overflow-x: hidden"));
+  const readability = fs.readFileSync(path.join(root, "app/service-readability.css"), "utf8");
+  assert(readability.includes(":not(.up, .down, .positive, .negative)"), "financial colors must not become generic metadata colors");
+  assert(readability.includes('html[data-theme="dark"]'));
+  assert(readability.includes("font-size: 12px"));
+  const chart = fs.readFileSync(path.join(root, "components/StockTrendPanel.tsx"), "utf8");
+  assert(chart.indexOf('className="broker-chart-canvas"') < chart.indexOf('className="broker-chart-inspection"'), "the price chart must precede its detailed inspection on mobile as well as in DOM order");
 });

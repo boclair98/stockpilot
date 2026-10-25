@@ -58,6 +58,7 @@ import "./broker-chart.css";
 import "./broker-rankings.css";
 import "./watchlist-layout.css";
 import "./page-recovery.css";
+import "./service-readability.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

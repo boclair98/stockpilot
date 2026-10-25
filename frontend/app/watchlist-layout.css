@@ -4,6 +4,9 @@
   container: watchlist / inline-size;
   min-width: 0;
 }
+/* The dedicated watch view is for saved instruments. Discovery remains in the
+   market view, global search and the empty-state "종목 찾아보기" link. */
+.consumer-app.view-watch .instrument-browser { display: none; }
 .consumer-app .watchlist-board .favorite-board-head {
   flex-wrap: wrap;
   gap: 8px 12px;

@@ -1,0 +1,63 @@
+/* Older secondary screens share the existing brand, but their original 7–10px
+   metadata and pale foregrounds are not suitable for financial reading. */
+:is(.league-app, .growth-app, .practice-app, .lounge-app, .learn-page, .pricing-page) {
+  --readable-muted: #526174;
+  --readable-warm: #a84b12;
+  --readable-brand: #2855b5;
+}
+html[data-theme="dark"] :is(.league-app, .growth-app, .practice-app, .lounge-app, .learn-page, .pricing-page) {
+  --readable-muted: var(--ws-muted);
+  --readable-warm: #edba82;
+  --readable-brand: var(--ws-brand);
+}
+:is(.league-app, .growth-app, .practice-app, .lounge-app, .learn-page, .pricing-page)
+  :is(small, span.lesson-category, .lesson-card-meta > span, .lounge-post-meta > span, .lounge-feed-head > div > span, .pricing-price small, p.pricing-prelaunch):not(.up, .down, .positive, .negative) {
+  color: var(--readable-muted);
+  font-size: 12px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+.league-app :is(.league-hero > div > p:last-child, .join-card > p, .privacy-card > p, .league-rules article p, .room-empty p, .ranking-note),
+.growth-app :is(.growth-hero > div > p:last-child, .growth-streak small, .journal-login p, .skill-login p, .duel-card p),
+.lounge-app :is(.lounge-hero > div > p:last-child, .lounge-login-card p, .lounge-sidebar p, .lounge-sidebar li),
+.learn-page :is(.learn-hero-copy > span, .learn-hero-copy > small, .learn-empty p),
+.pricing-page :is(.pricing-description, .pricing-section-head > span) {
+  color: var(--readable-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.practice-app :is(.practice-hero > div > span, .ohlc > span, .replay-chart > span, .replay-account > label, .replay-trades > p) {
+  color: var(--readable-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.league-app :is(.league-eyebrow, .league-section-head > div > p, .league-rules > p, .league-topbar nav .active) {
+  color: var(--readable-warm);
+  font-size: 12px;
+}
+.growth-app :is(.growth-section-head p, .growth-hero > div > p:first-child),
+.learn-page :is(.learn-hero-copy > p, .section-heading p),
+.pricing-page :is(.pricing-hero > div > p:first-child, .pricing-section-head p) {
+  color: var(--readable-brand);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.practice-app .practice-hero > div > p,
+.lounge-app .service-eyebrow { color: var(--readable-muted); font-size: 12px; }
+.growth-app :is(.skill-login a, .journal-login a),
+.lounge-app .lounge-login-card > a {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+  font-size: 14px;
+  min-height: 44px;
+}
+:is(.league-app, .growth-app, .practice-app, .lounge-app, .learn-page, .pricing-page) button {
+  min-height: 44px;
+  min-width: 44px;
+}
+:is(.league-footer, .growth-footer, .practice-footer, .lounge-footer, .learn-footer, .pricing-footer),
+:is(.league-footer, .growth-footer, .practice-footer, .lounge-footer, .learn-footer, .pricing-footer) a {
+  color: var(--readable-muted, var(--ws-muted));
+  font-size: 12px;
+  line-height: 1.7;
+}

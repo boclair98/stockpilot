@@ -56,10 +56,6 @@ export default function StockTrendPanel({ symbol, name, market, exchange, curren
       <div className="broker-chart-period"><span>{chart.points[0].date} — {chart.points.at(-1)!.date} · {chart.points.length}개 일별 기록</span><b data-sign={chart.changePercent === null || chart.changePercent === 0 ? "flat" : chart.changePercent > 0 ? "up" : "down"}>{chart.changePercent === null ? "기간 비교 준비 중" : `${chart.changePercent > 0 ? "+" : ""}${chart.changePercent.toFixed(2)}%`}<small> 첫날 종가 대비</small></b></div>
       {!chart.canCandle && <p className="broker-chart-note">일부 시가·고가·저가를 확인할 수 없어 종가 선으로 표시해요.</p>}
       {chart.points.some(point => point.volume === null) && <p className="broker-chart-note">거래량 자료가 없는 날은 막대를 그리지 않아요. 확인된 거래량 0과는 달라요.</p>}
-      <div className="broker-chart-inspection"><time dateTime={active.date}>{active.date}</time><dl>
-        {([['시가',active.open],['고가',active.high],['저가',active.low],['종가',active.close]] as const).map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{chartPrice(value,currency)}</dd></div>)}
-        <div><dt>거래량</dt><dd>{active.volume === null ? "자료 없음" : `${active.volume.toLocaleString("ko-KR")}주`}</dd></div>
-      </dl></div>
       <div className="broker-chart-canvas">
         <svg className="broker-chart-svg" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img" aria-label={`${name} ${chart.mode === "candle" ? "일봉" : "종가 선"}과 거래량 그래프. ${chart.points[0].date}부터 ${chart.points.at(-1)!.date}까지.`} aria-describedby={helpId}
           onPointerMove={event => { if (event.pointerType !== "mouse") return; const rect = event.currentTarget.getBoundingClientRect(); if(rect.width) inspect(nearestChartPoint(chart.coords, (event.clientX - rect.left) / rect.width * chart.width)); }}
@@ -75,6 +71,10 @@ export default function StockTrendPanel({ symbol, name, market, exchange, curren
         <div className="broker-chart-scale" aria-hidden="true"><span>{chartPrice(chart.scaleMax,currency)}</span><span>{chartPrice(chart.scaleMin,currency)}</span><small>거래량</small></div>
       </div>
       <div className="broker-chart-axis"><span>{chartDate(chart.points[0].date)}</span><span>{chartDate(chart.points.at(-1)!.date)}</span></div>
+      <div className="broker-chart-inspection"><time dateTime={active.date}>{active.date}</time><dl>
+        {([['시가',active.open],['고가',active.high],['저가',active.low],['종가',active.close]] as const).map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{chartPrice(value,currency)}</dd></div>)}
+        <div><dt>거래량</dt><dd>{active.volume === null ? "자료 없음" : `${active.volume.toLocaleString("ko-KR")}주`}</dd></div>
+      </dl></div>
       <label className="broker-chart-scrubber">날짜 살펴보기<input type="range" min={0} max={chart.points.length-1} value={activeIndex} aria-label="차트 날짜 선택" aria-valuetext={`${active.date}, 종가 ${chartPrice(active.close,currency)}, 거래량 ${active.volume === null ? "자료 없음" : active.volume.toLocaleString("ko-KR")+"주"}`} onChange={event => inspect(Number(event.target.value))}/></label>
       <p id={helpId} className="broker-chart-note">그래프를 누르거나 날짜 조절 막대의 좌우 키로 살펴보세요. MA20은 일별 종가 20개 평균이에요.{showAverage ? " 점선은 MA20이에요." : ""} 시세는 거래일 기준으로 표시하며 실시간 틱 차트가 아니에요.</p>
       <details className="broker-chart-table"><summary>가격·거래량 표로 보기</summary><div role="region" aria-label="일별 가격과 거래량" tabIndex={0}><table><caption>{name} · {currency} · {chart.points.length}개 일별 기록</caption><thead><tr><th scope="col">거래일</th><th scope="col">시가</th><th scope="col">고가</th><th scope="col">저가</th><th scope="col">종가</th><th scope="col">거래량(주)</th></tr></thead><tbody>{chart.points.map(point => <tr key={point.date}><th scope="row"><time dateTime={point.date}>{point.date}</time></th><td>{chartPrice(point.open,currency)}</td><td>{chartPrice(point.high,currency)}</td><td>{chartPrice(point.low,currency)}</td><td>{chartPrice(point.close,currency)}</td><td>{point.volume === null ? "자료 없음" : point.volume.toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div></details>

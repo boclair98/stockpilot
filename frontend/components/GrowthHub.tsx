@@ -190,6 +190,7 @@ export default function GrowthHub() {
     }
     if (writing.current) return null;
     writing.current = true;
+    activeRead.current?.abort();
     setBusy(true);
     setNotice("");
     try {
@@ -308,7 +309,7 @@ export default function GrowthHub() {
       </section>
 
       {notice && <div className="growth-notice">{notice}</div>}
-      {readError && <div className="growth-notice" role="alert"><p>{readError}</p>{data && <p>이전에 불러온 기록을 표시하고 있어요.</p>}<button type="button" className="audit-retry" onClick={() => void load()}>다시 조회</button></div>}
+      {readError && <div className="growth-notice" role="alert"><p>{readError}</p>{data && <p>이전에 불러온 기록을 표시하고 있어요.</p>}<button type="button" className="audit-retry" disabled={busy} onClick={() => void load()}>다시 조회</button></div>}
 
       {data?.license && (
         <InvestmentLicense authenticated={data.authenticated} data={data.license} />
