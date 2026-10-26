@@ -398,6 +398,10 @@ button,select,input,textarea { font:inherit; }
   .service-page .service-document h2 { font-size:19px; }
   .service-page .service-document h3 { font-size:16px; }
 }
+@media(max-width:389px) {
+  .product-edition.view-market .workspace-summary .balance-card > strong { grid-column:1/-1; white-space:nowrap; min-width:0; max-width:100%; overflow-x:auto; scrollbar-width:thin; }
+  .product-edition.view-market .balance-mobile-disclosure { grid-column:1/-1; }
+}
 @media(max-width:359px) {
   .consumer-app.product-edition { --page-gutter:12px; }
   .product-edition .brand { font-size:18px; }

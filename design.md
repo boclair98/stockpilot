@@ -386,3 +386,8 @@ Output and quality gate: implement real integrated files, run full safety/type/l
 - Path: existing `frontend/app/page.tsx` and linked components; no replacement app or framework migration.
 - First review:390×844 and1440×900, then320/360/430/768/1024/1920 edges, light/dark, keyboard/reduced-motion.
 - Passes:1 composition and first content;2 typography/row/filter/theme;3 modal/keyboard/loading/error/responsive. Each pass produces actual code fixes when needed.
+
+### 운영 360px 재검증 보완
+- 첫 운영 배포의 실제 1억 원 자산 문자열이 360px에서 주문 가능 disclosure와 같은 행을 쓰면서 마지막 숫자만 줄바꿈되는 것을 확인했다. 기존 기능·폰트 크기·금융 계산은 유지한다.
+- 389px 이하에서는 자산 금액과 disclosure를 각기 전체 행으로 배치한다. 금액은 한 줄을 유지하며, 극단적으로 긴 값은 해당 값 영역만 수평으로 읽을 수 있게 한다. 페이지 전체를 숨기거나 숫자를 생략·축소하지 않는다.
+- 수정 경로는 `frontend/app/product-workspace.css`뿐이며, 실제 운영 320/360/390px의 금액 높이·한 줄 여부·글자 잘림·가로 넘침과 768/1440px를 재확인한다. 로컬 빌드·회귀 검사 후 upstream → fork → 기존 웹 재배포로 마무리한다.
