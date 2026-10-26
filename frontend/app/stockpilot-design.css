@@ -814,7 +814,7 @@ body {
 
 .consumer-app .consumer-stock-row .symbol-logo.brand-logo {
   border-color: var(--ws-line);
-  background: var(--ws-surface) !important;
+  background: #fff !important;
 }
 
 .consumer-app .consumer-stock-row .rank-identity {

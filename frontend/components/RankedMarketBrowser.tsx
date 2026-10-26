@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { RefreshCw, ChevronDown, X, ArrowUpRight } from "lucide-react";
+import { RefreshCw, ChevronDown, X, ArrowUpRight, Search } from "lucide-react";
 import StockRow from "./StockRow";
+import MarketLens from "./MarketLens";
+import { EMPTY_MARKET_LENS, filterRankedStocks, type MarketLensValue } from "@/lib/market-lens";
 import { type InstrumentIdentity } from "@/lib/instrument-identity";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { normalizeRankingPage, rankingComparisonHref, toggleComparison, type RankedStock, type RankingPage } from "@/lib/ranking-comparison";
@@ -52,9 +54,11 @@ export default function RankedMarketBrowser({
   const [exchange, setExchange] = useState("ALL");
   const [comparison, setComparison] = useState<InstrumentIdentity[]>([]);
   const [selectionNotice, setSelectionNotice] = useState("");
+  const [lens, setLens] = useState<MarketLensValue>({ ...EMPTY_MARKET_LENS });
   const [failedPage, setFailedPage] = useState<"first" | "more" | null>(null);
   const request = useRef<AbortController | null>(null);
   const comparisonHref = rankingComparisonHref(comparison);
+  const filtered = filterRankedStocks(data?.items ?? [], lens, savedIds, market === "KR" ? "KRW" : "USD");
   function selectForComparison(item: Stock | InstrumentIdentity) {
     const next = toggleComparison(comparison, item);
     setComparison(next.items);
@@ -74,6 +78,7 @@ export default function RankedMarketBrowser({
         setBusy(true);
         setMarket(desired);
         setExchange("ALL");
+        setLens({ ...EMPTY_MARKET_LENS });
       }
     };
     const timer = setTimeout(sync, 0);
@@ -144,6 +149,7 @@ export default function RankedMarketBrowser({
   }
   return (
     <section className="ranked-browser broker-rankings" aria-label="시장 종목 순위">
+      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div><p>궁금한 종목을 찾고, 나란히 비교해 보세요.</p></div>
       <header>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
@@ -158,6 +164,7 @@ export default function RankedMarketBrowser({
                 setBusy(true);
                 setMarket(v);
                 setExchange("ALL");
+                setLens({ ...EMPTY_MARKET_LENS });
               }}
             >
               {v === "KR" ? "한국" : "미국"}
@@ -202,13 +209,13 @@ export default function RankedMarketBrowser({
         >
           <RefreshCw size={16} />
         </button>
-      </header>
       <div className="record-filters ranking-exchange-filter">
         <label>거래소<select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); setExchange(e.target.value); }}>
           <option value="ALL">전체 거래소</option>
           {market === "KR" ? <><option value="KOSPI">코스피</option><option value="KOSDAQ">코스닥</option></> : <><option value="NAS">나스닥</option><option value="NYS">뉴욕증권거래소</option><option value="AMS">아멕스</option></>}
         </select></label>
       </div>
+      </header>
       <label className="ranked-sort">
         정렬 기준
         <select
@@ -245,6 +252,7 @@ export default function RankedMarketBrowser({
         {comparison.length ? <div className="ranking-comparison-action">{comparisonHref ? <Link href={comparisonHref}>선택한 {comparison.length}개 비교 <ArrowUpRight size={16} aria-hidden="true" /></Link> : <button type="button" disabled>2개부터 비교할 수 있어요</button>}<small>계좌·보유 정보는 전달하지 않아요.</small></div> : null}
         <p className="ranking-selection-status" role="status">{selectionNotice}</p>
       </section>
+      <MarketLens items={data?.items ?? []} value={lens} currency={market === "KR" ? "KRW" : "USD"} matched={filtered.items.length} error={filtered.error} onChange={setLens}/>
       <div
         className={`stock-list-heading${metric === "CAP" || metric === "VOLUME" ? " with-metric" : ""}`}
       >
@@ -257,11 +265,11 @@ export default function RankedMarketBrowser({
         ) : null}
       </div>
       <ol className="ranked-list">
-        {data?.items.map((s, i) => (
+        {filtered.items.map(({ stock: s, rank }) => (
           <li key={s.id}>
             <StockRow
               stock={s}
-              rank={i + 1}
+              rank={rank}
               metric={
                 metric === "VOLUME"
                   ? s.volume !== null ? `${s.volume.toLocaleString("ko-KR")}주` : "—"
@@ -318,6 +326,7 @@ export default function RankedMarketBrowser({
       {!busy && data?.items.length === 0 && !error ? (
         <p className="ranked-state">이 조건의 자료가 없어요.</p>
       ) : null}
+      {!busy && Boolean(data?.items.length) && filtered.items.length === 0 && !error ? <div className="ranked-state lens-empty"><Search size={24} aria-hidden="true"/><b>{filtered.error ? "가격 조건을 확인해 주세요" : "현재 목록에서 찾지 못했어요"}</b><p>{data?.hasMore ? "조건을 바꾸거나 다음 20개를 불러와 더 살펴보세요." : "다른 조건이나 전체 종목 검색으로 찾아보세요."}</p><button type="button" onClick={() => setLens({ ...EMPTY_MARKET_LENS })}>조건 초기화</button></div> : null}
       {data?.hasMore ? (
         <button
           className="ranked-more"
@@ -339,7 +348,7 @@ export default function RankedMarketBrowser({
           {!data.hasMore ? " · 제공 자료 끝" : ""}
         </p>
       ) : null}
-      {comparisonHref && data?.items.length ? <div className="ranking-comparison-bottom"><Link href={comparisonHref}>선택한 {comparison.length}개 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link></div> : null}
+      {comparisonHref && data?.items.length ? <div className="ranking-comparison-bottom"><span>{comparison.length}개 종목 선택</span><Link href={comparisonHref}>나란히 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link><button type="button" aria-label="비교 선택 모두 해제" onClick={() => { setComparison([]); setSelectionNotice("비교 선택을 모두 해제했어요."); }}><X size={17} aria-hidden="true"/></button></div> : null}
     </section>
   );
 }

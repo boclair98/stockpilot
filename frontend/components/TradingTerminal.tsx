@@ -20,6 +20,7 @@ import {
   Bell,
   BrainCircuit,
   ChevronRight,
+  ChevronDown,
   Compass,
   Gauge,
   GraduationCap,
@@ -1355,7 +1356,7 @@ export default function TradingTerminal() {
 
   return (
     <main
-      className={`app workspace-app consumer-app view-${workspaceView.toLowerCase()}${mobileOrderOpen ? " mobile-order-open" : ""}`}
+      className={`app workspace-app consumer-app product-edition view-${workspaceView.toLowerCase()}${mobileOrderOpen ? " mobile-order-open" : ""}`}
     >
       <a className="skip-link" href="#market-content">
         본문으로 건너뛰기
@@ -1463,7 +1464,7 @@ export default function TradingTerminal() {
           <h1>
             {
               {
-                MARKET: "시장 홈",
+                MARKET: "오늘의 시장",
                 DETAIL: "종목 상세",
                 WATCH: "관심종목",
                 ASSETS: "내 자산",
@@ -1481,12 +1482,6 @@ export default function TradingTerminal() {
           </small>
         </div>
       </section>
-      {workspaceView === "MARKET" ? <BrokerServiceAccess /> : null}
-      {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry broker-welcome" aria-label="처음 시작하는 투자 연습">
-        <span className="welcome-entry-icon"><Compass size={24} aria-hidden="true"/></span>
-        <div><strong>투자, 내 돈 없이 먼저 연습해요.</strong><p>실제 시세를 살펴보고 연습 자금으로 모의주문해 보세요.</p></div>
-        <div className="welcome-entry-actions"><button type="button" onClick={focusSearch}>종목 찾아보기<ArrowUpRight size={16} aria-hidden="true"/></button><Link href="/guide">어떻게 이용하나요?<ChevronRight size={16} aria-hidden="true"/></Link></div>
-      </aside> : null}
       {accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
         <div><b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b><p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>{accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}</div>
         <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} className={accountRefreshing ? "spin" : ""}/>{accountRefreshing ? "확인 중" : "잔고 다시 확인"}</button>
@@ -1510,10 +1505,12 @@ export default function TradingTerminal() {
               {portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
             </span>
             <small>원화 평가액 · 달러 별도</small>
+            {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
           </div>
           <strong className="private-value">
             {money(portfolio.cash.KRW + positionValues.KRW, "KRW")}
           </strong>
+          {workspaceView === "MARKET" ? <details className="balance-mobile-disclosure"><summary>주문 가능 금액<ChevronDown size={14} aria-hidden="true"/></summary><div><span>원화<b className="private-value">{money(portfolio.cash.KRW,"KRW")}</b></span><span>달러<b className="private-value">{money(portfolio.cash.USD,"USD")}</b></span></div></details> : null}
           <div className="balance-detail">
             <span>
               원화 주문 가능{" "}
@@ -1915,10 +1912,10 @@ export default function TradingTerminal() {
               </div>
             )}
             {!searchQuery && recentStocks.length > 0 && (
-              <div className="recent-stocks">
-                <span>
+              <details className="recent-stocks">
+                <summary>
                   <History size={14} /> 최근 본 종목
-                </span>
+                </summary>
                 <div>
                   {recentStocks.map((item) => (
                     <button
@@ -1945,7 +1942,7 @@ export default function TradingTerminal() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
           </div>
         </div>
@@ -2658,6 +2655,12 @@ export default function TradingTerminal() {
         </aside>
       </section>
       <div className="workspace-secondary">
+        {workspaceView === "MARKET" ? <BrokerServiceAccess /> : null}
+        {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry broker-welcome" aria-label="처음 시작하는 투자 연습">
+          <span className="welcome-entry-icon"><Compass size={24} aria-hidden="true"/></span>
+          <div><strong>투자, 내 돈 없이 먼저 연습해요.</strong><p>실제 시세를 살펴보고 연습 자금으로 모의주문해 보세요.</p></div>
+          <div className="welcome-entry-actions"><button type="button" onClick={focusSearch}>종목 찾아보기<ArrowUpRight size={16} aria-hidden="true"/></button><Link href="/guide">어떻게 이용하나요?<ChevronRight size={16} aria-hidden="true"/></Link></div>
+        </aside> : null}
         <details>
           <summary>투자 환경·비교 지표</summary>
           <KospiBenchmarkCard />
@@ -2667,9 +2670,7 @@ export default function TradingTerminal() {
           />
         </details>
         <nav aria-label="더 많은 투자 기능">
-          <a href="/compare"><BarChart3 size={17} />종목 비교</a>
-          <a href="/notifications"><Bell size={17} />알림 모아보기</a>
-          <a href="/account-tools"><Wallet size={17} />계좌 관리·정기 매수</a>
+          {workspaceView !== "MARKET" ? <><a href="/compare"><BarChart3 size={17} />종목 비교</a><a href="/notifications"><Bell size={17} />알림 모아보기</a><a href="/account-tools"><Wallet size={17} />계좌 관리·정기 매수</a></> : null}
           <a href="/support">고객지원·공지</a>
           <a href="/league">
             <Trophy size={17} />

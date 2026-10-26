@@ -298,3 +298,91 @@ Create one integrated repair of StockPilot's existing responsive product, not a 
 - 격리된 컴포넌트 테스트로 검색·정렬·빈 결과·초기화·저장/삭제 분리·실패/오래된 응답 처리를 검증한다. 운영 쓰기/계좌 초기화는 하지 않는다.
 - 기존 안전성 스크립트 전체, 변경 파일 lint, production build 수행. 운영은 360/390/768/1440px와 양 테마를 실제 관찰하고 새 코드의 미확인 시각 검증은 구분한다.
 - 운영 직접 URL 재검증에서, 숨겨진 시장 레이아웃에 등록한 IntersectionObserver가 상세 전환 뒤 핵심 차트를 마운트하지 않는 경우를 확인했다. 차트·기업정보는 상세 화면 활성화 시 즉시 마운트하고, 나머지 보조 모듈의 지연 로드는 유지한다. 화면 디자인·시세 계산은 변경하지 않는다.
+
+# 2026-10-27 · StockPilot consumer brokerage edition
+
+실화면 1차 보완: 기존 모바일 규칙의 `display:none`/flex 충돌을 제거해 지수·자산 요약을 grid로 복원한다. 목록 필터는 이름이 명확한 native details로 접어 종목 접근을 앞당기며, 적용 중 상태를 별도로 표시한다. 작은 화면의 금액 범위·통화·자료 시각은 12px 수준으로 읽을 수 있게 유지한다.
+
+## Variant 1
+
+### 실제 감사와 보존 범위
+- Next.js 16.2.2 static export / React19 / TypeScript / Pretendard / Lucide / 기존 CSS 토큰과 FastAPI 계약을 유지한다. 현재 홈은 안내·도구 바로가기·지수·자산·검색이 중첩돼 실제 종목이 늦게 보인다. 색만 바꾸지 않고 첫 화면의 읽기 순서를 다시 구성한다.
+- 핵심 사용자: 한국·미국 주식을 처음 연습하거나 재방문해 관심종목과 계좌를 확인하는 모바일 사용자. 첫 행동은 실제 순위에서 종목을 찾고 상세 차트를 확인하는 것이다.
+- 기존 계좌·주문 규칙·로그인·API·데이터·경로를 보존한다. 별도 앱인토스와 사용자의 LeagueRooms.tsx/artifacts 변경은 제외한다. 이번 작업의 GitHub 반영·기존 웹 재배포 및 로컬 브라우저 검증은 2026-10-27 사용자 답변으로 승인됐다.
+
+### Compact reference board
+|공식 출처 / 유형|직접 확인한 내용|적용 / 제외|
+|---|---|---|
+|https://seed-design.io/foundations/color/color-role / 디자인 시스템 웹 문서|브라우저에서 역할별 색 설명·명암 레이어·큰 제목과 읽기 흐름 확인|의미 기반 전경/표면/선 토큰; 로고·당근 색상은 복제하지 않음|
+|https://tradingview.github.io/lightweight-charts/ / 라이브러리 문서·샘플|브라우저에서 일관된 차트 축·선·가격 라벨과 문서 예시 확인, 공식 v5.2 API 확인|Lightweight Charts의 확대·축소·이동·크로스헤어를 별도 확대 창에 사용; 기본 접근성 차트/표는 보존|
+|https://github.com/tradingview/lightweight-charts / 오픈소스|공식 라이선스·NOTICE·필수 출처 안내 확인|패키지와 출처 표기를 함께 사용; 외부 위젯·외부 시세는 불러오지 않음|
+|https://www.tossinvest.com/ / 소비자 증권 웹|공개 문서의 홈·종목 탐색·계좌 구조만 확인, 이번 실제 시각 관찰은 하지 않음|짧은 동선의 원칙만 참고, 화면·자산·전용 폰트 복제 없음|
+|OpenBB 공식 GitHub / 공개 소스 검토|라이선스 조건을 확인|복사하지 않음. 복잡한 기관 터미널 구조를 소비자 화면에 이식하지 않음|
+
+### Resolved inputs
+- Topic: StockPilot, 실제 시세를 읽고 가상 자금으로 매매를 연습하는 소비자 증권 서비스.
+- Offer: 시장 탐색, 한국·미국 순위, 가격·등락 조건 좁히기, 관심·비교, 읽기 쉬운 계좌·기록, 실제 기록을 사용하는 확대형 금융 차트.
+- Audience: 모바일 초보 투자자 및 재방문 데스크톱 사용자.
+- Primary user action: 시장 목록을 필터링하고 종목 상세를 연다.
+- Deliverable: 기존 Next.js 제품 전체와 통합된 React/CSS, 새 목록 필터와 차트 탐색 창, 자동·브라우저 검증 및 승인된 웹 배포.
+- Style direction: Quiet confidence, crisp consumer brokerage. 기존 인디고 정체성을 선명한 숫자·목록·섬세한 상태로 발전시킨다.
+- Tonal key: 다크 기본값과 동등한 라이트 테마. 사진·마스코트·장식 코인 없음.
+- Icon policy: 기존 Lucide 한 계열. 아이콘은 조작·탐색에만 사용한다.
+- Proof assets: 실제 API와 계좌/순위 데이터. 디자인 검증용 자료는 명시된 로컬 fixture에서만 사용하며 운영에 포함하지 않는다.
+- Motion intensity: Minimal. 140~200ms 조작 피드백, 시트는220ms 이하, reduced-motion 존중. 가격 count-up/리스트 무작위 이동 없음.
+
+### Composition contract
+- Hero archetype: asymmetrical, 단 마케팅 히어로가 아니라 작업형 시장 요약이다.
+- First-viewport structure: 얇은 수평 탐색 → 간결한 오늘의 시장 제목 → 압축된 지수/계좌 문맥 → 주된 실제 순위 목록. 넓은 화면은 목록 약7:개인 문맥 약3. 좁은 화면은 지수·자산을 간결하게 접고 실제 종목 탐색을 우선한다. 반복 안내와 별도 기능 바는 하나의 작은 탐색 묶음으로 정리한다.
+- Primary visual/proof artifact: 실제 KOSPI 흐름, 회사명/가격/등락률이 정렬된 종목 행, 데이터 범위가 명시된 목록 분포. 장식용 가짜 스파크라인을 만들지 않는다.
+- Interaction behavior: 시장·거래소·순위는 서버 조회, 이름/가격/등락/관심 조건은 불러온 목록 내부 필터임을 명시한다. 필터 결과가0개면 초기화/더보기로 복구한다. 비교 선택은 독립 동작이며2~3종목만 기존 공개 비교 URL로 전달한다. 상세의 확대 창은 기존 검증된 일별 데이터만 사용하고 기본 주문/차트는 유지한다.
+- Reuse boundary: 공통 토큰·종목 행·폼·섹션 제목·서비스 shell은 재사용한다. 데이터/금융 계산은 재작성하지 않는다. 새로운 광고·추천 AI·가입/결제 유도는 추가하지 않는다.
+
+### Concrete visual system
+- Canvas light #F6F7FB / dark #0B0D13; surface #FFFFFF / #141720; raised #F0F2F8 / #1C202C; text #182131 / #F2F4FA; secondary #58667A / #A7B1C3; border #E4E7EF / #2A3040.
+- Brand solid #5262DB, light text #4053C4, dark text #B9C5FF, tint #EEF0FF / #242B49. Brand surface text white. Korean gains #CF3553 / #FF8194, losses #2763CE / #91B5FF; validation/success colors separately named. Measure actual contrast and retain signs/labels.
+- Font: bundled StockPilot Pretendard, Pretendard, system sans-serif. Tabular numerals. Titles32/26px, section20/18px, row name15~16px, body14~16px, essential inputs16px, metadata12px. Weights450/600/700/800, line height1.4~1.6, Korean keep-all with safe long-token wrapping.
+- Spacing4/8/12/16/20/24/32/40; gutters16 mobile,24 tablet,32 desktop; max working width1440px. Controls10~12px radius; panels18~22px; no nested rounded-card grids. Shadows only floating dialogs and restrained raised surfaces.
+- Stock rows: market logo36px, unambiguous name/ticker column, tabular quote/change column, relevant metric, independent save/compare44px actions. Mobile keeps price and name and wraps long names without shrinking money.
+- Chart enlargement: native modal top layer, labeled title/close, all-period/zoom controls, crosshair readings, red-up/blue-down both markets. Vertical page scrolling remains available; chart horizontal touch gestures and pinch are intentional. Empty/missing OHLC does not become fake candles. Canvas failure returns to the working basic chart and table.
+- Shared surfaces: light/dark both use semantic roles; watchlists, assets, history, company/disclosure, league and service pages gain the same font/spacing/control finishing. Existing per-page meaningful layouts stay intact.
+
+### Contents, paths and behavior
+- `frontend/components/TradingTerminal.tsx`: compact market heading/overview and purposeful account actions, route/API/financial contracts unchanged.
+- `frontend/components/RankedMarketBrowser.tsx`, new `MarketLens.tsx`, `lib/market-lens.ts`: real loaded-list distribution, name/price/movement/saved filters, result counts, reset and filtered paging state. No fabricated global popularity/breadth.
+- `frontend/components/StockTrendPanel.tsx`, new `ChartExplorer.tsx` / `InteractiveChart.tsx`, `lib/chart-explorer.ts`: lazy expanded chart using approved open-source dependency, full keyboard alternatives and original basic SVG/table retained.
+- `frontend/components/ServicePageShell.tsx`, common `StockRow` and new `frontend/app/product-workspace.css`: one visually coherent consumer product with modern responsive composition. Replace conflicting rules at the relevant layer rather than indiscriminate hiding/overflow clipping.
+- `frontend/scripts/verify-product-edition.cjs`: deterministic helper and actual component regression tests; existing15 safety scripts remain required. README and third-party license/source record updated.
+- Primary CTA: row `onSelect` → existing identity-bound detail. Secondary CTA: `rankingComparisonHref` → `/compare`. Account CTA `#holdings`, records `#decision-review`, extra services retain current routes. No unconnected buttons.
+
+### Filled generation prompt
+Create one high-concept integrated product page for StockPilot's real-market simulated-investing discovery.
+
+Inputs: Topic is a Korean consumer brokerage learning product with real prices and virtual money. Offer is readable discovery, meaningful loaded-list filters, watchlists, comparisons and an expandable interactive financial chart. Audience is mobile-first beginner investors and returning desktop users. Primary user action is to browse or filter real instruments and open their detail. Deliverable is integrated React components and CSS in the current Next.js static-export application, with working behavior, tests and the authorized Coders web release. Style is crisp consumer brokerage with purposeful whitespace and typographic alignment. Tonal key is coherent dark-default and light themes. Icons are minimal existing Lucide. Proof assets are real product content, verified API contracts and isolated explicitly labeled local test fixtures only. Motion is minimal feedback, not animated money.
+
+Objective: make StockPilot memorable through the craft of its actual financial interface. Keep one dominant topic-native market overview and one coherent visual world. The product is an actual securities-style workspace, so the unified list/quote/chart surface is the justified proof artifact; do not add a marketing dashboard mockup in front of the product.
+
+Internal concept: asymmetrical working overview, actual market trace and stock list as single proof artifact, existing indigo brand, dark/light semantic surfaces, minimal continuity feedback and topic-native navigation icons. No additional alternative concepts are requested.
+
+Non-negotiables: concise Korean titles and helper text; short task-specific CTAs; instruments visible in the first viewport; no fake prices, returns, users, reviews, company popularity, chart paths or integrations. Keep hierarchy through scale, alignment, spacing, restrained depth and meaningful state. No floating decorative panels, abstract aircraft/radar/coins, confetti or repeated banners. Financial correctness, privacy, existing accounts and order rules remain mandatory.
+
+Composition: use a thin horizontal desktop shell and mobile bottom navigation. Compact market and asset context precedes a dominant stock list, with a secondary personal column on wide screens. Avoid a giant sidebar, full-screen welcome hero or a wall of equal cards. Preserve all supported feature access through a single lower discovery cluster. Do not hide essential data to fit the layout. The selected instruments, data timestamps and order identity remain coherent.
+
+Visual system: use the concrete token palette and typography above. Match backgrounds, strokes and foregrounds by semantic role. Keep brand colors distinct from price movement and validation. No unreadable white small text on bright accents. Use original composition and licensed assets only. Depth is restrained and functional; typography and real content carry the page.
+
+Proof and concept expression: a real KOSPI trace, expertly aligned stock rows and a clear expanded chart are the evidence. Never invent historical prices or rank metrics. Show absent values as unknown and provider failures as recoverable states. Explain loaded-list-only filter scope. Price precision and currency are retained.
+
+Support cluster: group secondary learning, league, alerts and account tools once below the core work. Uniform low-emphasis styling, no duplication in the first viewport. All links lead to existing real destinations.
+
+Motion: 140~200ms for control/selection feedback, up to220ms for modal entry. No scroll hijacking, constant pulsing, number count-ups or automatic rank shuffling. Reduced motion removes nonessential transitions. Feedback must never delay a trade action.
+
+Accessibility and readability: use semantic lists, labels, pressed states, visible focus and focus restoration. Important touch targets44px. Use Korean wrapping and shrinkable grid children. Provide keyboard and textual alternatives to chart interaction. Modal cannot obscure its close action or trap users without Escape. Do not announce every quote tick. Test 320/360/390/430/768/1024/1440/1920 widths, both themes, enlarged text and active states.
+
+Anti-drift rules: do not turn this into a generic SaaS landing page or institutional trading terminal. Do not replace existing APIs, authentication, account storage or financial math. No arbitrary library migration. New dependency must be justified by the chart interaction, pinned, licensed, dynamically loaded and cleaned up. Never weaken tests merely to get a green result.
+
+Output and quality gate: implement real integrated files, run full safety/type/lint/build checks, then inspect actual desktop/mobile screenshots and correct composition, typography and state defects in three passes. Verify search → list filters → detail → expanded chart → close → order sheet → assets/history continuity without production account writes. Publish only through canonical upstream → actual fork sync → existing Coders deployment → ready and real production verification, as authorized. Report observed results, screenshots, dependency/license facts and remaining limitations without claiming zero possible errors.
+
+### Output target
+- Path: existing `frontend/app/page.tsx` and linked components; no replacement app or framework migration.
+- First review:390×844 and1440×900, then320/360/430/768/1024/1920 edges, light/dark, keyboard/reduced-motion.
+- Passes:1 composition and first content;2 typography/row/filter/theme;3 modal/keyboard/loading/error/responsive. Each pass produces actual code fixes when needed.

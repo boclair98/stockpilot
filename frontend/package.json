@@ -10,6 +10,7 @@
     "lint": "eslint",
     "generate:social": "node scripts/generate-social-image.mjs",
     "verify:pwa": "node scripts/verify-pwa.mjs",
+    "verify:product": "node scripts/verify-product-edition.cjs",
     "verify:safety": "node scripts/verify-release-safety.cjs && node scripts/verify-comparison.cjs && node scripts/verify-market-responses.cjs && node scripts/verify-record-filters.cjs && node scripts/verify-market-navigation.cjs && node scripts/verify-portfolio-insights.cjs && node scripts/verify-analytics-recovery.cjs && node scripts/verify-personal-write.cjs && node scripts/verify-personal-recovery.cjs && node scripts/verify-trade-calendar.cjs && node scripts/verify-us-market-details.cjs && node scripts/verify-stock-chart.cjs && node scripts/verify-ranking-comparison.cjs && node scripts/verify-broker-service-access.cjs && node scripts/verify-workspace-audit.cjs"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "clsx": "^2.1.1",
     "firebase": "12.3.0",
     "lucide-react": "^1.7.0",
+    "lightweight-charts": "5.2.1",
     "next": "16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",

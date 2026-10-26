@@ -1,4 +1,4 @@
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, ChartNoAxesColumnIncreasing } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -13,7 +13,7 @@ export default function ServicePageShell({ eyebrow, title, description, children
   return (
     <main className="service-page">
       <header className="service-topbar">
-        <Link className="brand" href="/"><span><Sparkles size={18} /></span>StockPilot</Link>
+        <Link className="brand" href="/"><span><ChartNoAxesColumnIncreasing size={18} aria-hidden="true"/></span>StockPilot</Link>
         <Link className="service-back" href="/"><ArrowLeft size={15} /> 시장으로 돌아가기</Link>
       </header>
       <section className="service-page-hero">

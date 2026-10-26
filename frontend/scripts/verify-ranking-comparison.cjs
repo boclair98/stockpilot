@@ -18,6 +18,7 @@ function harness() {
   const slots = [], requests = [], modules = new Map(), timers = new Map(), opened = [], saved = [];
   let cursor = 0, effects = [], dirty = false, tree, timerId = 0;
   const react = {
+    useId: () => ":market-lens:",
     useState(initial) { const index = cursor++; if (!slots[index]) slots[index] = { value: typeof initial === "function" ? initial() : initial }; return [slots[index].value, value => { const next = typeof value === "function" ? value(slots[index].value) : value; if (!Object.is(next, slots[index].value)) { slots[index].value = next; dirty = true; } }]; },
     useRef(initial) { const index = cursor++; if (!slots[index]) slots[index] = { value: { current: initial } }; return slots[index].value; },
     useEffect(effect, deps) { const index = cursor++, previous = slots[index]; if (!previous || previous.deps.some((dep, i) => !Object.is(dep, deps[i]))) effects.push(() => { previous?.cleanup?.(); slots[index] = { deps, cleanup: effect() }; }); },
@@ -123,4 +124,14 @@ test("timeout, malformed response, first-page retry and stale pagination recover
   h.respond(6, page([kr("000660", "old data")])); h.respond(7, page([us()])); await h.flush();
   assert(!h.text().includes("old data")); assert(h.findButton("애플 비교 추가"));
   assert(h.requests.every(request => !request.init.method && !request.init.body && request.init.cache === "no-store"));
+});
+
+test("actual list lens filters loaded rows, keeps server rank, and resets price units on market change", async t => {
+  const h=harness();t.after(h.unmount);h.render();await h.flush();h.respond(0,page([kr(),{...kr("000660","SK하이닉스"),price:175000,changePercent:-2}],{hasMore:true,nextOffset:20}));await h.flush();
+  const field=label=>h.nodes().find(node=>node.type==="input"&&node.props["aria-label"]===label);
+  field("불러온 종목에서 찾기").props.onChange({target:{value:"하이닉스"}});await h.flush();assert(h.findButton("SK하이닉스 상세 보기"));assert(!h.findButton("삼성전자 상세 보기"));
+  assert.equal(h.nodes().find(node=>node.props?.className==="rank-number").props.children,2);
+  field("목록 최저 가격").props.onChange({target:{value:"200000"}});await h.flush();assert(h.text().includes("현재 목록에서 찾지 못했어요"));assert(h.findButton("20개 더 보기 · 2개 조회"));
+  h.click("조건 초기화");await h.flush();assert(h.findButton("삼성전자 상세 보기"));h.click("하락");await h.flush();assert(h.findButton("SK하이닉스 상세 보기"));assert(!h.findButton("삼성전자 상세 보기"));
+  h.click("미국");await h.flush();h.respond(1,page([us()]));await h.flush();assert(h.findButton("애플 상세 보기"));assert.equal(field("목록 최저 가격").props.value,"");assert.equal(field("불러온 종목에서 찾기").props.value,"");
 });

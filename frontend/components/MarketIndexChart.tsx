@@ -2,26 +2,9 @@
 
 import { Activity, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
-type IndexPoint = {
-  date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
-
-export type IndexData = {
-  name: string;
-  value: number;
-  change: number;
-  changePercent: number;
-  asOf: string;
-  source: string;
-  stale?: boolean;
-  points: IndexPoint[];
-};
+import { requestJson } from "@/lib/reliable-request";
+import { indexSnapshot, parseIndexData, type IndexData } from "@/lib/market-index";
+export type { IndexData } from "@/lib/market-index";
 
 const number = new Intl.NumberFormat("ko-KR", {
   minimumFractionDigits: 2,
@@ -39,77 +22,76 @@ export default function MarketIndexChart({
 }: {
   initialData?: IndexData | null;
 }) {
-  const [data, setData] = useState<IndexData | null>(initialData);
+  const [data, setData] = useState<IndexData | null>(() => indexSnapshot(initialData));
   const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
     let controller: AbortController | null = null;
     let hydrateTimer: number | null = null;
-    if (initialData?.points?.length) {
-      localStorage.setItem(
-        "stockpilot_kospi_snapshot",
-        JSON.stringify(initialData),
-      );
+    const initial = indexSnapshot(initialData);
+    const saveSnapshot = (next: IndexData) => { try { localStorage.setItem("stockpilot_kospi_snapshot",JSON.stringify(next)); } catch { /* Restricted storage does not stop market data. */ } };
+    if (initial?.points.length) {
+      saveSnapshot(initial);
       hydrateTimer = window.setTimeout(() => {
         if (active) {
-          setData(initialData);
+          setData(initial);
           setLoading(false);
         }
       }, 0);
     } else {
       try {
-        const cached = JSON.parse(
+        const cached = indexSnapshot(JSON.parse(
           localStorage.getItem("stockpilot_kospi_snapshot") || "null",
-        );
+        ));
         if (cached?.points?.length) {
           hydrateTimer = window.setTimeout(() => {
-            if (active) setData(cached);
+            if (active) setData({ ...cached, stale: true });
           }, 0);
         }
       } catch {
-        localStorage.removeItem("stockpilot_kospi_snapshot");
+        try { localStorage.removeItem("stockpilot_kospi_snapshot"); } catch { /* Storage may be unavailable. */ }
       }
     }
 
     const load = async (initial: boolean) => {
       controller?.abort();
       controller = new AbortController();
+      const current = controller;
       if (initial) setLoading(true);
       else setRefreshing(true);
+      setError("");
       try {
-        const response = await fetch("/api/trading/kospi", {
+        const payload = await requestJson<unknown>("/api/trading/kospi", {
           cache: "default",
-          signal: controller.signal,
+          signal: current.signal,
         });
-        if (!response.ok) throw new Error("KOSPI request failed");
-        const next: IndexData = await response.json();
-        if (active && !controller.signal.aborted) {
+        const next = parseIndexData(payload);
+        if (active && !current.signal.aborted) {
           setData(next);
           if (next.points?.length) {
-            localStorage.setItem(
-              "stockpilot_kospi_snapshot",
-              JSON.stringify(next),
-            );
+            saveSnapshot(next);
           }
         }
       } catch (reason) {
         if (
           active &&
-          !(reason instanceof DOMException && reason.name === "AbortError")
+          !current.signal.aborted
         ) {
-          setData((current) => current);
+          setError(reason instanceof Error ? reason.message : "지수를 불러오지 못했어요.");
         }
       } finally {
-        if (active && !controller.signal.aborted) {
+        if (active && controller === current && !current.signal.aborted) {
           setLoading(false);
           setRefreshing(false);
         }
       }
     };
 
-    if (!initialData?.points?.length) void load(true);
+    if (!initial?.points.length || attempt > 0) void load(!initial);
     const interval = window.setInterval(() => void load(false), 300_000);
     return () => {
       active = false;
@@ -117,7 +99,7 @@ export default function MarketIndexChart({
       if (hydrateTimer !== null) window.clearTimeout(hydrateTimer);
       window.clearInterval(interval);
     };
-  }, [initialData]);
+  }, [initialData, attempt]);
 
   const chart = useMemo(() => {
     const points = data?.points || [];
@@ -178,12 +160,12 @@ export default function MarketIndexChart({
         <small title={data?.source || "KIS Open API"}>
           5분마다 갱신
           {updated ? ` · ${updated}` : ""}
-          {data?.stale ? " · 이전 데이터 표시 중" : ""}
+          {data?.stale || error ? " · 이전 자료" : ""}
         </small>
       </div>
 
       <div className="market-index-visual">
-        {loading ? (
+        {loading && !data ? (
           <div className="index-state">
             <RefreshCw className="spin" size={17} /> KOSPI 지수를 불러오고
             있어요
@@ -242,10 +224,12 @@ export default function MarketIndexChart({
             장 운영 시간 또는 KIS 연결 상태를 확인하고 있어요.
           </div>
         )}
-        {refreshing ? (
+        {refreshing || loading && data ? (
           <RefreshCw className="index-refresh spin" size={14} />
         ) : null}
       </div>
+      <button type="button" className="index-refresh-button" aria-label="KOSPI 지수 다시 조회" disabled={loading || refreshing} onClick={() => setAttempt(value => value + 1)}><RefreshCw size={14} className={refreshing ? "spin" : ""} aria-hidden="true"/></button>
+      {error ? <p className="index-read-error" role="status">{data ? "최근 자료를 확인하지 못했어요. 이전 자료를 표시해요." : error}<button type="button" onClick={() => setAttempt(value => value + 1)}>다시 조회</button></p> : null}
     </section>
   );
 }

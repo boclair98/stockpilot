@@ -76,6 +76,7 @@ http.createServer(async(req,res) => {
     }
     if(upgradeFixture&&p==='/api/personal/recurring')return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(scenario==='personal-malformed'?{items:null}:{items:[],runs:[],worker:null}));
     if(upgradeFixture&&p==='/api/personal/notices')return res.writeHead(200,{'Content-Type':'application/json'}).end('{"items":[]}');
+    if(upgradeFixture&&p==='/api/personal/saved')return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({owner:'local-verification',items:url.searchParams.get('kind')==='FAVORITE'?[quotes[0],quotes[2]].map(quote=>({key:quote.id,data:quote,version:1,deleted:false,updatedAt:'2026-10-22T01:00:00Z'})):[]}));
     if(upgradeFixture&&p==='/api/growth/analytics') {
       if(scenario==='analytics-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 분석 조회 실패"}');}
       data=scenario==='analytics-guest'?{authenticated:false,analytics:null}:{authenticated:true,analytics:scenario==='analytics-empty'?null:scenario==='analytics-malformed'?{...analyticsFixture,totalReturn:'invalid'}:analyticsFixture};

@@ -1,6 +1,7 @@
 "use client";
 
-import { BarChart3, CandlestickChart, LineChart, RefreshCw } from "lucide-react";
+import { BarChart3, CandlestickChart, LineChart, RefreshCw, Maximize2 } from "lucide-react";
+import ChartExplorer from "./ChartExplorer";
 import { useEffect, useId, useMemo, useState } from "react";
 import { requestJson } from "@/lib/reliable-request";
 import { buildStockChart, chartDate, chartPrice, nearestChartPoint, parseStockHistory, type ChartIdentity, type StockChartMode, type StockHistory } from "@/lib/stock-chart";
@@ -15,6 +16,7 @@ export default function StockTrendPanel({ symbol, name, market, exchange, curren
   const [inspected, setInspected] = useState<{ key: string; date: string } | null>(null);
   const [showAverage, setShowAverage] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [expandedFor, setExpandedFor] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     // Reset the read state for this exact instrument; never show another symbol's chart.
@@ -52,7 +54,7 @@ export default function StockTrendPanel({ symbol, name, market, exchange, curren
         <button type="button" aria-pressed={chart.mode === "line"} onClick={() => setMode("line")}><LineChart size={16} aria-hidden="true"/>선</button>
         <button type="button" aria-pressed={chart.mode === "candle"} disabled={!chart.canCandle} onClick={() => setMode("candle")}><CandlestickChart size={16} aria-hidden="true"/>일봉</button>
         <button type="button" aria-pressed={showAverage} disabled={!chart.averageAvailable} onClick={() => setShowAverage(value => !value)}>MA20</button>
-      </div><button type="button" className="broker-chart-reload" aria-label="일별 시세 새로고침" onClick={retry}><RefreshCw size={17} aria-hidden="true"/></button></div>
+      </div><div className="broker-chart-actions"><button type="button" className="chart-expand" onClick={() => setExpandedFor(identityKey)}><Maximize2 size={16} aria-hidden="true"/>넓게 보기</button><button type="button" className="broker-chart-reload" aria-label="일별 시세 새로고침" onClick={retry}><RefreshCw size={17} aria-hidden="true"/></button></div></div>
       <div className="broker-chart-period"><span>{chart.points[0].date} — {chart.points.at(-1)!.date} · {chart.points.length}개 일별 기록</span><b data-sign={chart.changePercent === null || chart.changePercent === 0 ? "flat" : chart.changePercent > 0 ? "up" : "down"}>{chart.changePercent === null ? "기간 비교 준비 중" : `${chart.changePercent > 0 ? "+" : ""}${chart.changePercent.toFixed(2)}%`}<small> 첫날 종가 대비</small></b></div>
       {!chart.canCandle && <p className="broker-chart-note">일부 시가·고가·저가를 확인할 수 없어 종가 선으로 표시해요.</p>}
       {chart.points.some(point => point.volume === null) && <p className="broker-chart-note">거래량 자료가 없는 날은 막대를 그리지 않아요. 확인된 거래량 0과는 달라요.</p>}
@@ -79,5 +81,6 @@ export default function StockTrendPanel({ symbol, name, market, exchange, curren
       <p id={helpId} className="broker-chart-note">그래프를 누르거나 날짜 조절 막대의 좌우 키로 살펴보세요. MA20은 일별 종가 20개 평균이에요.{showAverage ? " 점선은 MA20이에요." : ""} 시세는 거래일 기준으로 표시하며 실시간 틱 차트가 아니에요.</p>
       <details className="broker-chart-table"><summary>가격·거래량 표로 보기</summary><div role="region" aria-label="일별 가격과 거래량" tabIndex={0}><table><caption>{name} · {currency} · {chart.points.length}개 일별 기록</caption><thead><tr><th scope="col">거래일</th><th scope="col">시가</th><th scope="col">고가</th><th scope="col">저가</th><th scope="col">종가</th><th scope="col">거래량(주)</th></tr></thead><tbody>{chart.points.map(point => <tr key={point.date}><th scope="row"><time dateTime={point.date}>{point.date}</time></th><td>{chartPrice(point.open,currency)}</td><td>{chartPrice(point.high,currency)}</td><td>{chartPrice(point.low,currency)}</td><td>{chartPrice(point.close,currency)}</td><td>{point.volume === null ? "자료 없음" : point.volume.toLocaleString("ko-KR")}</td></tr>)}</tbody></table></div></details>
     </div>}
+    {expandedFor === identityKey && history?.points.length ? <ChartExplorer key={identityKey} points={history.points} currency={currency} symbol={symbol} name={name} initialDays={days} onDismiss={() => setExpandedFor(null)}/> : null}
   </section>;
 }

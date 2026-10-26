@@ -59,6 +59,7 @@ import "./broker-rankings.css";
 import "./watchlist-layout.css";
 import "./page-recovery.css";
 import "./service-readability.css";
+import "./product-workspace.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -111,6 +112,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return <html lang="ko"><body>{children}<AdSenseScript client={adsenseClient} /><PwaRuntime /><MobileServiceNav /><GlobalDisplayControls/></body></html>;
+  return <html lang="ko" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: `(()=>{let p={dark:true};try{const v=JSON.parse(localStorage.getItem('stockpilot:display:v1')||'null');if(v&&typeof v==='object'&&!Array.isArray(v)&&typeof v.dark==='boolean')p=v}catch{}const h=document.documentElement;h.dataset.theme=p.dark?'dark':'light';h.dataset.density=p.compact===true?'compact':'comfortable';h.dataset.private=p.privateMode===true?'true':'false'})()` }}/></head><body>{children}<AdSenseScript client={adsenseClient} /><PwaRuntime /><MobileServiceNav /><GlobalDisplayControls/></body></html>;
 }
 

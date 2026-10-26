@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useSyncExternalStore } from "react";
 import { Moon, Sun, Rows3, PanelTop, Eye, EyeOff } from "lucide-react";
-const defaultSnapshot = '{"dark":false,"compact":false,"privateMode":false}';
+const defaultSnapshot = '{"dark":true,"compact":false,"privateMode":false}';
 function read() {
   try {
     return localStorage.getItem("stockpilot:display:v1") || defaultSnapshot;
@@ -22,6 +22,7 @@ export default function WorkspaceControls({ themeOnly = false }: { themeOnly?: b
   let prefs;
   try {
     prefs = JSON.parse(snapshot);
+    if (!prefs || typeof prefs !== "object" || Array.isArray(prefs) || typeof prefs.dark !== "boolean") prefs = JSON.parse(defaultSnapshot);
   } catch {
     prefs = JSON.parse(defaultSnapshot);
   }
