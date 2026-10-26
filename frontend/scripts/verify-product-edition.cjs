@@ -93,6 +93,7 @@ test("canvas enhancement keeps one chart across modes and cleans up observers/ha
   const inspected=[],base={points:prices,days:20,mode:"line",average:false,currency:"KRW",name:"삼성전자",selectedDate:prices.at(-1).date,onInspect:date=>inspected.push(date),zoom:{revision:0,action:"fit"}};
   const h=harness("components/InteractiveChart.tsx",base);h.render();await h.flush();assert.equal(h.charts.length,1);const chart=h.charts[0];assert.equal(chart.series.length,4);assert.equal(h.observations.resize,1);assert.equal(h.observations.theme,1);
   assert.equal(chart.series[3].options.priceFormat.formatter(2000),"2,000주");assert.equal(chart.series[3].options.priceFormat.minMove,1);
+  assert.equal(chart.options.localization.priceFormatter,undefined);assert.equal(chart.series[0].options.priceFormat.formatter(2000),"₩2,000");
   h.props({...base,mode:"candle",average:true});await h.flush();assert.equal(h.charts.length,1);assert.equal(chart.series[1].options.visible,true);assert.equal(chart.series[2].options.visible,true);
   chart.crosshair({time:{year:2026,month:9,day:29}});assert.equal(inspected.at(-1),"2026-09-29");chart.crosshair({time:"2026-08-01"});assert.equal(inspected.length,1);
   h.props({...base,zoom:{revision:1,action:"in"}});assert.equal(chart.ranges.length,1);h.unmount();assert.equal(chart.removed,1);assert.equal(chart.crosshair,null);assert.equal(h.observations.disconnected,2);

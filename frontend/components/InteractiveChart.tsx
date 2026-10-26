@@ -36,12 +36,12 @@ export default function InteractiveChart(props: Props) {
         crosshair: { mode: lib.CrosshairMode.Normal, vertLine: { color: palette.brand, labelBackgroundColor: "#5262db" }, horzLine: { color: palette.brand, labelBackgroundColor: "#5262db" } },
         handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
         handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true, axisDoubleClickReset: true },
-        localization: { locale: "ko-KR", priceFormatter: (value: number) => chartPrice(value, latest.current.currency) },
+        localization: { locale: "ko-KR" },
       });
       chart.current = api;
       // The exact inspected price stays above the chart. Avoid a low-contrast
       // duplicate price badge on the bright Korean movement colors.
-      const common = { priceLineVisible: false, lastValueVisible: false };
+      const common = { priceLineVisible: false, lastValueVisible: false, priceFormat: { type: "custom" as const, minMove: .0001, formatter: (value: number) => chartPrice(value, latest.current.currency) } };
       const line = api.addSeries(lib.AreaSeries, { ...common, lineColor: palette.up, topColor: "rgba(207,53,83,.16)", bottomColor: "rgba(207,53,83,0)", lineWidth: 2 });
       const candles = api.addSeries(lib.CandlestickSeries, { ...common, upColor: palette.up, downColor: palette.down, borderVisible: false, wickUpColor: palette.up, wickDownColor: palette.down, visible: false });
       const average = api.addSeries(lib.LineSeries, { ...common, color: palette.brand, lineWidth: 1, lineStyle: lib.LineStyle.Dashed, lastValueVisible: false, visible: false });
