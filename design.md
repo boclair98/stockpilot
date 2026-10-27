@@ -391,3 +391,16 @@ Output and quality gate: implement real integrated files, run full safety/type/l
 - 첫 운영 배포의 실제 1억 원 자산 문자열이 360px에서 주문 가능 disclosure와 같은 행을 쓰면서 마지막 숫자만 줄바꿈되는 것을 확인했다. 기존 기능·폰트 크기·금융 계산은 유지한다.
 - 389px 이하에서는 자산 금액과 disclosure를 각기 전체 행으로 배치한다. 금액은 한 줄을 유지하며, 극단적으로 긴 값은 해당 값 영역만 수평으로 읽을 수 있게 한다. 페이지 전체를 숨기거나 숫자를 생략·축소하지 않는다.
 - 수정 경로는 `frontend/app/product-workspace.css`뿐이며, 실제 운영 320/360/390px의 금액 높이·한 줄 여부·글자 잘림·가로 넘침과 768/1440px를 재확인한다. 로컬 빌드·회귀 검사 후 upstream → fork → 기존 웹 재배포로 마무리한다.
+
+## 2026-10-27 전체 종목 접근성·정확성 보완
+
+- 목적/사용자: 처음 주식을 찾는 모바일 사용자와 전체 목록을 탐색하는 데스크톱 사용자. 기존 브로커리지 디자인·가상 계좌·주문 규칙은 유지한다.
+- 근거: 운영 목록 API는 KR 3,962 / US 12,882건을 반환했지만 `FullMarketCatalog`가 순위 아래 접힌 영역에 숨어 있다. 기존 검색은 최대20건이고 페이지 점프가 없다. 공식 KIS 코스닥 마스터는 코스피와 다른 필드 길이를 쓰며, 영문 포함6자리 코드가 실제 파일에 있다. 기존 끝6자리 자르기는9자리 펀드 코드를 주식 코드처럼 취급할 수도 있어 교정한다.
+- OpenUI resolved inputs: Topic=한국·미국 전체 종목 찾기, Offer=지원 거래소 전 종목의 페이지 탐색·검색·상세 연결, Audience=주식 초보자와 재방문자, Primary user action=종목 검색 후 상세 열기, Deliverable=기존 Next.js에 `/stocks` 통합, Style direction=기존 consumer brokerage 그대로, Tonal key=dark-default/light, Icon policy=기존 Lucide, Proof assets=실제 공식 마스터 및 격리된 테스트 자료, Motion intensity=낮음.
+- Composition contract: hero archetype=작업형 제목·검색, first viewport=시장/거래소 필터와 실제 목록, proof artifact=전체 건수·해당 범위·정렬된 종목 행, interaction=20/50/100개 단위 페이지·직접 이동·URL 복원, reuse boundary=기존 토큰·폰트·로고·상세 URL 유지. 새로운 랜딩·마케팅 히어로는 만들지 않는다.
+- 방향/토큰: 기존 `--ws-*` 색상, Pretendard, 26/32px 제목, 16px 입력·종목명, 12~14px 보조 정보, 44px 터치, 12px 컨트롤·20px 주요 표면, 4/8/12/16/24/32 간격. 작은 화면은 순위처럼 보이는 번호 대신 탐색 위치와 종목·거래소·상세 액션에 집중한다. 좁은 영역을 전역 overflow 숨김이나 숫자 축소로 해결하지 않는다.
+- CTA: ‘전체 종목’→`/stocks`; 종목명/‘시세 보기’→기존 `/?view=detail&market=...&exchange=...&symbol=...`; ‘이전/다음/마지막/이동’은 읽기 전용 목록 조회. 가격은 수만 개 동시 요청하지 않고 기존 상세에서 실제 조회한다. 전체 건수와 검색 결과 수를 구분한다. 지원 밖 거래소·파생상품까지 모두 있다고 말하지 않는다.
+- 상태: 중단 가능한 검색, 오래된 응답 무시, 목록 버전 변경409 시 첫 페이지 재조회, 실패 시 오류·재조회, 부분 자료 시 거래소별 상태 표시 및 전체 완전성 주장 금지. URL의 시장·거래소·검색·페이지 크기·페이지를 뒤로가기/새로고침에도 복원한다. 가격·주문 응답은 제조하지 않는다.
+- 수정 경로: catalog parser와 읽기 전용 directory method/route, `/stocks` 페이지·client·helper·CSS, 홈/전체 메뉴/검색 바로가기, sitemap·README·회귀 검사. AIT 소스·계좌 DB·금융 계산 변경 없음. 라이브러리는 기존 기능으로 충분해 추가 설치하지 않는다.
+- 검증: 공식 마스터 실제 파싱 전후 비교, 페이지 전체 순회·끝 페이지·한글/영문/티커 검색·거래소 필터·잘못된 입력·부분자료·snapshot 변경 테스트. 타입/린트/전체 safety/build 후 320/360/390/768/1440px 라이트/다크 실제 브라우저에서 검색→상세→뒤로가기 및 오류 복구. 실제 운영 계좌 쓰기는 하지 않는다.
+- Filled master prompt/output: StockPilot의 현재 consumer brokerage 시각 언어 안에서 국내·미국 종목 전체 탐색을 한 화면에 완성한다. 실제 지원 범위와 자료 건수를 증거로 삼고 거대한 마케팅 카드 대신 읽기 쉬운 종목 행과 검색에 집중한다. 원본 모의주문·계좌·인증·통화·정확한 종목 ID를 유지한다. 기존 semantic colors·44px 조작·한국어 줄바꿈·reduced-motion을 따르며 모든 액션은 실제 읽기 API/기존 상세 URL에 연결한다. Output target=`frontend/app/stocks/page.tsx` 및 공통 진입점, backend 읽기 전용 API. 세 번의 검토는 구성→타입/간격/테마→상태/키보드/반응형 순으로 실제 결함을 고친다. 배포는 이번 변경에 대한 사용자 승인 후에만 한다.

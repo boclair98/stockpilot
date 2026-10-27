@@ -105,7 +105,7 @@ export default function CompanyInsight({
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const validSymbol = market === "KR" ? /^\d{6}$/.test(symbol) : /^[A-Za-z][A-Za-z0-9.\-]{0,11}$/.test(symbol);
+    const validSymbol = market === "KR" ? /^[0-9A-Z]{6}$/.test(symbol) : /^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol);
     if (!validSymbol) {
       return;
     }
@@ -115,7 +115,7 @@ export default function CompanyInsight({
       setData(null);
       setLoading(true);
       setFailed(false);
-      const endpoint = market === "US" ? `/api/company/us/${encodeURIComponent(symbol)}` : `/api/company/${symbol}`;
+      const endpoint = market === "US" ? symbol.includes("/") ? `/api/company/us-lookup?${new URLSearchParams({symbol})}` : `/api/company/us/${encodeURIComponent(symbol)}` : `/api/company/${symbol}`;
       requestJson<CompanyData>(endpoint, {
         cache: "no-store",
         signal: controller.signal,

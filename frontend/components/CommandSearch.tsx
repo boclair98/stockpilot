@@ -180,6 +180,7 @@ export default function CommandSearch({
                     { href: "#decision-review", label: "매매 기록" },
                     { href: "/practice", label: "투자 연습" },
                     { href: "/compare", label: "종목 비교" },
+                    { href: "/stocks", label: "국내·미국 전체 종목" },
                     { href: "/notifications", label: "알림 모아보기" },
                     { href: "/account-tools", label: "계좌 관리·정기 매수" },
                     { href: "/support", label: "고객지원·공지" },
@@ -193,6 +194,7 @@ export default function CommandSearch({
                 </>
               )}
             </div>
+            {query.trim() ? <a className="command-search-catalog" href={`/stocks?${new URLSearchParams({q: query.trim(), market: items[active]?.market || items[0]?.market || "KR"})}`} onClick={close}><span>전체 목록에서 더 찾기<small>빠른 검색은 최대 20개를 보여줘요</small></span><ArrowUpRight size={17}/></a> : null}
             <footer>↑ ↓ 이동 · Enter 선택 · Esc 닫기</footer>
           </section>
         </div>

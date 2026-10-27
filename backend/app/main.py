@@ -30,6 +30,7 @@ from app.routes.company import router as company_router
 from app.routes.engagement import router as engagement_router
 from app.routes.growth import router as growth_router
 from app.routes.league import router as league_router
+from app.routes.market_directory import router as market_directory_router
 from app.routes.operations import router as operations_router
 from app.routes.personal import router as personal_router
 from app.routes.posts import router as posts_router
@@ -254,6 +255,7 @@ app.include_router(company_router)
 app.include_router(engagement_router)
 app.include_router(growth_router)
 app.include_router(league_router)
+app.include_router(market_directory_router)
 app.include_router(operations_router)
 app.include_router(posts_router)
 app.include_router(trading_router)

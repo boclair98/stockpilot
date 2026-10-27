@@ -85,7 +85,7 @@ def normalize_row(raw: dict, market: str, exchange: str, as_of: str) -> dict | N
         else raw.get("symb", "")
     ).strip()
     if not re.fullmatch(
-        r"\d{6}" if market == "KR" else r"[A-Z0-9][A-Z0-9.\-]{0,11}", symbol
+        r"[0-9A-Z]{6}" if market == "KR" else r"[A-Z0-9][A-Z0-9./\-]{0,11}", symbol
     ):
         return None
     if market == "US" and raw.get("excd") not in {None, "", exchange}:

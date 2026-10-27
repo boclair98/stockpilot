@@ -62,6 +62,7 @@ import AdSlot from "./AdSlot";
 import OrderResult, { type OrderResultState } from "./OrderResult";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { isOrderReceipt, isValidPortfolio, isValidQuote, type OrderReceipt } from "@/lib/trading-validation";
+import { mergeQuoteSnapshots } from "@/lib/quote-snapshots";
 
 const InvestmentHistory = dynamic(() => import("./InvestmentHistory"), {
   loading: () => <p role="status">투자 기록 화면을 준비하고 있어요…</p>,
@@ -252,6 +253,8 @@ const percentText = (value: number) =>
 
 export default function TradingTerminal() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [quoteReadError, setQuoteReadError] = useState<{id:string;message:string}|null>(null);
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
   const [portfolio, setPortfolio] = useState<Portfolio>({
     authenticated: false,
     cash: { KRW: 100_000_000, USD: 100_000 },
@@ -480,7 +483,7 @@ export default function TradingTerminal() {
       );
       if (Array.isArray(saved) && saved.length) {
         window.setTimeout(() => {
-          if (!stopped) setQuotes(saved.filter((item:Quote) => isValidQuote(item) && Date.now() - Date.parse(item.asOf) < 7 * 86400_000).map((item:Quote) => ({...item,marketState:"CACHED"})));
+          if (!stopped) setQuotes(current => mergeQuoteSnapshots(current, saved.filter((item:Quote) => isValidQuote(item) && Date.now() - Date.parse(item.asOf) < 7 * 86400_000).map((item:Quote) => ({...item,marketState:"CACHED"}))));
         }, 0);
       }
     } catch {
@@ -494,7 +497,7 @@ export default function TradingTerminal() {
         if (!data || stopped) return;
         if (Array.isArray(data.quotes) && data.quotes.length) {
           const valid = data.quotes.filter(isValidQuote);
-          setQuotes(valid);
+          setQuotes(current => mergeQuoteSnapshots(current, valid));
           saveSnapshot(valid);
         }
         if (data.status) setStatus(data.status);
@@ -528,13 +531,7 @@ export default function TradingTerminal() {
           if (message.type === "quotes" && Array.isArray(message.data)) {
             const incoming: Quote[] = message.data.filter(isValidQuote);
             startTransition(() => {
-              setQuotes((current) => [
-                ...incoming,
-                ...current.filter(
-                  (item) =>
-                    !incoming.some((next: Quote) => next.id === item.id),
-                ),
-              ]);
+              setQuotes(current => mergeQuoteSnapshots(current, incoming));
               setStatus(message.status);
             });
             saveSnapshot(incoming);
@@ -706,6 +703,9 @@ export default function TradingTerminal() {
     [quotes],
   );
   const quote = quoteById.get(selected);
+  const activeMarket: Market = selected.startsWith("US:") ? "US" : "KR";
+  const activeExchange = selected.split(":")[1] || (activeMarket === "US" ? "NAS" : "KRX");
+  const activeCurrency: Currency = activeMarket === "US" ? "USD" : "KRW";
   const activeSymbol = quote?.symbol ?? selected.split(":").at(-1) ?? "005930";
   const selectedName = quote?.name ?? activeSymbol;
   const favoriteIds = useMemo(
@@ -1003,11 +1003,12 @@ export default function TradingTerminal() {
       setConfirmingOrder(false);
       const params = new URLSearchParams(location.search);
       const symbol = params.get("symbol")?.toUpperCase();
-      if (params.get("view") !== "detail" || !symbol || !/^[A-Z0-9.\-]{1,12}$/.test(symbol)) return;
+      if (params.get("view") !== "detail" || !symbol || !/^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol)) return;
       const market: Market = params.get("market") === "US" ? "US" : "KR";
       const exchange = params.get("exchange") || (market === "US" ? "NAS" : "KRX");
       if (!/^[A-Z]{3,8}$/.test(exchange)) return;
       const id = `${market}:${exchange}:${symbol}`;
+      setQuoteReadError(null);
       if (selectedIdentity.current !== id) activateInstrument(id);
       if (location.hash === "#order-ticket" && window.innerWidth < 980) setMobileOrderOpen(true);
       void loadQuote({
@@ -1016,14 +1017,16 @@ export default function TradingTerminal() {
       })
         .then((data) => {
           if (!active || request !== selectionRequest.current) return;
-          setQuotes((current) => [...current.filter((q) => q.id !== data.id), data]);
+          setQuotes(current => mergeQuoteSnapshots(current, [data]));
           // A delayed read must not overwrite a price the user has started typing.
           setLimitPrice((current) => current || String(data.price));
           setTriggerPrice((current) => current || String(data.price));
         })
         .catch(() => {
-          if (active && request === selectionRequest.current)
+          if (active && request === selectionRequest.current) {
+            setQuoteReadError({id,message:"이 종목의 시세를 불러오지 못했어요. 다시 조회하거나 다른 종목을 선택해 주세요."});
             notify("이 종목의 시세를 불러오지 못했어요. 검색으로 다시 선택해 주세요.");
+          }
         });
     };
     restoreInstrument();
@@ -1034,7 +1037,7 @@ export default function TradingTerminal() {
       window.removeEventListener("popstate", restoreInstrument);
       window.removeEventListener("hashchange", restoreInstrument);
     };
-  }, [activateInstrument, loadQuote, notify]);
+  }, [activateInstrument, loadQuote, notify, quoteAttempt]);
 
   const toggleFavorite = useCallback(
     async (item: SearchItem) => {
@@ -1101,10 +1104,7 @@ export default function TradingTerminal() {
       url.searchParams.set("exchange", data.exchange);
       url.hash = "instrument-workspace";
       history.pushState({ stockpilotView: "DETAIL" }, "", url);
-      setQuotes((current) => [
-        ...current.filter((entry) => entry.id !== data.id),
-        data,
-      ]);
+      setQuotes(current => mergeQuoteSnapshots(current, [data]));
       activateInstrument(data.id, data.price);
       rememberStock({
         id: data.id,
@@ -1393,7 +1393,7 @@ export default function TradingTerminal() {
           >
             매매 기록
           </a>
-          <a href="/practice">투자 연습</a>
+          <a href="/stocks">전체 종목</a>
         </nav>
         <div className="top-actions">
           <CommandSearch onChoose={chooseSearchResult} />
@@ -2026,8 +2026,8 @@ export default function TradingTerminal() {
               />
               <div>
                 <span className="workspace-eyebrow">
-                  {activeSymbol} · {quote?.exchange || "—"} ·{" "}
-                  {quote?.currency || "—"}
+                  {activeSymbol} · {activeExchange} ·{" "}
+                  {activeCurrency}
                 </span>
                 <h2>{selectedName}</h2>
               </div>
@@ -2084,13 +2084,14 @@ export default function TradingTerminal() {
               </button>
             </div>
           </header>
+          {quoteReadError?.id === selected && !quote ? <div className="instrument-quote-recovery" role="alert"><p>{quoteReadError.message}</p><button type="button" onClick={() => setQuoteAttempt(value => value + 1)}>시세 다시 조회</button><a href={`/stocks?market=${activeMarket}`}>다른 종목 찾기</a></div> : null}
           <DeferredMount minHeight={390} rootMargin="420px 0px" eager={workspaceView === "DETAIL"}>
             <StockTrendPanel
               symbol={activeSymbol}
               name={selectedName}
-              market={quote?.market ?? "KR"}
-              exchange={quote?.exchange ?? "KRX"}
-              currency={quote?.currency ?? "KRW"}
+              market={activeMarket}
+              exchange={activeExchange}
+              currency={activeCurrency}
             />
           </DeferredMount>
 
@@ -2120,9 +2121,9 @@ export default function TradingTerminal() {
               <MarketReplayStudio
                 symbol={activeSymbol}
                 name={selectedName}
-                market={quote?.market ?? "KR"}
-                exchange={quote?.exchange ?? "KRX"}
-                currency={quote?.currency ?? "KRW"}
+                market={activeMarket}
+                exchange={activeExchange}
+                currency={activeCurrency}
               />
             </DeferredMount>
           ) : null}
@@ -2132,7 +2133,7 @@ export default function TradingTerminal() {
               <DeferredMount minHeight={320} rootMargin="320px 0px" eager={workspaceView === "DETAIL"}>
                 <CompanyInsight
                   symbol={activeSymbol}
-                  market={quote?.market ?? "KR"}
+                  market={activeMarket}
                 />
               </DeferredMount>
             </div>

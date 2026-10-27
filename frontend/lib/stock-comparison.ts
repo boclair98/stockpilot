@@ -45,8 +45,8 @@ export function parseComparisonIds(value: string): Array<{symbol:string;market:"
     seen.add(id);
     const [market,exchange,symbol,...rest] = id.split(':');
     if (rest.length || !symbol) return [];
-    if (market === 'KR' && ['KRX','NXT'].includes(exchange) && /^\d{6}$/.test(symbol)) return [{market,symbol,exchange} as const];
-    if (market === 'US' && ['NAS','NYS','AMS'].includes(exchange) && /^[A-Z0-9.\-]{1,16}$/.test(symbol)) return [{market,symbol,exchange} as const];
+    if (market === 'KR' && ['KRX','NXT'].includes(exchange) && /^[0-9A-Z]{6}$/.test(symbol)) return [{market,symbol,exchange} as const];
+    if (market === 'US' && ['NAS','NYS','AMS'].includes(exchange) && /^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol)) return [{market,symbol,exchange} as const];
     return [];
   }).slice(0,3);
 }

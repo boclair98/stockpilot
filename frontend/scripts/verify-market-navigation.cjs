@@ -32,7 +32,7 @@ function deferred() {
   return {promise, resolve, reject};
 }
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-const instrument = (symbol, market = 'KR') => ({id: `${market}:${market === 'KR' ? 'KRX' : 'NAS'}:${symbol}`, symbol, name: `종목 ${symbol}`, englishName: `Company ${symbol}`, market, exchange: market === 'KR' ? 'KRX' : 'NAS', currency: market === 'KR' ? 'KRW' : 'USD'});
+const instrument = (symbol, market = 'KR') => ({id: `${market}:${market === 'KR' ? 'KRX' : 'NAS'}:${symbol}`, symbol, name: `종목 ${symbol}`, englishName: `Company ${symbol}`, market, exchange: market === 'KR' ? 'KRX' : 'NAS', currency: market === 'KR' ? 'KRW' : 'USD',asOf:'2026-10-27T00:00:00Z'});
 const a = instrument('005930'), b = instrument('000660');
 
 async function navigationTests() {
@@ -49,7 +49,10 @@ async function navigationTests() {
     loadQuote: item => { const pending = deferred(); reads.push({item, ...pending}); return pending.promise; },
     quotes: [],
   });
-  for (const name of ['Selected','Side','Kind','Quantity','LimitPrice','TriggerPrice','ProtectionQuantity','TakeProfitPrice','StopLossPrice','ConfirmingOrder','MobileOrderOpen','OrderSafetyChecks','Searching','Quotes','WorkspaceView','SearchQuery','SearchResults','SearchFailed','SearchMarket','SearchAttempt']) {
+  const quoteModule={exports:{}};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/quote-snapshots.ts','utf8'),{compilerOptions:options}).outputText,{exports:quoteModule.exports});
+  ctx.mergeQuoteSnapshots=quoteModule.exports.mergeQuoteSnapshots;
+  for (const name of ['Selected','Side','Kind','Quantity','LimitPrice','TriggerPrice','ProtectionQuantity','TakeProfitPrice','StopLossPrice','ConfirmingOrder','MobileOrderOpen','OrderSafetyChecks','Searching','Quotes','WorkspaceView','SearchQuery','SearchResults','SearchFailed','SearchMarket','SearchAttempt','QuoteReadError']) {
     const state = name[0].toLowerCase() + name.slice(1);
     ctx[`set${name}`] = next => { ctx[state] = typeof next === 'function' ? next(ctx[state]) : next; };
   }
@@ -110,9 +113,26 @@ async function navigationTests() {
   ctx.item = 'ALL'; ctx.searchMarket = 'ALL'; ctx.searching = false;
   marketClick();
   assert.equal(ctx.searching, false, 'Clicking the active market does not start an endless loading state');
+  ctx.location = new URL('https://example.test/?view=detail&symbol=BRK%2FB&market=US&exchange=NYS');
+  listeners.get('popstate')();
+  assert.equal(reads[4].item.symbol, 'BRK/B', 'A slash share-class ticker must not be silently rejected or normalized');
+  assert.equal(reads[4].item.exchange, 'NYS');
+  reads[4].resolve({...instrument('BRK/B','US'),exchange:'NYS',id:'US:NYS:BRK/B',price:500});
+  await flush();
+  assert.equal(ctx.selected, 'US:NYS:BRK/B');
+  assert.equal(notices.length,0,'Successful navigation and canceled old reads must not show an error');
+  ctx.location = new URL('https://example.test/?view=detail&symbol=ABR%2FD&market=US&exchange=NYS');
+  listeners.get('popstate')();
+  reads[5].reject(new Error('offline'));await flush();
+  assert.equal(ctx.quoteReadError.id,'US:NYS:ABR/D','A failed detail read has a durable recoverable error, not an endless loading label');
+  listeners.get('popstate')();
+  assert.equal(ctx.quoteReadError,null,'Explicit read retry clears the old error without replaying an order');
+  reads[6].resolve({...instrument('ABR/D','US'),exchange:'NYS',id:'US:NYS:ABR/D',price:20});await flush();
+  assert.equal(ctx.quotes.some(q=>q.id==='US:NYS:ABR/D'),true);
   cleanup();
   assert.equal(listeners.size, 0);
-  assert.equal(notices.length, 0);
+  assert.equal(notices.length, 1, 'Only the explicitly simulated offline read should show an error');
+  assert.match(notices[0],/시세를 불러오지 못했어요/);
 }
 
 async function searchTests() {

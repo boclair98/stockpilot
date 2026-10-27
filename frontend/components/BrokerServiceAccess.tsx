@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeftRight, Bell, History, WalletCards } from "lucide-react";
+import { ArrowLeftRight, Bell, History, WalletCards, Search } from "lucide-react";
 
 const services = [
+  { href: "/stocks", label: "전체 종목", compact: "전체 종목", icon: Search },
   { href: "/compare", label: "종목 비교", compact: "비교", icon: ArrowLeftRight },
   { href: "/notifications", label: "알림 모아보기", compact: "알림", icon: Bell },
   { href: "/account-tools", label: "계좌 도구", compact: "계좌", icon: WalletCards },

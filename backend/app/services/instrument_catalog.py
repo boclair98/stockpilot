@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import heapq
 import logging
 import zipfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from io import BytesIO
 from urllib.parse import quote
 
@@ -138,6 +140,8 @@ class InstrumentCatalog:
         self._search_rows: dict[str, tuple[Instrument, str, str, str]] = {}
         self._page_rows: dict[tuple[str, str], list[Instrument]] = {}
         self._loaded_exchanges: set[str] = set()
+        self._loaded_at: dict[str, str] = {}
+        self._directory_versions: dict[tuple[str, str], str] = {}
         for item in TOP_INSTRUMENTS:
             self._add(item)
         self._loaded = False
@@ -160,6 +164,7 @@ class InstrumentCatalog:
             item.english_name.casefold(),
         )
         self._page_rows.clear()
+        self._directory_versions.clear()
 
     @property
     def count(self) -> int:
@@ -197,11 +202,14 @@ class InstrumentCatalog:
                         else self._parse_us(raw, exchange)
                     )
                     if not parsed:
-                        logger.warning("KIS master contained no instruments (%s)", exchange)
+                        logger.warning(
+                            "KIS master contained no instruments (%s)", exchange
+                        )
                         continue
                     for item in parsed:
                         self._add(item)
                     self._loaded_exchanges.add(exchange)
+                    self._loaded_at[exchange] = datetime.now(UTC).isoformat()
                 self._loaded = self._loaded_exchanges == set(MASTER_URLS)
                 if not self._loaded:
                     self.last_error = "일부 KIS 종목 마스터를 불러오지 못했습니다."
@@ -219,15 +227,25 @@ class InstrumentCatalog:
     @staticmethod
     def _parse_domestic(raw: bytes, exchange_name: str) -> list[Instrument]:
         items = []
-        for line in raw.splitlines():
-            # The last 228 bytes are fixed-width flags; the name before them
-            # is variable-width CP949 text.
-            if len(line) <= 249:
+        # Official KIS parsers count the LF terminator in 228/222 characters.
+        # splitlines removes that terminator; KOSPI has 227 trailing fields,
+        # KOSDAQ 221. Decode first so a Korean name cannot be cut mid-character.
+        flag_width = 221 if exchange_name == "KOSDAQ" else 227
+        for line in raw.decode("cp949", errors="replace").splitlines():
+            if len(line) <= 21 + flag_width:
                 continue
-            head = line[:-228]
-            code = head[0:9].decode("cp949", errors="ignore").strip()[-6:]
-            name = head[21:].decode("cp949", errors="ignore").strip()
-            if len(code) == 6 and code.isdigit() and name:
+            head = line[:-flag_width]
+            code = head[:9].strip().upper()
+            name = head[21:].strip()
+            # Six-character listed codes may contain letters. Never truncate
+            # a nine-character fund identifier into a different stock identity.
+            if (
+                len(code) == 6
+                and code.isascii()
+                and code.isalnum()
+                and name
+                and "\ufffd" not in name
+            ):
                 items.append(
                     Instrument(
                         code,
@@ -240,6 +258,99 @@ class InstrumentCatalog:
                     )
                 )
         return items
+
+    def _listing_rows(self, market: str, exchange: str) -> list[Instrument]:
+        key = (market, exchange)
+        if key not in self._page_rows:
+            unique = {}
+            for item in self._items.values():
+                if item.market != market or (market == "KR" and item.exchange != "KRX"):
+                    continue
+                listing = item.listing_market or (
+                    "KOSPI" if item.is_top and market == "KR" else ""
+                )
+                if (
+                    exchange != "ALL"
+                    and (listing if market == "KR" else item.exchange) != exchange
+                ):
+                    continue
+                unique.setdefault((item.exchange, item.symbol), item)
+            self._page_rows[key] = sorted(
+                unique.values(), key=lambda item: (item.symbol, item.exchange)
+            )
+        return self._page_rows[key]
+
+    @staticmethod
+    def _required_exchanges(market: str, exchange: str) -> set[str]:
+        return (
+            ({"KOSPI", "KOSDAQ"} if market == "KR" else {"NAS", "NYS", "AMS"})
+            if exchange == "ALL"
+            else {exchange}
+        )
+
+    async def directory(
+        self, market: str, exchange: str, query: str, offset: int, limit: int
+    ) -> dict:
+        """Web directory: whole-universe search, bounded pages, no quote fanout.
+
+        Versions bind navigation to actual catalog content, not request time.
+        Searching scans the local index only; user queries are never cached.
+        """
+        await self.ensure_loaded()
+        rows = self._listing_rows(market, exchange)
+        key = (market, exchange)
+        if key not in self._directory_versions:
+            digest = hashlib.sha256()
+            for item in rows:
+                digest.update(f"{item.id}\0{item.name}\0{item.english_name}\n".encode())
+            self._directory_versions[key] = digest.hexdigest()[:24]
+        needle = query.strip().casefold()
+        matches = rows
+        if needle:
+            matches = [
+                item
+                for item in rows
+                if any(needle in value for value in self._search_rows[item.id][1:])
+            ]
+            # Exact ticker first, then name/ticker prefix. Stable identity tie-break.
+            matches.sort(
+                key=lambda item: (
+                    0
+                    if needle == item.symbol.casefold()
+                    else 1
+                    if item.symbol.casefold().startswith(needle)
+                    else 2
+                    if item.name.casefold().startswith(needle)
+                    or item.english_name.casefold().startswith(needle)
+                    else 3,
+                    item.symbol,
+                    item.exchange,
+                )
+            )
+        required = self._required_exchanges(market, exchange)
+        complete = required.issubset(self._loaded_exchanges)
+        return {
+            "items": [item.public() for item in matches[offset : offset + limit]],
+            "total": len(matches),
+            "universeTotal": len(rows),
+            "offset": offset,
+            "limit": limit,
+            "query": query.strip(),
+            "market": market,
+            "exchange": exchange,
+            "hasMore": offset + limit < len(matches),
+            "partial": not complete,
+            "snapshot": self._directory_versions[key],
+            "coverage": [
+                {
+                    "exchange": name,
+                    "available": name in self._loaded_exchanges,
+                    "loadedAt": self._loaded_at.get(name),
+                }
+                for name in sorted(required)
+            ],
+            "basis": "종목코드순 · 검색 시 일치도순",
+        }
 
     @staticmethod
     def _parse_us(raw: bytes, exchange: str) -> list[Instrument]:
@@ -269,35 +380,8 @@ class InstrumentCatalog:
     async def page(self, market: str, exchange: str, offset: int, limit: int) -> dict:
         """Paginate the official catalog without fetching thousands of quotes."""
         await self.ensure_loaded()
-        cache_key = (market, exchange)
-        rows = self._page_rows.get(cache_key)
-        if rows is None:
-            unique = {}
-            for item in self._items.values():
-                if item.market != market:
-                    continue
-                if market == "KR" and item.exchange != "KRX":
-                    continue
-                listing = item.listing_market or (
-                    "KOSPI" if item.is_top and market == "KR" else ""
-                )
-                if (
-                    exchange != "ALL"
-                    and (listing if market == "KR" else item.exchange) != exchange
-                ):
-                    continue
-                unique.setdefault((item.exchange, item.symbol), item)
-            rows = sorted(unique.values(), key=lambda item: (item.symbol, item.exchange))
-            self._page_rows[cache_key] = rows
-        required = (
-            {"KOSPI", "KOSDAQ"}
-            if market == "KR" and exchange == "ALL"
-            else {exchange}
-            if market == "KR"
-            else {"NAS", "NYS", "AMS"}
-            if exchange == "ALL"
-            else {exchange}
-        )
+        rows = self._listing_rows(market, exchange)
+        required = self._required_exchanges(market, exchange)
         partial = not required.issubset(self._loaded_exchanges)
         has_more = not partial and offset + limit < len(rows)
         return {

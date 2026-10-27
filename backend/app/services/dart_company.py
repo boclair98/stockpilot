@@ -83,7 +83,12 @@ def parse_corp_codes(content: bytes) -> dict[str, str]:
     for item in root.findall("list"):
         stock_code = (item.findtext("stock_code") or "").strip()
         corp_code = (item.findtext("corp_code") or "").strip()
-        if len(stock_code) == 6 and stock_code.isdigit() and len(corp_code) == 8:
+        if (
+            len(stock_code) == 6
+            and stock_code.isascii()
+            and stock_code.isalnum()
+            and len(corp_code) == 8
+        ):
             codes[stock_code] = corp_code
     return codes
 
@@ -207,10 +212,10 @@ class DartCompanyService:
         return None
 
     async def company(self, symbol: str) -> dict:
-        symbol = symbol.strip()
+        symbol = symbol.strip().upper()
         if not self.configured:
             return {"configured": False, "available": False, "symbol": symbol}
-        if len(symbol) != 6 or not symbol.isdigit():
+        if len(symbol) != 6 or not symbol.isascii() or not symbol.isalnum():
             return {"configured": True, "available": False, "symbol": symbol}
 
         cached = self._company_cache.get(symbol)

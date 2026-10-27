@@ -17,17 +17,17 @@ vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleK
   require(name) {
     if(name==='react/jsx-runtime') return require(name);
     if(name==='next/link') return {__esModule:true,default:Link};
-    if(name==='lucide-react') return {ArrowLeftRight:icon,Bell:icon,History:icon,WalletCards:icon};
+    if(name==='lucide-react') return {ArrowLeftRight:icon,Bell:icon,History:icon,WalletCards:icon,Search:icon};
     throw new Error(`Unexpected dependency: ${name}`);
   },
 });
-test('market tool access has four real destinations and does not prefetch heavy account pages',()=>{
+test('market tool access includes the full directory and preserves all existing destinations without prefetch',()=>{
   seen.length=0;
   const html=renderToStaticMarkup(React.createElement(moduleBox.exports.default));
   assert.match(html,/aria-label="투자 도구 바로가기"/);
-  assert.deepEqual(seen.map(item=>item.href),['/compare','/notifications','/account-tools','/#decision-review']);
+  assert.deepEqual(seen.map(item=>item.href),['/stocks','/compare','/notifications','/account-tools','/#decision-review']);
   assert.equal(seen.every(item=>item.prefetch===false),true);
-  for(const label of ['종목 비교','알림 모아보기','계좌 도구','매매 기록']) assert.ok(html.includes(`aria-label="${label}"`));
-  assert.equal((html.match(/<a /g)||[]).length,4);
+  for(const label of ['전체 종목','종목 비교','알림 모아보기','계좌 도구','매매 기록']) assert.ok(html.includes(`aria-label="${label}"`));
+  assert.equal((html.match(/<a /g)||[]).length,5);
   assert.equal(/localStorage|fetch\(|cash|portfolio|token/.test(source),false);
 });

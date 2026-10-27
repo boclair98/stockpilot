@@ -24,8 +24,8 @@ const positive = (value: unknown): number | null => typeof value === "number" &&
 export function comparisonIdentity(value: unknown): InstrumentIdentity | null {
   if (!isInstrument(value)) return null;
   const { symbol, market, exchange, currency, name } = value;
-  if (market === "KR" ? !/^\d{6}$/.test(symbol) || !["KRX", "NXT"].includes(exchange)
-    : !/^[A-Z0-9.\-]{1,16}$/.test(symbol) || !["NAS", "NYS", "AMS"].includes(exchange)) return null;
+  if (market === "KR" ? !/^[0-9A-Z]{6}$/.test(symbol) || !["KRX", "NXT"].includes(exchange)
+    : !/^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol) || !["NAS", "NYS", "AMS"].includes(exchange)) return null;
   const id = `${market}:${exchange}:${symbol}`;
   if (value.id !== id) return null;
   return { id, symbol, market, exchange, currency, name };

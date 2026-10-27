@@ -87,6 +87,30 @@ http.createServer(async(req,res) => {
       data=scenario==='statement-guest'?{authenticated:false}:{authenticated:true,asOf:'2026-10-23T01:00:00Z',cash:{KRW:75000000,USD:90000},equity:{KRW:76000000,USD:91000},positions:[{symbol:'005930',name:'삼성전자',quantity:10,averagePrice:99000,currentPrice:100000,marketValue:1000000,unrealizedPnl:10000,currency:'KRW'},{symbol:'AAPL',name:'애플',quantity:4,averagePrice:247.5,currentPrice:250,marketValue:1000,unrealizedPnl:10,currency:'USD'}],summary:{marketValue:{KRW:1000000,USD:1000},unrealizedPnl:{KRW:10000,USD:10},realizedPnl:{KRW:0,USD:0},costs:{KRW:100,USD:1},filledOrders:2,openOrders:0,rejectedOrders:0},rules:{isSimulation:true,initialCash:{KRW:100000000,USD:100000},fees:{commissionRate:.015,krSellTaxRate:.2,slippage:'격리 검증'},orderTypes:[],sessions:[],dataPolicy:{maxQuoteAgeSeconds:60,staleOrderPolicy:'격리 검증',source:'격리 검증'},disclaimer:'실제 돈이 아닌 연습용 자금입니다.'}};
       return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(data));
     }
+    // Optional local read-only catalog API. No account/quote/order forwarding.
+    if(process.env.DIRECTORY_LIVE_PREVIEW==='1'&&p==='/api/market/instruments'&&req.method==='GET') {
+      const upstream=http.get(`http://127.0.0.1:8265${p}${url.search}`,reply=>{
+        res.writeHead(reply.statusCode||502,{'Content-Type':'application/json','Cache-Control':'no-store'});
+        reply.pipe(res);
+      });
+      upstream.setTimeout(20000,()=>upstream.destroy());
+      upstream.on('error',()=>{if(!res.headersSent)res.writeHead(503,{'Content-Type':'application/json'});res.end('{"detail":"로컬 종목 API 연결을 확인해 주세요."}');});
+      res.on('close',()=>upstream.destroy());return;
+    }
+    if(upgradeFixture&&p==='/api/market/instruments') {
+      const market=url.searchParams.get('market')||'KR',exchange=url.searchParams.get('exchange')||'ALL',q=url.searchParams.get('q')||'',offset=Number(url.searchParams.get('offset')||0),limit=Number(url.searchParams.get('limit')||20);
+      if(q==='error')return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 목록 연결 실패. 다시 조회해 주세요."}');
+      if(q==='slow')await new Promise(resolve=>setTimeout(resolve,900));
+      const source=market==='KR'?['KOSPI','KOSDAQ']:['NAS','NYS','AMS'];
+      const rows=Array.from({length:237},(_,i)=>{
+        const listing=source[i%source.length],ex=market==='KR'?'KRX':listing,symbol=market==='KR'?(i===1?'0001A0':String(900000+i)):`TEST${i}`;
+        return {id:`${market}:${ex}:${symbol}`,symbol,name:i===1&&market==='KR'?'덕양에너젠':`격리 검증 기업 ${i+1}`,englishName:`Isolated Company ${i+1}`,market,currency:market==='KR'?'KRW':'USD',exchange:ex,listingMarket:market==='KR'?listing:''};
+      }).filter(item=>exchange==='ALL'||(market==='KR'?item.listingMarket:item.exchange)===exchange);
+      const items=rows.filter(item=>!q||`${item.name} ${item.englishName} ${item.symbol}`.toLowerCase().includes(q.toLowerCase()));
+      const snapshot='isolated-directory-v1';
+      if(url.searchParams.has('snapshot')&&url.searchParams.get('snapshot')!==snapshot)return res.writeHead(409,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 목록이 갱신됐어요."}');
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items:items.slice(offset,offset+limit),total:items.length,universeTotal:rows.length,offset,limit,market,exchange,query:q,partial:false,snapshot,coverage:source.filter(ex=>exchange==='ALL'||exchange===ex).map(ex=>({exchange:ex,available:true,loadedAt:'2026-10-27T00:00:00Z'}))}));
+    }
     if(upgradeFixture&&p==='/api/toss-market/instruments') {
       const offset=Number(url.searchParams.get('offset')||0),market=url.searchParams.get('market')||'KR',quote=quotes.find(item=>item.market===market);
       if(scenario==='catalog-retry'&&offset===20&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 다음 페이지 실패"}');}
@@ -153,7 +177,7 @@ http.createServer(async(req,res) => {
       const base=symbol==='AAPL'?200:symbol==='000660'?150000:70000;
       data = {symbol,market,exchange,currency:market==='US'?'USD':'KRW',source:'격리된 로컬 검증 자료',asOf:new Date().toISOString(),items:Array.from({length:65},(_,i)=>{const close=Math.round(base*(1+(symbol==='000660'?-.001:.002)*i));return {date:new Date(Date.UTC(2026,6,1+i)).toISOString().slice(0,10),close,open:close*(i%2?.99:1.01),high:close*1.025,low:close*.975,volume:1000+(i%7)*230};})};
     }
-    else if (p.includes('company')) data = {available:false,configured:false};
+    else if (p.includes('company')) data = {symbol:url.searchParams.get('symbol')||decodeURIComponent(p.split('/').pop()),available:false,configured:false};
     else if (p.includes('news')) data = {items:[]};
     else if (p === '/api/features/dashboard') data = {authenticated:true,watchlist:[],alerts:[],unreadAlerts:0,push:{configured:false},missions:[],report:{returnRate:{combined:0,KRW:0,USD:0},tradeCount:0,allocation:[]}};
     else return res.writeHead(404,{'Content-Type':'application/json'}).end('{}');

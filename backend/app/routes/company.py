@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Path, Response
+from fastapi import APIRouter, HTTPException, Path, Query, Response
 
 from app.services.dart_company import DartAPIError, dart_company
 from app.services.sec_company import SecAPIError, sec_company
@@ -29,10 +29,20 @@ async def us_company(
         ) from exc
 
 
+@router.get("/us-lookup")
+async def us_company_lookup(
+    response: Response,
+    symbol: str = Query(pattern=r"^[A-Z0-9][A-Z0-9./\-]{0,11}$"),
+) -> dict:
+    # KIS class/preferred tickers contain '/'. Keep the public identity intact
+    # and use a query parameter, not an ambiguous extra URL path segment.
+    return await us_company(response, symbol)
+
+
 @router.get("/{symbol}")
 async def company(
     response: Response,
-    symbol: str = Path(pattern=r"^\d{6}$"),
+    symbol: str = Path(pattern=r"^[0-9A-Z]{6}$"),
 ) -> dict:
     try:
         result = await dart_company.company(symbol)

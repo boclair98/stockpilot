@@ -17,7 +17,7 @@ export type USMarketDetailData = Record<USDetailField, number | null> & {
 
 export function supportsUSDetails(identity: USDetailIdentity): boolean {
   return identity.market === "US" && identity.currency === "USD"
-    && /^[A-Z0-9][A-Z0-9.\-]{0,11}$/.test(identity.symbol)
+    && /^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(identity.symbol)
     && ["NAS", "NYS", "AMS"].includes(identity.exchange);
 }
 

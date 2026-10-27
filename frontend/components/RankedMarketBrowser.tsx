@@ -149,7 +149,7 @@ export default function RankedMarketBrowser({
   }
   return (
     <section className="ranked-browser broker-rankings" aria-label="시장 종목 순위">
-      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div><p>궁금한 종목을 찾고, 나란히 비교해 보세요.</p></div>
+      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div><Link className="ranking-directory-entry" href={`/stocks?market=${market}`} prefetch={false}>전체 종목 보기<ArrowUpRight size={17} aria-hidden="true"/></Link></div>
       <header>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
