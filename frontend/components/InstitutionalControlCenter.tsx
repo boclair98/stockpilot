@@ -161,6 +161,8 @@ export default function InstitutionalControlCenter() {
         <div><strong>{overview.mode} 전용</strong><span>실거래 라우팅 OFF · 고객자산 보관 없음</span></div>
       </section>
 
+      <p><Link className="ops-secondary" href="/operations/workers">워커 점검 기록 보기</Link></p>
+
       <section className="ops-metrics">
         <article><span>시장데이터</span><strong>{overview.marketData.connected ? "연결" : "점검 필요"}</strong><small>{overview.marketData.quoteCount.toLocaleString()}개 시세</small></article>
         <article><span>가상계좌</span><strong>{overview.ledger.accountCount.toLocaleString()}</strong><small>모의 원장 계좌</small></article>

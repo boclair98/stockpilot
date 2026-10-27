@@ -51,6 +51,7 @@ function harness(file, initialProps = {}, named = "default") {
       if (id === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (id === "lucide-react") return new Proxy({}, { get: () => "icon" });
       if (id === "next/link") return { default: "a" };
+      if (id === "@base-ui/react/button") return { Button: "button" };
       if (id.includes("/identity") || id === "./identity") return { useMe: () => user, signInHref: () => "/login" };
       if (id.includes("firebase-push")) return { browserPushState: () => "unsupported", listenForForegroundPush: async () => () => {}, restoreBrowserPush: async () => null };
       if (id === "./warming") return { tracked: fn => fn() };
@@ -74,6 +75,42 @@ function harness(file, initialProps = {}, named = "default") {
     unmount() { slots.forEach(slot => slot.cleanup?.()); timers.clear(); },
   };
 }
+
+function workerStatus() {
+  const at = new Date().toISOString();
+  return {status:"healthy", checkedAt:at, heartbeatAt:at, heartbeatAgeSeconds:1, sharedCache:true,
+    note:"격리 검증 기록: 점검 성공은 주문 체결·푸시 수신을 보장하지 않습니다.",
+    jobs:[{id:"alerts",label:"가격 알림 점검",state:"ok",startedAt:at,lastSuccessAt:at,durationMs:30,errorType:null}]};
+}
+
+test("worker read retains useful previous data on failure and retries without mutation", async t => {
+  const h = harness("components/WorkerStatusPanel.tsx"); t.after(h.unmount); h.render(); await h.flush();
+  assert.equal(h.requests[0].url,"/api/operations/workers"); assert.equal(h.requests[0].init.cache,"no-store");
+  h.respond(0,workerStatus()); await h.flush(); assert(h.text().includes("가격 알림 점검"));
+  void h.click("다시 확인"); await h.flush(); h.respond(1,{detail:"일시적 연결 실패"},503); await h.flush();
+  assert(h.text().includes("이전에 확인한 기록")); assert(h.text().includes("가격 알림 점검"));
+  void h.click("다시 확인"); await h.flush(); h.respond(2,workerStatus()); await h.flush();
+  assert(!h.text().includes("이전에 확인한 기록")); assert(h.requests.every(r=>!r.init.method||r.init.method==="GET"));
+});
+
+test("worker malformed values are not healthy, and expired authorization clears private state", async t => {
+  const h = harness("components/WorkerStatusPanel.tsx"); t.after(h.unmount); h.render(); await h.flush();
+  const invalid=workerStatus(); invalid.jobs[0].durationMs=-1; h.respond(0,invalid); await h.flush();
+  assert(h.text().includes("응답 형식")); assert(!h.text().includes("가격 알림 점검"));
+  void h.click("다시 확인"); await h.flush(); h.respond(1,workerStatus()); await h.flush();
+  assert(h.text().includes("가격 알림 점검"));
+  void h.click("다시 확인"); await h.flush(); h.respond(2,{detail:"권한 없음"},403); await h.flush();
+  assert(h.text().includes("운영자에게만")); assert(!h.text().includes("가격 알림 점검"));
+});
+
+test("US filings show eight real response rows, clarify duplicated form names and retain identity", async t => {
+  const h=harness("components/CompanyInsight.tsx",{symbol:"BRK/B",market:"US"}); t.after(h.unmount); h.render(); await h.flush();
+  assert(h.requests[0].url.includes("symbol=BRK%2FB"));
+  h.respond(0,{configured:true,available:true,symbol:"BRK/B",profile:{name:"격리 검증"},
+    disclosures:Array.from({length:8},(_,i)=>({receiptNo:`test-${i}`,title:"8-K/A · 8-K/A",date:"20261028",submitter:"격리 검증",url:`https://example.test/${i}`}))});
+  await h.flush(); assert(h.text().includes("8-K/A · 주요 사항 보고서 정정"));
+  assert.equal(h.nodes().filter(n=>n.type==="a"&&n.props.href?.startsWith("https://example.test/")).length,8);
+});
 
 test("watchlist separates status/actions from fields and preserves filters/sort/reset", async t => {
   const h = harness("components/MarketWatchlist.tsx", { items: [KR, US], selectedId: "", onSelect() {}, onRemove() {} }); t.after(h.unmount); h.render();

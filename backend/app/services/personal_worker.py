@@ -21,6 +21,7 @@ from app.services.kis_market import kis_market
 from app.services.personal_ledger import apply_action, require_simulation
 from app.services.personal_math import aware, next_weekly
 from app.services.risk_engine import assess_pretrade, quote_age_seconds
+from app.services.worker_observer import worker_observer
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,7 @@ class PersonalWorker:
                     "background:personal-tools", ttl_seconds=120
                 )
                 if lease:
-                    await asyncio.wait_for(self.poll(), timeout=90)
+                    await worker_observer.run("personal", self.poll)
                     await traffic_store.set_json(
                         "personal:worker:heartbeat",
                         {"at": datetime.now(UTC).isoformat(), "status": "ok"},

@@ -17,6 +17,7 @@ from app.services.firebase_push import firebase_push
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.price_alerts import current_alert_price
+from app.services.worker_observer import worker_observer
 
 logger = logging.getLogger(__name__)
 CURSOR_KEY = "background:price-alert-cursor:v1"
@@ -65,7 +66,7 @@ class PriceAlertNotifier:
                 if lease:
                     # Finish before the 120-second lease expires; never allow a
                     # slow symbol to retain leadership indefinitely.
-                    await asyncio.wait_for(self.poll_once(), timeout=90)
+                    await worker_observer.run("alerts", self.poll_once)
             except asyncio.CancelledError:
                 raise
             except Exception:

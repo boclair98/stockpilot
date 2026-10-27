@@ -1,0 +1,141 @@
+/* StockPilot-native filing rows. No broker assets, prices or calculations. */
+.consumer-app .company-insight.company-insight--readable {
+  padding: 24px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.consumer-app .company-insight.company-insight--readable .section-head {
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.consumer-app .company-insight.company-insight--readable .section-head h2 {
+  font-size: 24px;
+  line-height: 1.35;
+  letter-spacing: -0.035em;
+}
+.consumer-app .company-insight.company-insight--readable .section-head p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.consumer-app .company-insight.company-insight--readable .company-profile {
+  border: 0;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 28px;
+}
+.consumer-app .company-insight.company-insight--readable .financial-title {
+  margin-bottom: 14px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-list {
+  display: block;
+  border-top: 1px solid var(--ci-border);
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-list a {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 92px;
+  padding: 18px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--ci-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.consumer-app
+  .company-insight.company-insight--readable
+  .disclosure-list
+  a:hover {
+  background: var(--ci-hover);
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-date {
+  padding: 0;
+  background: transparent;
+  gap: 5px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-date b {
+  font-size: 16px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-copy em {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 3px 6px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-copy b {
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: normal;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow-wrap: anywhere;
+}
+.consumer-app
+  .company-insight.company-insight--readable
+  .disclosure-copy
+  small {
+  font-size: 12px;
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-open {
+  min-width: 54px;
+  min-height: 44px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--ws-brand);
+}
+.consumer-app .company-insight.company-insight--readable .disclosure-list a:hover .disclosure-open {
+  background: transparent;
+  color: var(--ws-brand);
+}
+.consumer-app .company-insight.company-insight--readable .dart-note {
+  padding: 14px 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-width: 620px) {
+  .consumer-app .company-insight.company-insight--readable {
+    padding: 18px 0;
+  }
+  .consumer-app .company-insight.company-insight--readable .section-head {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .consumer-app .company-insight.company-insight--readable .section-head h2 {
+    font-size: 22px;
+  }
+  .consumer-app .company-insight.company-insight--readable .section-head p {
+    font-size: 14px;
+  }
+  .consumer-app .company-insight.company-insight--readable .company-profile {
+    padding: 18px 16px;
+  }
+  .consumer-app .company-insight.company-insight--readable .disclosure-list a {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+    padding: 18px 0;
+    min-height: 100px;
+  }
+  .consumer-app .company-insight.company-insight--readable .disclosure-date b {
+    font-size: 15px;
+  }
+  .consumer-app .company-insight.company-insight--readable .disclosure-copy b {
+    font-size: 14px;
+  }
+  .consumer-app .company-insight.company-insight--readable .disclosure-open {
+    display: none;
+  }
+}

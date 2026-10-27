@@ -19,6 +19,7 @@ from app.services.execution_quality import protection_trigger
 from app.services.instrument_catalog import Instrument, instrument_catalog
 from app.services.kis_market import kis_market
 from app.services.risk_engine import load_control, quote_age_seconds
+from app.services.worker_observer import worker_observer
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class ProtectionMatcher:
                     "background:protection-matcher", ttl_seconds=120
                 )
                 if lease:
-                    await self.poll_once()
+                    await worker_observer.run("protections", self.poll_once)
             except asyncio.CancelledError:
                 raise
             except Exception:

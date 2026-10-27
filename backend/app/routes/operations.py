@@ -12,6 +12,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,8 +30,19 @@ from app.services.audit import record_audit
 from app.services.kis_market import kis_market
 from app.services.reconciliation import run_reconciliation
 from app.services.risk_engine import load_control
+from app.services.worker_observer import worker_observer
 
 router = APIRouter(prefix="/api/operations", tags=["institutional-operations"])
+
+
+@router.get("/workers")
+async def worker_status(operator: Identity = Depends(require_operator)):
+    return JSONResponse(
+        await worker_observer.status(),
+        headers={"Cache-Control": "no-store", "Vary": "Cookie"},
+    )
+
+
 CONTROL_ENTITY_ID = uuid5(NAMESPACE_URL, "stockpilot:trading-control:global")
 
 

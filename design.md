@@ -1,5 +1,44 @@
 # OpenUI Design Plan
 
+## 2026-10-28 · 워커 관측성과 증권형 공시 목록
+
+### Resolved inputs
+- Topic: StockPilot 워커의 실제 점검 상태와 기업 공시 읽기.
+- Offer: 계좌를 변경하지 않는 운영 진단과 SEC/DART 원문 탐색.
+- Audience: 한국어 초보 투자자와 별도 인증된 운영자.
+- Primary user action: 공시 원문 열기; 운영자는 워커 상태 다시 확인.
+- Deliverable: 기존 Next.js/FastAPI에 통합하는 공시 목록과 운영자 전용 상태 페이지.
+- Style direction: 기존 StockPilot 금융 목록의 정렬·여백·반복 행을 유지하는 명료한 증권 제품.
+- Tonal key: 기존 다크 기본, 동일한 라이트 토큰 지원.
+- Icon policy: 기존 lucide와 MIT 라이선스 Base UI 버튼만 재사용.
+- Proof assets: 실제 제출 이력, 워커 heartbeat/점검 시각. 검증 화면에는 명시적인 합성 fixture만 사용.
+- Motion intensity: Minimal, 버튼 160ms와 reduced-motion. 금융 숫자 count-up 없음.
+
+### Audit and reference record
+- 실제 코드: Next 16 static export/React19, FastAPI, 기존 --ws/--ci 토큰. 워커의 `/` 경로가 없어 404가 기록되고, DB/Redis 준비 외 작업별 성공 상태가 표시되지 않음.
+- 기존 공시 화면은 중첩 프레임·모바일 여백이 크며 미국 응답 8개를 항상 5개로 자름. 계산·시세·계좌는 변경하지 않고 해당 목록만 정돈.
+- 토스증권 공식 공개 페이지의 검색·필터·금융 열 구조는 문서에서 확인. 실제 브라우저 열람은 권한 차단되어 시각 검사를 했다고 주장하지 않음. 로고·전용 소스·폰트 복사 없음.
+- Base UI: https://github.com/mui/base-ui/blob/master/LICENSE 의 MIT 라이선스 확인. 이미 설치된 패키지를 그대로 사용하고 라이선스 보존. 새 유료 템플릿/새 프레임워크 없음.
+
+### Composition contract
+- Hero archetype: asymmetrical, 신규 마케팅 hero 없음. 작업 화면의 제목/확인 시각/재조회가 첫 영역.
+- First viewport: 운영 상태 제목 → 관측 범위와 마지막 heartbeat → 작업 이름·상태·최근 성공·소요시간의 정렬 행. 모바일은 각 행을 이름/상태와 시각/소요시간 두 줄로 재배치.
+- Primary visual/proof artifact: 실제 worker job heartbeat와 SEC 원문 목록. 모니터가 없으면 정상 대신 미확인 표시.
+- Interaction behavior: GET만 수동 재조회, 8초 제한/취소, 인증 만료 안내, 이전 자료 보존 후 오류 표시. 공시는 실제 URL 새 탭 연결.
+- Reuse boundary: 브랜드·홈·계좌·내비게이션·금융 함수·API 인증 보존. 운영 페이지는 운영자 allow-list 유지, 계좌 정보 노출 안 함. 앱인토스 및 사용자 LeagueRooms 변경 제외.
+
+### Visual and content contract
+- 기존 Pretendard/system sans, tabular-nums; 제목24–30px/750, 행14–16px/1.6, 보조13px. 입력/주요 버튼16px·44px 이상.
+- 기존 --ws-ink/--ws-muted/--ws-surface/--ws-line/--ws-brand 토큰 재사용, 다크 배경 #10131B·밝은 글자, 라이트 #F7F9FB·#172333. 실패는 텍스트+아이콘으로도 구분.
+- 간격8/12/16/24/32px, 페이지 최대1120px, 모바일16–20px. 상태 목록은 공유 표면과 divider, 개별 nested 카드 제거. 제목/회사명 keep-all·긴 문자열 안전 줄바꿈.
+- 주 CTA `다시 확인` → `/api/operations/workers` GET; 보조 `운영센터로` → `/operations`. 권한 없으면 Google 로그인/시장 복귀만 제공. 주문·대사·재시작 버튼 없음.
+- 공시는 미국 최대8·국내 최대5와 실제 표시 건수를 일치시키고 날짜→제출 종류·제목→원문 링크를 정렬. 빈 자료를 0건의 실제 결과로 꾸미지 않음.
+- 대상: worker/core monitor/3개 poller instrumentation/read-only operations route, WorkerStatusPanel와 `/operations/workers`, CompanyInsight와 scoped CSS, 격리 검증/문서. DB schema·주문 금액·생산 인증 설정 변경 없음.
+- 검증: 성공/실패/취소/관측 만료/대기·인증 거부, Python 테스트·타입·린트·빌드, 360/390/768/1440 라이트·다크·키보드·넘침. 유료 서버·운영 대량 부하·GitHub 푸시·배포는 이번 로컬 구현에 포함하지 않음.
+
+### Filled generation prompt and output target
+Create one precise Korean StockPilot worker-status screen and refine its existing company-filings list. Use the current Next.js React components, FastAPI, Pretendard, lucide, MIT Base UI and semantic light/dark tokens. The primary action is a bounded read-only refresh; secondary actions are the existing operations console or public SEC/DART original. Place a clear title and observation age before aligned job rows; recompose rows on phones. Use only real timestamps and explicit unknown/stale/failed states. Preserve accounts, trading calculations, public web shell, private Apps in Toss and unrelated user changes. Use clear financial hierarchy, 44px controls, visible focus and minimal reduced-motion-aware feedback. Do not introduce a landing hero, invented performance, copied broker assets, new dependencies, fake healthy status, automatic order replay or production load. Output integrated source, isolated tests and verified responsive screenshots at `frontend/app/operations/workers/page.tsx`, `frontend/components/WorkerStatusPanel.tsx`, `frontend/components/CompanyInsight.tsx` and existing scoped style files.
+
 ## 2026-10-25 · 매매 캘린더와 장기 이용 정확성
 
 - 범위: 사용자가 코더스 웹의 기능 고도화·오류 수정·배포를 요청했다. 기존 디자인·계좌·금융 규칙·앱인토스·사용자 LeagueRooms 변경은 보존한다. 홈 구성이나 브랜드 개편은 하지 않는다.

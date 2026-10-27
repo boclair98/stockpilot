@@ -23,6 +23,7 @@ from app.services.kis_market import kis_market
 from app.services.personal_worker import personal_worker
 from app.services.price_alert_notifier import price_alert_notifier
 from app.services.protection_matcher import protection_matcher
+from app.services.worker_observer import worker_observer
 
 
 @asynccontextmanager
@@ -42,10 +43,34 @@ async def lifespan(app: FastAPI):
     catalog_task = asyncio.create_task(
         warm_instrument_catalog(), name="worker-instrument-catalog-warmup"
     )
+
+    async def publish_health() -> None:
+        while True:
+            await worker_observer.beat(
+                {
+                    "alerts": bool(
+                        price_alert_notifier._task
+                        and not price_alert_notifier._task.done()
+                    ),
+                    "protections": bool(
+                        protection_matcher._task and not protection_matcher._task.done()
+                    ),
+                    "personal": bool(
+                        personal_worker.task and not personal_worker.task.done()
+                    ),
+                }
+            )
+            await asyncio.sleep(10)
+
+    heartbeat_task = asyncio.create_task(
+        publish_health(), name="worker-health-heartbeat"
+    )
     try:
         yield
     finally:
         catalog_task.cancel()
+        heartbeat_task.cancel()
+        await asyncio.gather(heartbeat_task, return_exceptions=True)
         await asyncio.gather(catalog_task, return_exceptions=True)
         await price_alert_notifier.stop()
         await personal_worker.stop()
@@ -59,6 +84,7 @@ app = FastAPI(title="StockPilot Worker", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/health/live")
+@app.get("/", include_in_schema=False)
 async def liveness() -> JSONResponse:
     return JSONResponse(content={"status": "ok", "service": "worker"})
 

@@ -1,0 +1,72 @@
+# Disposable first-tier readiness benchmark only. Never points to production.
+name: stockpilot-capacity
+x-app: &app
+  build:
+    context: backend
+    dockerfile: Dockerfile.capacity
+  environment: &environment
+    STOCKPILOT_CAPACITY_FIXTURE: "1"
+    DATABASE_URL: postgresql+asyncpg://load:load-only@db:5432/stockpilot_load
+    REDIS_URL: redis://cache:6379/15
+  networks: [isolated]
+  mem_limit: 1g
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: load
+      POSTGRES_PASSWORD: load-only
+      POSTGRES_DB: stockpilot_load
+    volumes: [capacity_pg:/var/lib/postgresql/data]
+    networks: [isolated]
+    mem_limit: 1g
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U load -d stockpilot_load"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  cache:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks: [isolated]
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    <<: *app
+    command: [/app/.venv/bin/python, scripts/load_stack.py, --migrate]
+    depends_on:
+      db: {condition: service_healthy}
+      cache: {condition: service_healthy}
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8288:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, /app/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=3)"]
+      interval: 3s
+      timeout: 4s
+      retries: 30
+  worker:
+    <<: *app
+    command: [/app/.venv/bin/python, scripts/load_stack.py, --worker]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  generator:
+    image: grafana/k6:2.3.0
+    profiles: [test]
+    networks: [isolated]
+    mem_limit: 1g
+    volumes: [./load-tests/readiness.js:/scripts/readiness.js:ro]
+    command: [run, --no-usage-report, /scripts/readiness.js]
+    depends_on:
+      api: {condition: service_healthy}
+networks:
+  isolated:
+    internal: true
+volumes:
+  capacity_pg:

@@ -1,0 +1,12 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+ENV UV_NO_CACHE=1
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --frozen
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
+COPY scripts/load_stack.py scripts/loadtest_guard.py ./scripts/
+RUN useradd --system --no-create-home --uid 1001 loadtest && chown -R loadtest /app
+USER loadtest
+CMD ["/app/.venv/bin/python", "scripts/load_stack.py"]

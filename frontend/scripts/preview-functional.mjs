@@ -42,11 +42,28 @@ let receiptWrites = 0;
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.webmanifest':'application/manifest+json'};
 http.createServer(async(req,res) => {
   const url = new URL(req.url,'http://127.0.0.1');
+  const workerCases=new Set(['healthy','unknown','failed','error-once','denied','malformed']);
+  if(process.env.WORKER_OBSERVABILITY_FIXTURE==='1'&&workerCases.has(url.searchParams.get('worker_case'))) res.setHeader('Set-Cookie',`worker_fixture=${url.searchParams.get('worker_case')}; Path=/; SameSite=Lax`);
+  const workerCase=/(?:^|; )worker_fixture=([^;]+)/.exec(req.headers.cookie||'')?.[1]||'healthy';
   const selectedCase = url.searchParams.get('release_case');
   if (fixtureCases.has(selectedCase)) res.setHeader('Set-Cookie',`release_fixture=${selectedCase}; Path=/; SameSite=Lax`);
   const scenario = /(?:^|; )release_fixture=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
   if (url.pathname === '/_fixture/status') return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({receiptWrites,receiptCount:fixtureReceipts.size}));
   if (url.pathname.startsWith('/api/')) {
+    if(process.env.WORKER_OBSERVABILITY_FIXTURE==='1'&&url.pathname==='/api/operations/workers') {
+      if(req.method!=='GET')return res.writeHead(405).end();
+      if(workerCase==='denied')return res.writeHead(403,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 운영자 권한 없음"}');
+      if(workerCase==='error-once'&&!upgradeFailures.has('worker-error-once')){upgradeFailures.add('worker-error-once');return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 일시적 연결 실패"}');}
+      const at=new Date().toISOString();
+      const unknown=workerCase==='unknown';
+      const jobs=[['alerts','가격 알림 점검'],['protections','보호주문 점검'],['personal','정기매수·계좌 도구 점검']].map(([id,label],i)=>({id,label,state:unknown?'unknown':workerCase==='failed'&&i===1?'failed':'ok',startedAt:at,lastSuccessAt:unknown?null:at,durationMs:unknown?null:42+i*31,errorType:workerCase==='failed'&&i===1?'TimeoutError':null}));
+      if(workerCase==='malformed')jobs[0].durationMs='invalid';
+      return res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store','X-StockPilot-Fixture':'synthetic-only'}).end(JSON.stringify({status:unknown?'unknown':workerCase==='failed'?'degraded':'healthy',checkedAt:at,heartbeatAt:unknown?null:at,heartbeatAgeSeconds:unknown?null:3,sharedCache:!unknown,jobs,note:'격리된 합성 UI 검증 자료입니다. 운영 서버·실제 계좌와 연결되지 않습니다. 점검 성공은 주문 체결·푸시 수신을 뜻하지 않습니다.'}));
+    }
+    if(process.env.WORKER_OBSERVABILITY_FIXTURE==='1'&&url.pathname.startsWith('/api/company/us')) {
+      const symbol=url.pathname==='/api/company/us-lookup'?url.searchParams.get('symbol'):decodeURIComponent(url.pathname.split('/').pop());
+      return res.writeHead(200,{'Content-Type':'application/json','X-StockPilot-Fixture':'synthetic-only'}).end(JSON.stringify({configured:true,available:true,symbol,profile:{name:'격리 검증 기업',englishName:'Synthetic UI fixture'},disclosures:Array.from({length:8},(_,i)=>({receiptNo:`fixture-${i}`,title:i%2?'10-Q · 10-Q':'8-K/A · 8-K/A',date:`202610${21-i}`,submitter:'격리된 합성 검증',url:`https://example.com/stockpilot-fixture/filing/${i}`})),source:'격리된 합성 UI 검증',asOf:new Date().toISOString()}));
+    }
     if (process.env.PERSONAL_FIXTURE==='1' && (url.pathname.startsWith('/api/personal/') || url.pathname==='/api/trading/portfolio')) {
       const chunks=[];for await(const chunk of req) chunks.push(chunk);
       try {const reply=await fetch(`http://127.0.0.1:5234${url.pathname}${url.search}`,{method:req.method,headers:{'Content-Type':'application/json'},body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(chunks),signal:AbortSignal.timeout(15000)});res.writeHead(reply.status,{'Content-Type':'application/json'});return res.end(await reply.text());}

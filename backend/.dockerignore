@@ -20,3 +20,4 @@ uploads/
 tests/
 unit_tests/
 scripts/load_*.py
+scripts/loadtest_*.py

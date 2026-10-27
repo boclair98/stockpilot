@@ -84,6 +84,24 @@ function disclosureKind(title: string, market: "KR" | "US") {
   return "수시공시";
 }
 
+function readableFilingTitle(title: string, market: "KR" | "US") {
+  if (market !== "US") return title;
+  const parts = title.split(" · ");
+  const form = parts[0];
+  const names: Record<string, string> = {
+    "8-K": "주요 사항 보고서",
+    "10-Q": "분기보고서",
+    "10-K": "연차보고서",
+    "20-F": "해외 기업 연차보고서",
+    "40-F": "캐나다 기업 연차보고서",
+    "6-K": "해외 기업 주요 사항 보고서",
+  };
+  const label = names[form.replace(/\/A$/, "")];
+  return label && parts.length === 2 && parts[1] === form
+    ? `${form} · ${label}${form.endsWith("/A") ? " 정정" : ""}`
+    : title;
+}
+
 function disclosureDate(value: string) {
   if (value.length !== 8) return { year: "", day: value };
   return {
@@ -105,7 +123,10 @@ export default function CompanyInsight({
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const validSymbol = market === "KR" ? /^[0-9A-Z]{6}$/.test(symbol) : /^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol);
+    const validSymbol =
+      market === "KR"
+        ? /^[0-9A-Z]{6}$/.test(symbol)
+        : /^[A-Z0-9][A-Z0-9.\/\-]{0,11}$/.test(symbol);
     if (!validSymbol) {
       return;
     }
@@ -115,15 +136,42 @@ export default function CompanyInsight({
       setData(null);
       setLoading(true);
       setFailed(false);
-      const endpoint = market === "US" ? symbol.includes("/") ? `/api/company/us-lookup?${new URLSearchParams({symbol})}` : `/api/company/us/${encodeURIComponent(symbol)}` : `/api/company/${symbol}`;
+      const endpoint =
+        market === "US"
+          ? symbol.includes("/")
+            ? `/api/company/us-lookup?${new URLSearchParams({ symbol })}`
+            : `/api/company/us/${encodeURIComponent(symbol)}`
+          : `/api/company/${symbol}`;
       requestJson<CompanyData>(endpoint, {
         cache: "no-store",
         signal: controller.signal,
       })
         .then((body) => {
-          if (!body || body.symbol !== symbol || typeof body.available !== "boolean"
-            || (body.financials && (!Array.isArray(body.financials.metrics) || !body.financials.metrics.every(metric => metric && Number.isFinite(metric.value) && ["KRW", "USD"].includes(metric.currency) && typeof metric.label === "string")))
-            || (body.disclosures && (!Array.isArray(body.disclosures) || !body.disclosures.every(item => item && [item.title, item.date, item.receiptNo, item.url].every(field => typeof field === "string") && /^https?:\/\//i.test(item.url))))) throw new Error("company");
+          if (
+            !body ||
+            body.symbol !== symbol ||
+            typeof body.available !== "boolean" ||
+            (body.financials &&
+              (!Array.isArray(body.financials.metrics) ||
+                !body.financials.metrics.every(
+                  (metric) =>
+                    metric &&
+                    Number.isFinite(metric.value) &&
+                    ["KRW", "USD"].includes(metric.currency) &&
+                    typeof metric.label === "string",
+                ))) ||
+            (body.disclosures &&
+              (!Array.isArray(body.disclosures) ||
+                !body.disclosures.every(
+                  (item) =>
+                    item &&
+                    [item.title, item.date, item.receiptNo, item.url].every(
+                      (field) => typeof field === "string",
+                    ) &&
+                    /^https?:\/\//i.test(item.url),
+                )))
+          )
+            throw new Error("company");
           if (!controller.signal.aborted) setData(body);
         })
         .catch(() => {
@@ -137,14 +185,21 @@ export default function CompanyInsight({
   }, [market, refreshKey, symbol]);
 
   return (
-    <section className="company-insight">
+    <section className="company-insight company-insight--readable">
       <div className="section-head">
         <div>
           <span className="section-kicker">COMPANY INSIGHT</span>
           <h2>{market === "US" ? "미국 기업공시" : "기업정보와 공시"}</h2>
-          <p>{market === "US" ? "SEC 공식 제출 이력을 투자 전에 읽기 쉽게 정리했어요" : "복잡한 공식 정보를 투자 전에 읽기 쉽게 정리했어요"}</p>
+          <p>
+            {market === "US"
+              ? "SEC 공식 제출 이력을 투자 전에 읽기 쉽게 정리했어요"
+              : "복잡한 공식 정보를 투자 전에 읽기 쉽게 정리했어요"}
+          </p>
         </div>
-        <span className="dart-source"><BadgeCheck size={14} /> {market === "US" ? "SEC EDGAR 공식 데이터" : "OpenDART 공식 데이터"}</span>
+        <span className="dart-source">
+          <BadgeCheck size={14} />{" "}
+          {market === "US" ? "SEC EDGAR 공식 데이터" : "OpenDART 공식 데이터"}
+        </span>
       </div>
 
       {loading ? (
@@ -153,19 +208,41 @@ export default function CompanyInsight({
         </div>
       ) : failed ? (
         <div className="company-state">
-          <span className="company-state-icon"><Landmark size={22} /></span>
-          <span><b>기업정보를 불러오지 못했어요</b><small>연결 상태를 확인한 뒤 다시 시도해 주세요.</small></span>
-          <button type="button" onClick={() => setRefreshKey((key) => key + 1)}>다시 불러오기</button>
+          <span className="company-state-icon">
+            <Landmark size={22} />
+          </span>
+          <span>
+            <b>기업정보를 불러오지 못했어요</b>
+            <small>연결 상태를 확인한 뒤 다시 시도해 주세요.</small>
+          </span>
+          <button type="button" onClick={() => setRefreshKey((key) => key + 1)}>
+            다시 불러오기
+          </button>
         </div>
       ) : !data?.available ? (
         <div className="company-state">
-          <span className="company-state-icon"><Building2 size={22} /></span>
-          <span><b>{market === "US" ? "SEC 기업공시가 아직 없어요" : "DART 기업정보가 아직 없어요"}</b><small>{market === "US" ? "티커가 SEC 제출기업으로 확인되지 않거나 설정이 필요할 수 있어요." : "상장 구분이나 공시 등록 상태에 따라 제공되지 않을 수 있어요."}</small></span>
+          <span className="company-state-icon">
+            <Building2 size={22} />
+          </span>
+          <span>
+            <b>
+              {market === "US"
+                ? "SEC 기업공시가 아직 없어요"
+                : "DART 기업정보가 아직 없어요"}
+            </b>
+            <small>
+              {market === "US"
+                ? "티커가 SEC 제출기업으로 확인되지 않거나 설정이 필요할 수 있어요."
+                : "상장 구분이나 공시 등록 상태에 따라 제공되지 않을 수 있어요."}
+            </small>
+          </span>
         </div>
       ) : (
         <>
           <div className="company-profile">
-            <span className="company-building"><Building2 size={23} /></span>
+            <span className="company-building">
+              <Building2 size={23} />
+            </span>
             <div className="company-profile-copy">
               <div className="company-name-row">
                 <h3>{data.profile?.name || symbol}</h3>
@@ -175,75 +252,168 @@ export default function CompanyInsight({
               </div>
               <p>{data.profile?.englishName || symbol}</p>
             </div>
-            <span className="company-verified"><BadgeCheck size={14} /> 공식 확인</span>
+            <span className="company-verified">
+              <BadgeCheck size={14} /> 공식 확인
+            </span>
           </div>
 
-          {market === "KR" && <div className="company-facts">
-            <article><span><UserRound size={15} /></span><div><small>대표자</small><b>{data.profile?.ceo || "—"}</b></div></article>
-            <article><span><CalendarDays size={15} /></span><div><small>설립일</small><b>{dateText(data.profile?.establishedAt)}</b></div></article>
-            <article><span><WalletCards size={15} /></span><div><small>결산월</small><b>{data.profile?.fiscalMonth ? `${Number(data.profile.fiscalMonth)}월` : "—"}</b></div></article>
-            {data.profile?.homepage && /^https?:\/\//i.test(data.profile.homepage) && (
-              <a className="company-homepage" href={data.profile.homepage} target="_blank" rel="noreferrer">
-                <Globe2 size={14} /> 공식 홈페이지 <ExternalLink size={12} />
-              </a>
-            )}
-          </div>}
-
-          {data.profile?.address && (
-            <p className="company-address"><MapPin size={13} /> {data.profile.address}</p>
-          )}
-
-          {market === "KR" && data.financials && data.financials.metrics.length > 0 && (
-            <div className="financial-block">
-              <div className="financial-title">
+          {market === "KR" && (
+            <div className="company-facts">
+              <article>
+                <span>
+                  <UserRound size={15} />
+                </span>
                 <div>
-                  <span className="insight-section-icon finance"><WalletCards size={16} /></span>
-                  <span><b>핵심 재무정보</b><small>규모와 손익을 빠르게 비교해 보세요</small></span>
+                  <small>대표자</small>
+                  <b>{data.profile?.ceo || "—"}</b>
                 </div>
-                <span className="data-period">{data.financials.year} {data.financials.reportName} · {data.financials.scope}</span>
-              </div>
-              <div className="financial-grid">
-                {data.financials.metrics.map((metric, index) => (
-                  <article key={metric.key} data-tone={index % 3}>
-                    <small>{metric.label}</small>
-                    <strong>{compactMoney(metric.value, metric.currency)}</strong>
-                    <span>공시 기준</span>
-                  </article>
-                ))}
-              </div>
+              </article>
+              <article>
+                <span>
+                  <CalendarDays size={15} />
+                </span>
+                <div>
+                  <small>설립일</small>
+                  <b>{dateText(data.profile?.establishedAt)}</b>
+                </div>
+              </article>
+              <article>
+                <span>
+                  <WalletCards size={15} />
+                </span>
+                <div>
+                  <small>결산월</small>
+                  <b>
+                    {data.profile?.fiscalMonth
+                      ? `${Number(data.profile.fiscalMonth)}월`
+                      : "—"}
+                  </b>
+                </div>
+              </article>
+              {data.profile?.homepage &&
+                /^https?:\/\//i.test(data.profile.homepage) && (
+                  <a
+                    className="company-homepage"
+                    href={data.profile.homepage}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Globe2 size={14} /> 공식 홈페이지{" "}
+                    <ExternalLink size={12} />
+                  </a>
+                )}
             </div>
           )}
+
+          {data.profile?.address && (
+            <p className="company-address">
+              <MapPin size={13} /> {data.profile.address}
+            </p>
+          )}
+
+          {market === "KR" &&
+            data.financials &&
+            data.financials.metrics.length > 0 && (
+              <div className="financial-block">
+                <div className="financial-title">
+                  <div>
+                    <span className="insight-section-icon finance">
+                      <WalletCards size={16} />
+                    </span>
+                    <span>
+                      <b>핵심 재무정보</b>
+                      <small>규모와 손익을 빠르게 비교해 보세요</small>
+                    </span>
+                  </div>
+                  <span className="data-period">
+                    {data.financials.year} {data.financials.reportName} ·{" "}
+                    {data.financials.scope}
+                  </span>
+                </div>
+                <div className="financial-grid">
+                  {data.financials.metrics.map((metric, index) => (
+                    <article key={metric.key} data-tone={index % 3}>
+                      <small>{metric.label}</small>
+                      <strong>
+                        {compactMoney(metric.value, metric.currency)}
+                      </strong>
+                      <span>공시 기준</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div className="disclosure-block">
             <div className="financial-title">
               <div>
-                <span className="insight-section-icon disclosure"><Landmark size={16} /></span>
-                <span><b>최근 공시</b><small>중요한 공식 발표를 시간순으로 확인해요</small></span>
+                <span className="insight-section-icon disclosure">
+                  <Landmark size={16} />
+                </span>
+                <span>
+                  <b>최근 공시</b>
+                  <small>중요한 공식 발표를 시간순으로 확인해요</small>
+                </span>
               </div>
-              <span className="data-period">{market === "US" ? "최근 제출 · 최대 8건" : "최근 1년 · 최대 5건"}</span>
+              <span className="data-period">
+                {market === "US" ? "최근 제출" : "최근 1년"} ·{" "}
+                {Math.min(
+                  data.disclosures?.length || 0,
+                  market === "US" ? 8 : 5,
+                )}
+                건
+              </span>
             </div>
             {data.disclosures?.length ? (
               <div className="disclosure-list">
-                {data.disclosures.slice(0, 5).map((item) => {
-                  const date = disclosureDate(item.date);
-                  return (
-                    <a href={item.url} target="_blank" rel="noreferrer" key={item.receiptNo}>
-                      <span className="disclosure-date"><b>{date.day}</b><small>{date.year}</small></span>
-                      <span className="disclosure-copy">
-                        <em>{disclosureKind(item.title, market)}</em>
-                        <b>{item.title}</b>
-                        <small>{item.submitter} · {market === "US" ? "SEC EDGAR 원문" : "DART 원문"}</small>
-                      </span>
-                      <span className="disclosure-open">열기 <ArrowUpRight size={14} /></span>
-                    </a>
-                  );
-                })}
+                {data.disclosures
+                  .slice(0, market === "US" ? 8 : 5)
+                  .map((item) => {
+                    const date = disclosureDate(item.date);
+                    return (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={item.receiptNo}
+                      >
+                        <span className="disclosure-date">
+                          <b>{date.day}</b>
+                          <small>{date.year}</small>
+                        </span>
+                        <span className="disclosure-copy">
+                          <em>{disclosureKind(item.title, market)}</em>
+                          <b title={item.title}>
+                            {readableFilingTitle(item.title, market)}
+                          </b>
+                          <small>
+                            {market === "US"
+                              ? "SEC EDGAR 원문"
+                              : `${item.submitter} · DART 원문`}
+                          </small>
+                        </span>
+                        <span className="disclosure-open">
+                          열기 <ArrowUpRight size={14} />
+                        </span>
+                      </a>
+                    );
+                  })}
               </div>
             ) : (
-              <p className="no-disclosure">최근 1년간 조회된 공시가 없어요.</p>
+              <p className="no-disclosure">
+                {market === "US"
+                  ? "표시할 최근 제출 이력이 없어요."
+                  : "최근 1년간 조회된 공시가 없어요."}
+              </p>
             )}
           </div>
-          <p className="dart-note"><BadgeCheck size={12} /> {market === "US" ? "SEC EDGAR 제출 이력 기준" : "금융감독원 공시 보고서 기준"} · 투자 권유 자료가 아닙니다.</p>
+          <p className="dart-note">
+            <BadgeCheck size={12} />{" "}
+            {market === "US"
+              ? "SEC EDGAR 제출 이력 기준"
+              : "금융감독원 공시 보고서 기준"}{" "}
+            · 투자 권유 자료가 아닙니다.
+          </p>
         </>
       )}
     </section>
