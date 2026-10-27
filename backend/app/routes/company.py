@@ -15,17 +15,21 @@ async def us_company(
         result = await sec_company.company(symbol)
         response.headers["Cache-Control"] = (
             "public, max-age=60, s-maxage=900, stale-while-revalidate=3600"
+            if result.get("configured") and result.get("available")
+            else "no-store"
         )
         return result
     except SecAPIError as exc:
         raise HTTPException(
             status_code=502,
             detail="미국 기업 공시를 잠시 불러오지 못했습니다.",
+            headers={"Cache-Control": "no-store", "Retry-After": "60"},
         ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="미국 기업정보 서비스에 일시적으로 연결할 수 없습니다.",
+            headers={"Cache-Control": "no-store", "Retry-After": "60"},
         ) from exc
 
 

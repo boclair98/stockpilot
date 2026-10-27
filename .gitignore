@@ -31,6 +31,7 @@ backend/uploads/
 !.env.example
 .DS_Store
 .coders/
+artifacts/load-*.json
 *.jks
 *.keystore
 *.aab

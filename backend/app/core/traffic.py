@@ -57,6 +57,62 @@ class TrafficStore:
         self._redis = None
         self.available = False
 
+    async def outbound_delay(self, scope: str, interval_ms: int) -> float | None:
+        """Reserve one provider slot; return seconds to wait, or None on outage.
+
+        Provider quotas fail closed when configured Redis is unavailable. PTTL
+        uses the Redis server clock, not unsynchronized replica clocks.
+        """
+        key = f"outbound:{scope}"
+        interval = max(1, interval_ms)
+        if settings.redis_url:
+            if not self._redis:
+                return None
+            try:
+                wait_ms = await self._redis.eval(
+                    "local wait=redis.call('PTTL',KEYS[1]); "
+                    "if wait>0 then return wait end; "
+                    "redis.call('SET',KEYS[1],'1','PX',ARGV[1]); return 0",
+                    1,
+                    key,
+                    interval,
+                )
+                return max(0, int(wait_ms)) / 1000
+            except Exception:
+                logger.warning("Shared outbound limiter unavailable")
+                return None
+        async with self._lock:
+            now = time.monotonic()
+            current = self._memory.get(key)
+            if current and current[0] > now:
+                return current[0] - now
+            self._memory[key] = (now + interval / 1000, "1")
+            return 0.0
+
+    async def defer_outbound(self, scope: str, seconds: float) -> None:
+        """Extend, never shorten, the shared provider cooldown."""
+        key = f"outbound:{scope}"
+        delay_ms = max(1, int(seconds * 1000))
+        if settings.redis_url:
+            if not self._redis:
+                return
+            try:
+                await self._redis.eval(
+                    "local wait=redis.call('PTTL',KEYS[1]); "
+                    "if wait<tonumber(ARGV[1]) then "
+                    "redis.call('SET',KEYS[1],'1','PX',ARGV[1]) end; return 1",
+                    1,
+                    key,
+                    delay_ms,
+                )
+            except Exception:
+                logger.warning("Shared outbound cooldown unavailable")
+            return
+        async with self._lock:
+            until = time.monotonic() + delay_ms / 1000
+            current = self._memory.get(key)
+            self._memory[key] = (max(until, current[0] if current else 0), "1")
+
     async def acquire_lock(self, key: str, ttl_seconds: int = 60) -> str | None:
         """Acquire a short-lived distributed lease.
 
@@ -76,9 +132,7 @@ class TrafficStore:
                 # become a duplicate worker.
                 return None
             try:
-                acquired = await self._redis.set(
-                    lock_key, token, nx=True, ex=ttl
-                )
+                acquired = await self._redis.set(lock_key, token, nx=True, ex=ttl)
                 return token if acquired else None
             except Exception:
                 logger.warning("Redis lease acquire failed", exc_info=True)
@@ -91,9 +145,7 @@ class TrafficStore:
             self._memory[lock_key] = (now + ttl, token)
         return token
 
-    async def renew_lock(
-        self, key: str, token: str, ttl_seconds: int = 60
-    ) -> bool:
+    async def renew_lock(self, key: str, token: str, ttl_seconds: int = 60) -> bool:
         """Extend a lease only when its ownership token still matches."""
 
         lock_key = f"lease:{key}"
@@ -315,7 +367,9 @@ class TrafficStore:
                 if item[1] > now
             }
             active = sum(
-                1 for item_scope, _ in self._memory_connections.values() if item_scope == scope
+                1
+                for item_scope, _ in self._memory_connections.values()
+                if item_scope == scope
             )
             if active >= max(1, int(limit)):
                 return None
