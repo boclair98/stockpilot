@@ -17,14 +17,19 @@ const page = (items, extra = {}) => ({ items, asOf: stamp, hasMore: false, nextO
 function harness() {
   const slots = [], requests = [], modules = new Map(), timers = new Map(), opened = [], saved = [];
   let cursor = 0, effects = [], dirty = false, tree, timerId = 0;
+  const listeners = new Map();
+  const location = {hash:"",search:"",pathname:"/"};
+  const window = {addEventListener(name, fn) { if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn); },removeEventListener(name,fn){listeners.get(name)?.delete(fn);},dispatchEvent(event){listeners.get(event.type)?.forEach(fn=>fn(event));}};
+  const history = {pushState(state,title,href){const url=new URL(href,'https://example.test');Object.assign(location,{pathname:url.pathname,search:url.search,hash:url.hash});}};
   const react = {
+    useSyncExternalStore(subscribe, read) { const index=cursor++; if(!slots[index])slots[index]={cleanup:subscribe(()=>{dirty=true;})}; return read(); },
     useId: () => ":market-lens:",
     useState(initial) { const index = cursor++; if (!slots[index]) slots[index] = { value: typeof initial === "function" ? initial() : initial }; return [slots[index].value, value => { const next = typeof value === "function" ? value(slots[index].value) : value; if (!Object.is(next, slots[index].value)) { slots[index].value = next; dirty = true; } }]; },
     useRef(initial) { const index = cursor++; if (!slots[index]) slots[index] = { value: { current: initial } }; return slots[index].value; },
     useEffect(effect, deps) { const index = cursor++, previous = slots[index]; if (!previous || previous.deps.some((dep, i) => !Object.is(dep, deps[i]))) effects.push(() => { previous?.cleanup?.(); slots[index] = { deps, cleanup: effect() }; }); },
   };
-  const context = vm.createContext({ AbortController, URLSearchParams, Intl,
-    location: { hash: "" }, window: { addEventListener() {}, removeEventListener() {} },
+  const context = vm.createContext({ AbortController, URLSearchParams, Intl, Event,
+    location, window, history,
     setTimeout(fn, ms) { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout(id) { timers.delete(id); },
     fetch(url, init) { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); requests.push({ url, init, resolve, reject }); init.signal.addEventListener("abort", () => reject(new Error("abort")), { once: true }); return promise; },
   });
@@ -38,6 +43,7 @@ function harness() {
       if (id === "lucide-react") return new Proxy({}, { get: () => "icon" });
       if (id === "next/link") return { default: "a" };
       if (id === "./StockLogo") return { default: "logo" };
+      if (id === "./StockDirectory") return { default: "catalog" };
       if (id.startsWith("@/")) return load(id.replace("@/", "") + ".ts");
       if (id.startsWith("./")) return load(path.posix.join(path.posix.dirname(file), id) + (file.startsWith("components/") ? ".tsx" : ".ts"));
       throw new Error(id);
@@ -48,6 +54,7 @@ function harness() {
   const render = () => { cursor = 0; effects = []; dirty = false; tree = component({ selectedId: "", savedIds: new Set(), onSelect: async item => opened.push(item.id), onSave: item => saved.push(item.id) }); effects.forEach(effect => effect()); return tree; };
   const flush = async () => { for (let round = 0; round < 6; round++) { await new Promise(resolve => setImmediate(resolve)); if (dirty) render(); } };
   return { load, render, flush, requests, opened, saved, text: () => text(tree), nodes: () => nodes(tree),
+    pop(href) { history.pushState(null,"",href);window.dispatchEvent(new Event("popstate")); },
     findButton(label) { return nodes(tree).find(node => node.type === "button" && (node.props["aria-label"] === label || text(node).trim() === label)); },
     click(label) { const button = this.findButton(label); assert(button, label); assert(!button.props.disabled, label); button.props.onClick(); },
     respond(index, data, status = 200) { requests[index].resolve({ ok: status >= 200 && status < 300, status, json: async () => data }); },
@@ -55,6 +62,15 @@ function harness() {
     unmount() { slots.forEach(slot => slot.cleanup?.()); timers.clear(); },
   };
 }
+
+test("whole-universe tab stays in the market, avoids ranking reads and restores safe currency state", async t => {
+  const h=harness();t.after(h.unmount);h.render();await h.flush();h.respond(0,page([kr()]));await h.flush();
+  h.click("전체 종목");await h.flush();assert(h.nodes().some(n=>n.type==="catalog"&&n.props.embedded===true));assert.equal(h.requests.length,1);
+  h.click("미국");await h.flush();assert.equal(h.requests.length,1);
+  h.click("시가총액");await h.flush();assert(h.requests[1].url.includes("market=US"));h.respond(1,page([us()]));await h.flush();assert(h.text().includes("애플"));
+  h.pop("/?browse=cap&browseMarket=KR#market-rankings");await h.flush();assert(!h.text().includes("애플"));
+  h.respond(2,page([kr()]));await h.flush();assert(h.text().includes("삼성전자"));
+});
 
 test("comparison accepts canonical public identities only and caps two-to-three-item URLs", t => {
   const h = harness(); t.after(h.unmount); const lib = h.load("lib/ranking-comparison.ts");

@@ -26,6 +26,26 @@ export function directorySearch(criteria: DirectoryCriteria): string {
   if (criteria.q) params.set("q", criteria.q);
   return params.toString();
 }
+export function embeddedDirectoryCriteria(search: string): DirectoryCriteria {
+  const [query, hash = ""] = search.split("#");
+  const params = new URLSearchParams(query);
+  return parseDirectoryCriteria(new URLSearchParams({
+    market: hash === "us-top" ? "US" : hash === "kr-top" ? "KR" : params.get("browseMarket") || "KR",
+    exchange: params.get("catalogExchange") || "ALL",
+    q: params.get("catalogQ") || "",
+    page: params.get("catalogPage") || "1",
+    limit: params.get("catalogLimit") || "20",
+  }).toString());
+}
+export function embeddedDirectorySearch(criteria: DirectoryCriteria): string {
+  const safe = parseDirectoryCriteria(directorySearch(criteria));
+  const params = new URLSearchParams({browse: "all", browseMarket: safe.market, catalogExchange: safe.exchange, catalogPage: String(safe.page), catalogLimit: String(safe.limit)});
+  if (safe.q) params.set("catalogQ", safe.q);
+  return params.toString();
+}
+export function embeddedDirectoryHref(criteria: DirectoryCriteria): string {
+  return `/?${embeddedDirectorySearch(criteria)}#market-rankings`;
+}
 export function directoryRequest(criteria: DirectoryCriteria, snapshot = ""): string {
   const params = new URLSearchParams({market: criteria.market, exchange: criteria.exchange, limit: String(criteria.limit), offset: String((criteria.page - 1) * criteria.limit)});
   if (criteria.q) params.set("q", criteria.q);
@@ -51,6 +71,10 @@ export function validateDirectoryPage(value: unknown, criteria: DirectoryCriteri
   }
   return page;
 }
-export function instrumentDetailHref(item: InstrumentIdentity): string {
-  return `/?${new URLSearchParams({view: "detail", market: item.market, exchange: item.exchange, symbol: item.symbol})}`;
+export function instrumentDetailHref(item: InstrumentIdentity, returnCriteria?: DirectoryCriteria): string {
+  const params = new URLSearchParams({view: "detail", market: item.market, exchange: item.exchange, symbol: item.symbol});
+  if (returnCriteria) {
+    for (const [name, value] of new URLSearchParams(embeddedDirectorySearch(returnCriteria))) params.set(name, value);
+  }
+  return `/?${params}`;
 }

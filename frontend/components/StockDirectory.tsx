@@ -6,21 +6,24 @@ import { ArrowLeft, ArrowUpRight, ChartNoAxesColumnIncreasing, ChevronLeft, Chev
 import WorkspaceControls from "./WorkspaceControls";
 import StockLogo from "./StockLogo";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
-import { DIRECTORY_EXCHANGES, directoryRequest, directorySearch, instrumentDetailHref, parseDirectoryCriteria, validateDirectoryPage, type DirectoryCriteria, type DirectoryPage } from "@/lib/stock-directory";
+import { DIRECTORY_EXCHANGES, directoryRequest, directorySearch, embeddedDirectoryCriteria, embeddedDirectoryHref, instrumentDetailHref, parseDirectoryCriteria, validateDirectoryPage, type DirectoryCriteria, type DirectoryPage } from "@/lib/stock-directory";
+import { MARKET_BROWSE_EVENT, followInstrumentDetailLink, navigateMarketBrowse, readMarketBrowse } from "@/lib/market-browse";
 
 const NAV_EVENT = "stockpilot:directory-navigation";
 const subscribe = (callback: () => void) => {
   window.addEventListener("popstate", callback);
   window.addEventListener(NAV_EVENT, callback);
-  return () => { window.removeEventListener("popstate", callback); window.removeEventListener(NAV_EVENT, callback); };
+  window.addEventListener(MARKET_BROWSE_EVENT, callback);
+  window.addEventListener("hashchange", callback);
+  return () => { window.removeEventListener("popstate", callback); window.removeEventListener(NAV_EVENT, callback); window.removeEventListener(MARKET_BROWSE_EVENT, callback); window.removeEventListener("hashchange", callback); };
 };
 const readSearch = () => location.search;
 const serverSearch = () => "";
 const number = (value: number) => value.toLocaleString("ko-KR");
 
-export default function StockDirectory() {
-  const search = useSyncExternalStore(subscribe, readSearch, serverSearch);
-  const criteria = parseDirectoryCriteria(search);
+export default function StockDirectory({ embedded = false }: { embedded?: boolean } = {}) {
+  const search = useSyncExternalStore(subscribe, embedded ? readMarketBrowse : readSearch, serverSearch);
+  const criteria = embedded ? embeddedDirectoryCriteria(search) : parseDirectoryCriteria(search);
   const key = directorySearch(criteria);
   const [result, setResult] = useState<{ key: string; data: DirectoryPage } | null>(null);
   const [error, setError] = useState<{ key: string; message: string; expired: boolean } | null>(null);
@@ -29,6 +32,7 @@ export default function StockDirectory() {
   const version = useRef<{ group: string; snapshot: string } | null>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const focusResults = useRef(false);
+  const composing = useRef(false);
   const page = result?.key === key ? result.data : null;
   const failure = error?.key === key ? error : null;
   const loading = !page && !failure;
@@ -65,8 +69,11 @@ export default function StockDirectory() {
     const nextKey = directorySearch(next);
     if (nextKey === key) return;
     focusResults.current = Object.keys(patch).length === 1 && patch.page !== undefined;
-    history.pushState(null, "", `/stocks?${nextKey}`);
-    window.dispatchEvent(new Event(NAV_EVENT));
+    if (embedded) navigateMarketBrowse(embeddedDirectoryHref(next));
+    else {
+      history.pushState(null, "", `/stocks?${nextKey}`);
+      window.dispatchEvent(new Event(NAV_EVENT));
+    }
   }
   function retry() {
     version.current = null;
@@ -76,14 +83,16 @@ export default function StockDirectory() {
   }
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (composing.current) return;
     const q = String(new FormData(event.currentTarget).get("q") || "").trim().slice(0,80);
     navigate({q, page: 1});
   }
   const pages = page ? Math.max(1, Math.ceil(page.total / criteria.limit)) : 1;
   const refreshing = pendingKey === key;
 
-  return <main className="stock-directory">
-    <header className="directory-topbar">
+  const Root = embedded ? "div" : "main";
+  return <Root className={`stock-directory${embedded ? " market-directory" : ""}`}>
+    {!embedded ? <><header className="directory-topbar">
       <Link className="directory-brand" href="/"><span><ChartNoAxesColumnIncreasing size={19} aria-hidden="true" /></span>StockPilot</Link>
       <nav aria-label="시장 탐색"><Link href="/"><ArrowLeft size={16} />시장 순위</Link><span aria-current="page">전체 종목</span></nav>
       <WorkspaceControls themeOnly />
@@ -91,13 +100,13 @@ export default function StockDirectory() {
     <section className="directory-intro">
       <div><p className="directory-eyebrow">STOCK EXPLORER</p><h1>전체 종목</h1><p>한국·미국 상장 종목을 회사명·코드·티커로 찾아보세요.</p></div>
       <Link href="/compare">종목 비교<ArrowUpRight size={17} /></Link>
-    </section>
+    </section></> : null}
     <section className="directory-workspace" aria-label="전체 종목 탐색">
       <div className="directory-toolbar">
-        <div className="directory-markets" aria-label="국가 선택">{(["KR", "US"] as const).map(market => <button key={market} type="button" aria-pressed={criteria.market === market} onClick={() => navigate({market, exchange: "ALL", page: 1})}>{market === "KR" ? "한국 주식" : "미국 주식"}</button>)}</div>
-        <form className="directory-search" key={criteria.q} onSubmit={submitSearch} role="search" aria-label="전체 상장 종목 검색">
+        {!embedded ? <div className="directory-markets" aria-label="국가 선택">{(["KR", "US"] as const).map(market => <button key={market} type="button" aria-pressed={criteria.market === market} onClick={() => navigate({market, exchange: "ALL", page: 1})}>{market === "KR" ? "한국 주식" : "미국 주식"}</button>)}</div> : null}
+        <form className="directory-search" key={`${criteria.market}:${criteria.q}`} onSubmit={submitSearch} role="search" aria-label="전체 상장 종목 검색">
           <label className="sr-only" htmlFor="directory-query">회사명·종목코드·티커</label><Search size={19} aria-hidden="true" />
-          <input id="directory-query" name="q" type="search" defaultValue={criteria.q} maxLength={80} placeholder="회사명 · 종목코드 · 티커 검색" autoComplete="off" />
+          <input id="directory-query" name="q" type="search" defaultValue={criteria.q} maxLength={80} placeholder={criteria.market === "US" ? "회사명 · 티커 검색 (예: AAPL)" : "회사명 · 종목코드 검색"} autoComplete="off" onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onBlur={() => { composing.current = false; }} onKeyDown={event => { if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault(); }} />
           <button type="submit">검색</button>
         </form>
       </div>
@@ -115,7 +124,7 @@ export default function StockDirectory() {
       {page ? <>
         {page.partial ? <p className="directory-warning" role="status">일부 거래소 자료를 받지 못했어요. 현재 {number(page.universeTotal)}개는 전체 목록이 아닐 수 있어요. 새로 조회해 주세요.</p> : null}
         <div className="directory-columns" aria-hidden="true"><span>종목 / 티커</span><span>거래소</span><span>시세 · 차트</span></div>
-        <ul className="directory-list">{page.items.map(item => <li key={item.id}><Link className="directory-instrument" href={instrumentDetailHref(item)} prefetch={false}>
+        <ul className="directory-list">{page.items.map(item => <li key={item.id}><Link className="directory-instrument" href={instrumentDetailHref(item, embedded ? criteria : undefined)} prefetch={false} onClick={embedded ? followInstrumentDetailLink : undefined}>
           <StockLogo name={item.name} symbol={item.symbol} logoUrl={item.logoUrl} color="#5262db" />
           <span className="directory-identity"><strong>{item.name}</strong><span><b>{item.symbol}</b>{item.englishName && item.englishName !== item.name ? <small>{item.englishName}</small> : null}</span></span>
           <span className="directory-exchange">{item.listingMarket || item.exchange}<small>{item.currency}</small></span>
@@ -129,6 +138,6 @@ export default function StockDirectory() {
         <details className="directory-coverage"><summary>목록 범위와 자료 기준{page.partial ? " · 일부 조회 실패" : ""}</summary><p>한국: 코스피·코스닥 / 미국: 나스닥·뉴욕·아멕스의 제공 종목 목록입니다. 선물·옵션·장외주식 등 모든 금융상품을 포함하는 목록은 아닙니다. 가격은 종목 상세에서 조회하며, 시세가 없거나 거래가 제한된 종목은 모의주문이 불가능할 수 있습니다.</p><p>{criteria.q ? `선택 범위 ${number(page.universeTotal)}개 중 검색 결과 ${number(page.total)}개` : `선택 범위 ${number(page.universeTotal)}개`} · 목록 수신 시간은 시세 기준 시간이 아닙니다. 목록은 서버 시작 후 공식 마스터 수신 기준입니다.</p><ul>{page.coverage.map(source => <li key={source.exchange}><b>{source.exchange}</b><span>{source.available ? "수신 완료" : "미수신"}</span><time dateTime={source.loadedAt || undefined}>{source.loadedAt ? new Date(source.loadedAt).toLocaleString("ko-KR", {timeZone: "Asia/Seoul"}) : "수신 시간 없음"}</time></li>)}</ul></details>
       </> : null}
     </section>
-    <p className="directory-disclaimer">실제 시세로 살펴보고, 연습용 자금으로 투자해요. 실제 돈으로 거래하지 않습니다.</p>
-  </main>;
+    {!embedded ? <p className="directory-disclaimer">실제 시세로 살펴보고, 연습용 자금으로 투자해요. 실제 돈으로 거래하지 않습니다.</p> : null}
+  </Root>;
 }

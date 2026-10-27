@@ -9,6 +9,7 @@ function load(file, deps={}) {
 }
 const identity=load('lib/instrument-identity.ts');
 const lib=load('lib/stock-directory.ts',{'./instrument-identity':identity});
+const browse=load('lib/market-browse.ts',{'./stock-directory':lib});
 const {mergeQuoteSnapshots}=load('lib/quote-snapshots.ts');
 let passed=0;
 function test(name,fn){fn();passed++;process.stdout.write(`PASS ${name}\n`);}
@@ -24,6 +25,37 @@ test('round-trip URL preserves search, exchange and last page',()=>{
  for(const key of Object.keys(data))assert.equal(parsed[key],data[key]);
  const url=new URL('https://example.test'+lib.directoryRequest(parsed,'v1'));
  assert.equal(url.searchParams.get('offset'),'12800');assert.equal(url.searchParams.get('snapshot'),'v1');
+});
+
+test('integrated catalog keeps its state separate from the selected instrument and strips unrelated fields',()=>{
+ const criteria={market:'US',exchange:'NYS',q:'BRK/B & A',limit:100,page:9};
+ const href=lib.embeddedDirectoryHref(criteria);
+ const parsed=lib.embeddedDirectoryCriteria(new URL(href,'https://example.test').search);
+ for(const name of Object.keys(criteria))assert.equal(parsed[name],criteria[name]);
+ const item={id:'US:NYS:BRK/B',symbol:'BRK/B',name:'버크셔 B',market:'US',exchange:'NYS',currency:'USD'};
+ const detail=new URL(lib.instrumentDetailHref(item,criteria),'https://example.test');
+ assert.equal(detail.searchParams.get('view'),'detail');assert.equal(detail.searchParams.get('symbol'),'BRK/B');
+ assert.equal(detail.searchParams.get('exchange'),'NYS');assert.equal(detail.searchParams.get('catalogPage'),'9');
+ const returned=new URL(browse.marketReturnHref(detail.search),'https://example.test');
+ assert.equal(returned.searchParams.has('symbol'),false);assert.equal(returned.searchParams.get('catalogQ'),criteria.q);
+ assert.equal(returned.hash,'#market-rankings');
+ const safe=browse.marketBrowseHref('?browse=all&browseMarket=US&catalogPage=2&token=private&cash=123');
+ assert(!safe.includes('token'));assert(!safe.includes('cash'));
+});
+
+test('market mode URLs validate exchanges, restore rankings and reset catalog pages only across countries',()=>{
+ assert.equal(browse.parseMarketBrowse('?browse=unknown&browseMarket=US&rankExchange=KOSPI').metric,'CAP');
+ assert.equal(browse.parseMarketBrowse('?browse=cap&browseMarket=US&rankExchange=KOSPI').exchange,'ALL');
+ assert.equal(browse.parseMarketBrowse('?browse=all#us-top').market,'US');
+ assert.equal(lib.embeddedDirectoryCriteria('?browse=all#us-top').market,'US');
+ const all='?browse=all&browseMarket=KR&catalogExchange=KOSDAQ&catalogPage=3&catalogQ=삼성&catalogLimit=50';
+ const ranked=browse.marketBrowseHref(all,{metric:'VOLUME'});
+ assert.equal(browse.parseMarketBrowse(ranked.slice(1)).metric,'VOLUME');
+ assert.equal(new URL(ranked,'https://example.test').searchParams.get('catalogPage'),'3');
+ const switched=new URL(browse.marketBrowseHref(all,{market:'US'}),'https://example.test');
+ assert.equal(switched.searchParams.get('catalogPage'),'1');assert.equal(switched.searchParams.get('catalogExchange'),'ALL');
+ assert.equal(switched.searchParams.get('catalogQ'),'삼성');
+ assert.equal(browse.marketReturnHref('?view=detail&symbol=AAPL'),' /#market-rankings'.trim());
 });
 const criteria={market:'KR',exchange:'KOSDAQ',q:'',page:1,limit:20};
 const item={id:'KR:KRX:0001A0',symbol:'0001A0',name:'덕양에너젠',market:'KR',exchange:'KRX',currency:'KRW',listingMarket:'KOSDAQ'};

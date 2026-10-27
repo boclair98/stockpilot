@@ -1,5 +1,41 @@
 # OpenUI Design Plan
 
+## 2026-10-28 · 시장 상단 전체 종목·검색 통합
+
+### Resolved inputs
+- Topic: StockPilot 시장 화면에서 전체 상장 종목을 찾는 흐름.
+- Offer: 별도 페이지 이동 없이 순위와 전체 종목을 한 패널에서 전환하고 검색·페이지 탐색·실제 종목 상세를 연결.
+- Audience: 국내·미국 주식을 탐색하는 한국어 초보·재방문 사용자.
+- Primary user action: 시장 상단 `전체 종목` 선택 → 회사명·코드·티커 검색 → `시세 보기`.
+- Deliverable: 기존 Next.js 시장 컴포넌트와 URL 상태에 통합된 실제 웹 화면 1개.
+- Style direction: 현재 StockPilot의 명료한 금융 행·필터·검색 UI 유지. 새 브랜딩이나 마케팅 hero 없음.
+- Tonal key: 현재 다크 기본과 라이트 테마 동등 지원.
+- Icon policy: 현재 lucide 아이콘만 재사용.
+- Proof assets: 기존 `/api/market/instruments`의 공식 목록·실제 응답 건수·coverage. 검증 fixture는 운영과 분리.
+- Motion intensity: Minimal. 탭·버튼 피드백만 사용하고 reduced-motion 유지.
+
+### Audit and composition contract
+- 실제 문제: RankedMarketBrowser 우측의 `/stocks` 링크와 아래 접힌 FullMarketCatalog가 분리돼 있고, 전체 목록 검색은 별도 StockDirectory 페이지에 있음.
+- Hero archetype: asymmetrical 제품 작업 영역. 기존 시장·자산 요약을 유지하고 과도한 도입 화면 추가 없음.
+- First viewport: 시장 탐색의 한국/미국 선택 → `전체 종목 · 시가총액 · 거래량 · 상승률 · 하락률` → 해당 목록. 전체 종목 선택 시 바로 검색 입력·거래소·20/50/100개 표시가 나옴.
+- Primary visual/proof artifact: 실제 이름·티커·거래소를 정렬한 전체 목록. 전체 목록이 전체 종목의 실시간 가격을 일괄 수신한다는 표현은 금지하고 기존 시세 상세로 연결.
+- Interaction behavior: GET 조회만 사용. URL에 탐색 방식·국가·검색어·거래소·페이지·표시 수 저장, Back/Forward·새로고침·상세에서 시장 복귀로 복원. 늦은 응답 취소, 409 snapshot 만료·오류·빈 결과 재조회 유지.
+- Reuse boundary: StockDirectory를 embedded 변형으로 재사용하고 중복 브랜드 헤더/국가 선택/접힌 목록 제거. 기존 `/stocks` 북마크는 통합 화면으로 안전하게 연결. 계좌·주문·API·앱인토스·기존 사용자 변경은 보존.
+
+### Visual and implementation contract
+- 현재 Pretendard, --ws-brand/#5262db, --ws-canvas/#f6f7fb·다크 #0b0d13, --ws-ink/#182131·다크 #f2f4fa 재사용. 탭·본문14–16px, 입력16px, 제목20–24px, 행 보조12–13px, 숫자 tabular-nums.
+- 간격8/12/16/24px, 기존 패널 반경·divider 유지. embedded 목록에 중복 외곽 카드나 새 전체 화면 제목을 넣지 않음.
+- 모바일: 44px 이상 탭/검색/페이지 버튼, 검색은 한 줄 전체 폭, 거래소 필터는 안전하게 줄바꿈, 목록은 로고·이름/코드·통화·시세 보기로 재배치. 필수 필드를 숨기거나 작은 글자로 줄여 넘침 해결하지 않음.
+- CTA: `전체 종목`→같은 시장 패널, `검색`→기존 읽기 API의 q/offset/limit, `시세 보기`→기존 상세 URL(종목·시장·거래소와 탐색 복귀 정보 보존).
+- 대상: RankedMarketBrowser, StockDirectory, TradingTerminal, 주 메뉴/바로가기/모바일 전체 메뉴, legacy stocks route, URL helper·공통 scoped CSS·회귀 테스트·README.
+- 검증: 전체/순위 전환, 국내/미국 검색, IME·빈 결과·오류·취소·페이지 20/50/100·마지막 페이지·Back/Forward·상세 복귀. TypeScript/ESLint/빌드/기존 안전성 회귀와 360/390/768/1440 라이트·다크 시각 검사. 사용자가 승인한 범위로 GitHub 원본→실제 포크→코더스 웹 배포·운영 검증.
+
+### Filled generation prompt
+Create one integrated StockPilot market-discovery experience using its existing Next.js React components and current financial light/dark tokens. Offer Korean and US official instrument discovery in the same market panel through an explicit first `전체 종목` tab next to market-cap, volume and movement rankings. Reuse the existing directory API, accessible search form and bounded pagination without fetching prices for the entire universe or inventing data. Keep the current market summary, stock-detail and simulated-order workflows. Remove duplicate lower catalog and separate-page navigation from the primary flow; retain old /stocks URLs as parameter-preserving compatibility entry points. Preserve query, exchange, page, market and instrument identity across URL navigation, refresh and return from detail. Use current Pretendard, aligned rows, 44px controls and minimal reduced-motion-aware feedback. Verify actual Korean mobile/desktop content, empty/error/retry states and financial non-mutation boundaries. No new hero, copied broker assets, new dependencies, backend schema or private Apps in Toss changes.
+
+### Output target
+- Existing market page, embedded directory component, compatibility route and domain URL helpers under `frontend/`; no new independent product page.
+
 ## 2026-10-28 · 워커 관측성과 증권형 공시 목록
 
 ### Resolved inputs

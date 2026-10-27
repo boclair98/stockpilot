@@ -18,6 +18,7 @@ vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleK
     if(name==='react/jsx-runtime') return require(name);
     if(name==='next/link') return {__esModule:true,default:Link};
     if(name==='lucide-react') return {ArrowLeftRight:icon,Bell:icon,History:icon,WalletCards:icon,Search:icon};
+    if(name==='@/lib/market-browse') return {ALL_INSTRUMENTS_HREF:'/?browse=all#market-rankings',followMarketBrowseLink(){}};
     throw new Error(`Unexpected dependency: ${name}`);
   },
 });
@@ -25,7 +26,7 @@ test('market tool access includes the full directory and preserves all existing 
   seen.length=0;
   const html=renderToStaticMarkup(React.createElement(moduleBox.exports.default));
   assert.match(html,/aria-label="투자 도구 바로가기"/);
-  assert.deepEqual(seen.map(item=>item.href),['/stocks','/compare','/notifications','/account-tools','/#decision-review']);
+  assert.deepEqual(seen.map(item=>item.href),['/?browse=all#market-rankings','/compare','/notifications','/account-tools','/#decision-review']);
   assert.equal(seen.every(item=>item.prefetch===false),true);
   for(const label of ['전체 종목','종목 비교','알림 모아보기','계좌 도구','매매 기록']) assert.ok(html.includes(`aria-label="${label}"`));
   assert.equal((html.match(/<a /g)||[]).length,5);

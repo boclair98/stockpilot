@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { RefreshCw, ChevronDown, X, ArrowUpRight, Search } from "lucide-react";
 import StockRow from "./StockRow";
 import MarketLens from "./MarketLens";
+import StockDirectory from "./StockDirectory";
+import { BROWSE_METRICS, marketBrowseHref, navigateMarketBrowse, parseMarketBrowse, readMarketBrowse, serverMarketBrowse, subscribeMarketBrowse } from "@/lib/market-browse";
 import { EMPTY_MARKET_LENS, filterRankedStocks, type MarketLensValue } from "@/lib/market-lens";
 import { type InstrumentIdentity } from "@/lib/instrument-identity";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
@@ -45,16 +47,19 @@ export default function RankedMarketBrowser({
   savedIds: Set<string>;
   onSave: (item: Stock) => void;
 }) {
-  const [market, setMarket] = useState<"KR" | "US">("KR"),
-    [metric, setMetric] = useState("CAP"),
-    [data, setData] = useState<Page | null>(null),
+  const browseLocation = useSyncExternalStore(subscribeMarketBrowse, readMarketBrowse, serverMarketBrowse);
+  const {market, metric, exchange} = parseMarketBrowse(browseLocation);
+  const queryKey = `${market}:${metric}:${exchange}`;
+  const [loadedData, setData] = useState<(Page & {queryKey: string}) | null>(null),
     [busy, setBusy] = useState(true),
     [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const [exchange, setExchange] = useState("ALL");
   const [comparison, setComparison] = useState<InstrumentIdentity[]>([]);
   const [selectionNotice, setSelectionNotice] = useState("");
-  const [lens, setLens] = useState<MarketLensValue>({ ...EMPTY_MARKET_LENS });
+  const data = loadedData?.queryKey === queryKey ? loadedData : null;
+  const [lensState, setLensState] = useState<{market: "KR" | "US"; value: MarketLensValue}>({market: "KR", value: {...EMPTY_MARKET_LENS}});
+  const lens = lensState.market === market ? lensState.value : EMPTY_MARKET_LENS;
+  const setLens = (value: MarketLensValue) => setLensState({market, value});
   const [failedPage, setFailedPage] = useState<"first" | "more" | null>(null);
   const request = useRef<AbortController | null>(null);
   const comparisonHref = rankingComparisonHref(comparison);
@@ -65,30 +70,7 @@ export default function RankedMarketBrowser({
     setSelectionNotice(next.message);
   }
   useEffect(() => {
-    const sync = () => {
-      const desired =
-        location.hash === "#us-top"
-          ? "US"
-          : location.hash === "#kr-top"
-            ? "KR"
-            : null;
-      if (desired && desired !== market) {
-        setData(null);
-        setError("");
-        setBusy(true);
-        setMarket(desired);
-        setExchange("ALL");
-        setLens({ ...EMPTY_MARKET_LENS });
-      }
-    };
-    const timer = setTimeout(sync, 0);
-    window.addEventListener("hashchange", sync);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("hashchange", sync);
-    };
-  }, [market]);
-  useEffect(() => {
+    if (metric === "ALL" || parseMarketBrowse(readMarketBrowse()).metric === "ALL") return;
     const c = new AbortController();
     request.current?.abort();
     request.current = c;
@@ -99,7 +81,7 @@ export default function RankedMarketBrowser({
     setFailedPage(null);
     void load(market, metric, exchange, 0, undefined, c.signal)
       .then((d) => {
-        if (!c.signal.aborted) setData(d);
+        if (!c.signal.aborted) setData({...d, queryKey});
       })
       .catch((e) => {
         if (!c.signal.aborted) { setError(e instanceof Error ? e.message : "목록을 확인하지 못했어요."); setFailedPage("first"); }
@@ -111,9 +93,9 @@ export default function RankedMarketBrowser({
         }
       });
     return () => request.current?.abort();
-  }, [market, metric, exchange, attempt]);
+  }, [market, metric, exchange, attempt, queryKey]);
   async function more() {
-    if (!data?.hasMore || data.nextOffset === null || request.current) return;
+    if (metric === "ALL" || !data?.hasMore || data.nextOffset === null || request.current) return;
     const c = new AbortController();
     request.current = c;
     setBusy(true);
@@ -134,7 +116,7 @@ export default function RankedMarketBrowser({
         next.items.some((n) => data.items.some((s) => s.id === n.id))
       )
         throw new Error("순위가 바뀌었어요. 새로고침해 주세요.");
-      setData({ ...next, items: [...data.items, ...next.items] });
+      setData({ ...next, items: [...data.items, ...next.items], queryKey });
     } catch (e) {
       if (!c.signal.aborted) {
         setError(e instanceof Error ? e.message : "다시 시도해 주세요.");
@@ -148,8 +130,8 @@ export default function RankedMarketBrowser({
     }
   }
   return (
-    <section className="ranked-browser broker-rankings" aria-label="시장 종목 순위">
-      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div><Link className="ranking-directory-entry" href={`/stocks?market=${market}`} prefetch={false}>전체 종목 보기<ArrowUpRight size={17} aria-hidden="true"/></Link></div>
+    <section className={`ranked-browser broker-rankings${metric === "ALL" ? " is-directory" : ""}`} aria-label="시장 종목 탐색">
+      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div></div>
       <header>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
@@ -162,8 +144,7 @@ export default function RankedMarketBrowser({
                 setData(null);
                 setError("");
                 setBusy(true);
-                setMarket(v);
-                setExchange("ALL");
+                navigateMarketBrowse(marketBrowseHref(browseLocation, {market: v, exchange: "ALL"}));
                 setLens({ ...EMPTY_MARKET_LENS });
               }}
             >
@@ -171,15 +152,8 @@ export default function RankedMarketBrowser({
             </button>
           ))}
         </div>
-        <div className="ranked-metric-tabs" aria-label="순위 기준">
-          {(
-            [
-              ["CAP", "시가총액"],
-              ["VOLUME", "거래량"],
-              ["UP", "상승률"],
-              ["DOWN", "하락률"],
-            ] as const
-          ).map(([value, label]) => (
+        <div className="ranked-metric-tabs" aria-label="종목 탐색 방식">
+          {BROWSE_METRICS.map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -189,14 +163,14 @@ export default function RankedMarketBrowser({
                 setData(null);
                 setError("");
                 setBusy(true);
-                setMetric(value);
+                navigateMarketBrowse(marketBrowseHref(browseLocation, {metric: value}));
               }}
             >
               {label}
             </button>
           ))}
         </div>
-        <button
+        {metric !== "ALL" ? <><button
           className="ranked-refresh"
           type="button"
           aria-label="순위 새로고침"
@@ -210,12 +184,13 @@ export default function RankedMarketBrowser({
           <RefreshCw size={16} />
         </button>
       <div className="record-filters ranking-exchange-filter">
-        <label>거래소<select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); setExchange(e.target.value); }}>
+        <label>거래소<select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); navigateMarketBrowse(marketBrowseHref(browseLocation, {exchange: e.target.value})); }}>
           <option value="ALL">전체 거래소</option>
           {market === "KR" ? <><option value="KOSPI">코스피</option><option value="KOSDAQ">코스닥</option></> : <><option value="NAS">나스닥</option><option value="NYS">뉴욕증권거래소</option><option value="AMS">아멕스</option></>}
         </select></label>
-      </div>
+      </div></> : null}
       </header>
+      {metric === "ALL" ? <StockDirectory embedded /> : <>
       <label className="ranked-sort">
         정렬 기준
         <select
@@ -225,7 +200,7 @@ export default function RankedMarketBrowser({
             setData(null);
             setError("");
             setBusy(true);
-            setMetric(e.target.value);
+            navigateMarketBrowse(marketBrowseHref(browseLocation, {metric: e.target.value as typeof metric}));
           }}
         >
           <option value="CAP">시가총액</option>
@@ -349,6 +324,7 @@ export default function RankedMarketBrowser({
         </p>
       ) : null}
       {comparisonHref && data?.items.length ? <div className="ranking-comparison-bottom"><span>{comparison.length}개 종목 선택</span><Link href={comparisonHref}>나란히 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link><button type="button" aria-label="비교 선택 모두 해제" onClick={() => { setComparison([]); setSelectionNotice("비교 선택을 모두 해제했어요."); }}><X size={17} aria-hidden="true"/></button></div> : null}
+      </>}
     </section>
   );
 }

@@ -47,7 +47,7 @@ import WorkspaceControls from "./WorkspaceControls";
 import CommandSearch from "./CommandSearch";
 import DecisionNotebook from "./DecisionNotebook";
 import RankedMarketBrowser from "./RankedMarketBrowser";
-import FullMarketCatalog from "./FullMarketCatalog";
+import { ALL_INSTRUMENTS_HREF, MARKET_BROWSE_EVENT, followMarketBrowseLink, marketReturnHref } from "@/lib/market-browse";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
@@ -331,8 +331,9 @@ export default function TradingTerminal() {
     history.pushState(
       { stockpilotView: "MARKET" },
       "",
-      location.pathname + "#market-rankings",
+      marketReturnHref(location.search),
     );
+    window.dispatchEvent(new Event(MARKET_BROWSE_EVENT));
   }, []);
   const [detailTab, setDetailTab] = useState("RESEARCH");
   const [searchFailed, setSearchFailed] = useState(false);
@@ -396,10 +397,12 @@ export default function TradingTerminal() {
     const timer = window.setTimeout(sync, 0);
     window.addEventListener("popstate", sync);
     window.addEventListener("hashchange", sync);
+    window.addEventListener(MARKET_BROWSE_EVENT, sync);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("popstate", sync);
       window.removeEventListener("hashchange", sync);
+      window.removeEventListener(MARKET_BROWSE_EVENT, sync);
     };
   }, []);
   const toastTimer = useRef<number | null>(null);
@@ -1393,7 +1396,7 @@ export default function TradingTerminal() {
           >
             매매 기록
           </a>
-          <a href="/stocks">전체 종목</a>
+          <a href={ALL_INSTRUMENTS_HREF} onClick={followMarketBrowseLink}>전체 종목</a>
         </nav>
         <div className="top-actions">
           <CommandSearch onChoose={chooseSearchResult} />
@@ -1762,12 +1765,6 @@ export default function TradingTerminal() {
             selectedId={selected}
             onSelect={chooseSearchResult}
             savedIds={favoriteIds}
-            onSave={toggleFavorite}
-          />
-          <FullMarketCatalog
-            selectedId={selected}
-            savedIds={favoriteIds}
-            onSelect={chooseSearchResult}
             onSave={toggleFavorite}
           />
           <div

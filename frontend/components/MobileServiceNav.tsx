@@ -23,9 +23,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useDialogFocus } from "@/lib/dialog-focus";
+import { ALL_INSTRUMENTS_HREF, followMarketBrowseLink } from "@/lib/market-browse";
 const subscribeHash = (callback: () => void) => {
   window.addEventListener("hashchange", callback);
-  return () => window.removeEventListener("hashchange", callback);
+  window.addEventListener("popstate", callback);
+  window.addEventListener("stockpilot:market-browse", callback);
+  return () => { window.removeEventListener("hashchange", callback); window.removeEventListener("popstate", callback); window.removeEventListener("stockpilot:market-browse", callback); };
 };
 const readHash = () => window.location.hash;
 
@@ -37,7 +40,7 @@ const primaryItems = [
 ];
 
 const moreItems = [
-  { href:"/stocks",label:"전체 종목",description:"한국·미국 상장 종목 검색과 페이지 탐색",icon:Search },
+  { href:ALL_INSTRUMENTS_HREF,label:"전체 종목",description:"시장에서 바로 전체 종목 검색",icon:Search },
   { href:"/notifications",label:"알림 모아보기",description:"주문·가격·공시와 문의 답변",icon:MessageCircle },
   { href:"/account-tools",label:"계좌 관리",description:"정기 모의 매수·가상 환전·권리 일정",icon:Wallet },
   { href:"/support",label:"고객지원",description:"문의와 서비스 공지 확인",icon:ShieldCheck },
@@ -164,7 +167,7 @@ export default function MobileServiceNav() {
                   className={isCurrent(pathname, href) ? "active" : ""}
                   href={href}
                   key={href}
-                  onClick={closeMenu}
+                  onClick={event => { followMarketBrowseLink(event); closeMenu(); }}
                 >
                   <span>
                     <Icon size={20} />
@@ -202,7 +205,7 @@ export default function MobileServiceNav() {
           const active = href.includes("#")
             ? pathname + hash === href
             : href === "/"
-              ? pathname === "/" && !hash
+              ? pathname === "/" && (!hash || ["#market-rankings", "#search-card", "#kr-top", "#us-top"].includes(hash))
               : isCurrent(pathname, href);
           return (
             <Link

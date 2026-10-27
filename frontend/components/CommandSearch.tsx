@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, X, ArrowUpRight } from "lucide-react";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { isInstrument } from "@/lib/instrument-identity";
+import { ALL_INSTRUMENTS_HREF, followMarketBrowseLink } from "@/lib/market-browse";
 type Instrument = {
   id: string;
   symbol: string;
@@ -180,13 +181,13 @@ export default function CommandSearch({
                     { href: "#decision-review", label: "매매 기록" },
                     { href: "/practice", label: "투자 연습" },
                     { href: "/compare", label: "종목 비교" },
-                    { href: "/stocks", label: "국내·미국 전체 종목" },
+                    { href: ALL_INSTRUMENTS_HREF, label: "국내·미국 전체 종목" },
                     { href: "/notifications", label: "알림 모아보기" },
                     { href: "/account-tools", label: "계좌 관리·정기 매수" },
                     { href: "/support", label: "고객지원·공지" },
                     { href: "/league", label: "수익률 리그" },
                   ].map((item) => (
-                    <a key={item.href} href={item.href} onClick={close}>
+                    <a key={item.href} href={item.href} onClick={event => { followMarketBrowseLink(event); close(); }}>
                       {item.label}
                       <ArrowUpRight size={16} />
                     </a>
