@@ -37,6 +37,8 @@ from app.services.price_alerts import current_alert_price
 router = APIRouter(prefix="/api/features", tags=["features"])
 
 SEOUL = timezone(timedelta(hours=9))
+ACTIVE_ALERT_LIMIT = 20
+RECENT_TRIGGERED_ALERT_LIMIT = 30
 
 
 class InstrumentIn(BaseModel):
@@ -139,7 +141,7 @@ async def _quote(instrument: Instrument) -> dict | None:
 
 async def _equity(
     session: AsyncSession, owner: UUID
-) -> tuple[Decimal, Decimal, list[dict]]:
+) -> tuple[Decimal, Decimal, list[dict], dict]:
     wallet = await session.get(TradingAccount, owner)
     equity = {
         "KRW": Decimal(wallet.cash_krw) if wallet else INITIAL_KRW,
@@ -158,16 +160,22 @@ async def _equity(
         .all()
     )
     allocations = []
+    estimated_positions = 0
+    unavailable_positions = 0
     for position in positions:
         instrument = await instrument_catalog.get(
             position.symbol, exchange=position.exchange
         )
         if not instrument:
+            unavailable_positions += 1
             continue
         quote = await _quote(instrument)
+        has_quote = bool(quote and quote.get("price") is not None)
+        if not has_quote:
+            estimated_positions += 1
         price = (
             Decimal(str(quote["price"]))
-            if quote and quote.get("price") is not None
+            if has_quote
             else Decimal(position.average_price)
         )
         value = Decimal(position.quantity) * price
@@ -179,19 +187,25 @@ async def _equity(
                 "market": instrument.market,
                 "currency": instrument.currency,
                 "value": float(value),
+                "valuationBasis": "QUOTE" if has_quote else "COST",
             }
         )
-    return equity["KRW"], equity["USD"], allocations
+    return equity["KRW"], equity["USD"], allocations, {
+        "valuationComplete": estimated_positions == 0 and unavailable_positions == 0,
+        "estimatedPositions": estimated_positions,
+        "unavailablePositions": unavailable_positions,
+    }
 
 
 async def _evaluate_alerts(session: AsyncSession, owner: UUID) -> list[PriceAlert]:
+    # Old active alerts must not disappear behind newer reached-price history.
     alerts = (
         (
             await session.execute(
                 sa.select(PriceAlert)
-                .where(PriceAlert.owner_id == owner)
-                .order_by(PriceAlert.created_at.desc())
-                .limit(30)
+                .where(PriceAlert.owner_id == owner, PriceAlert.status == "ACTIVE")
+                .order_by(PriceAlert.created_at.desc(), PriceAlert.id.desc())
+                .limit(ACTIVE_ALERT_LIMIT)
             )
         )
         .scalars()
@@ -212,7 +226,72 @@ async def _evaluate_alerts(session: AsyncSession, owner: UUID) -> list[PriceAler
         ):
             alert.status = "TRIGGERED"
             alert.triggered_at = datetime.now(UTC)
-    return alerts
+    recent_triggered = (
+        (
+            await session.execute(
+                sa.select(PriceAlert)
+                .where(PriceAlert.owner_id == owner, PriceAlert.status == "TRIGGERED")
+                .order_by(PriceAlert.triggered_at.desc(), PriceAlert.id.desc())
+                .limit(RECENT_TRIGGERED_ALERT_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [item for item in alerts if item.status == "ACTIVE"] + recent_triggered
+
+
+async def _alert_scope(session: AsyncSession, owner: UUID, alerts: list[PriceAlert]):
+    counts = dict(
+        (
+            await session.execute(
+                sa.select(PriceAlert.status, sa.func.count())
+                .where(PriceAlert.owner_id == owner)
+                .group_by(PriceAlert.status)
+            )
+        ).all()
+    )
+    unread = await session.scalar(
+        sa.select(sa.func.count()).where(
+            PriceAlert.owner_id == owner,
+            PriceAlert.status == "TRIGGERED",
+            PriceAlert.read_at.is_(None),
+        )
+    )
+    active_count = counts.get("ACTIVE", 0)
+    triggered_count = counts.get("TRIGGERED", 0)
+    return {
+        "activeLimit": ACTIVE_ALERT_LIMIT,
+        "recentTriggeredLimit": RECENT_TRIGGERED_ALERT_LIMIT,
+        "activeCount": active_count,
+        "triggeredCount": triggered_count,
+        "activeHasMore": active_count > sum(item.status == "ACTIVE" for item in alerts),
+        "triggeredHasMore": triggered_count > sum(item.status == "TRIGGERED" for item in alerts),
+    }, int(unread or 0)
+
+
+def _alert_view(item: PriceAlert, instrument: Instrument | None, quote: dict | None):
+    # A delisted/missing catalog item must remain identifiable and removable.
+    market = instrument.market if instrument else (
+        "KR" if item.exchange in {"KRX", "NXT"}
+        else "US" if item.exchange in {"NAS", "NYS", "AMS"} else None
+    )
+    return {
+        "id": str(item.id),
+        "symbol": item.symbol,
+        "name": instrument.name if instrument else item.symbol,
+        "market": market,
+        "exchange": item.exchange,
+        "currency": instrument.currency if instrument else (
+            "KRW" if market == "KR" else "USD" if market == "US" else None
+        ),
+        "direction": item.direction,
+        "targetPrice": float(item.target_price),
+        "currentPrice": quote.get("price") if quote else None,
+        "status": item.status,
+        "read": item.read_at is not None,
+        "triggeredAt": item.triggered_at.isoformat() if item.triggered_at else None,
+    }
 
 
 @router.get("/dashboard")
@@ -263,30 +342,14 @@ async def dashboard(
         )
 
     alerts = await _evaluate_alerts(session, owner)
+    alert_scope, unread_alerts = await _alert_scope(session, owner, alerts)
     alert_rows = []
     for item in alerts:
         instrument = await instrument_catalog.get(item.symbol, exchange=item.exchange)
-        if not instrument:
-            continue
-        quote = await _quote(instrument)
-        alert_rows.append(
-            {
-                "id": str(item.id),
-                "symbol": item.symbol,
-                "name": instrument.name,
-                "currency": instrument.currency,
-                "direction": item.direction,
-                "targetPrice": float(item.target_price),
-                "currentPrice": quote.get("price") if quote else None,
-                "status": item.status,
-                "read": item.read_at is not None,
-                "triggeredAt": (
-                    item.triggered_at.isoformat() if item.triggered_at else None
-                ),
-            }
-        )
+        quote = await _quote(instrument) if instrument else None
+        alert_rows.append(_alert_view(item, instrument, quote))
 
-    equity_krw, equity_usd, allocations = await _equity(session, owner)
+    equity_krw, equity_usd, allocations, valuation = await _equity(session, owner)
     orders = (
         (
             await session.execute(
@@ -355,9 +418,8 @@ async def dashboard(
         "authenticated": True,
         "watchlist": watchlist_rows,
         "alerts": alert_rows,
-        "unreadAlerts": sum(
-            1 for item in alerts if item.status == "TRIGGERED" and item.read_at is None
-        ),
+        "alertScope": alert_scope,
+        "unreadAlerts": unread_alerts,
         "push": {
             "configured": firebase_push.configured,
             "deviceCount": int(
@@ -371,6 +433,7 @@ async def dashboard(
             ),
         },
         "report": {
+            **valuation,
             "equity": {"KRW": float(equity_krw), "USD": float(equity_usd)},
             "returnRate": {
                 "KRW": float(return_rate(performance_krw, INITIAL_KRW)),

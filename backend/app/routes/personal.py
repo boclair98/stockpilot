@@ -3,11 +3,11 @@
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.database import get_session
@@ -93,6 +93,20 @@ class SavedIn(BaseModel):
     version: int = Field(ge=0)
 
 
+def verify_saved_owner(expected_owner: str | None, owner: UUID):
+    # The header is a precondition, never authentication. Older clients can
+    # omit it; a supplied stale owner must fail before catalog/account writes.
+    if expected_owner is not None and expected_owner != str(owner):
+        raise HTTPException(
+            409,
+            {
+                "code": "OWNER_CHANGED",
+                "message": "로그인 계정이 바뀌어 변경을 적용하지 않았어요. 기록을 다시 조회해 주세요.",
+            },
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+
 async def canonical_saved(kind, key, data):
     if len(key) > 200:
         raise HTTPException(422, "저장 식별자가 너무 길어요.")
@@ -115,6 +129,9 @@ async def canonical_saved(kind, key, data):
     if kind == "COMPARE":
         rows = data.get("instruments", [])
         note = data.get("note", "")
+        days = data.get("days", 20)
+        if not isinstance(days, int) or isinstance(days, bool) or days not in {5, 20, 60}:
+            raise HTTPException(422, "비교 기간은 5일, 20일, 60일 중 선택해 주세요.")
         if (
             not isinstance(rows, list)
             or not 2 <= len(rows) <= 3
@@ -140,6 +157,7 @@ async def canonical_saved(kind, key, data):
             "name": " · ".join(row.name for row in selected),
             "instruments": [row.public() for row in selected],
             "note": note,
+            "days": days,
         }
     raise HTTPException(422, "저장 유형을 확인해 주세요.")
 
@@ -195,10 +213,12 @@ async def saved_put(
     key: str,
     payload: SavedIn,
     response: Response,
+    expected_owner: Annotated[str | None, Header(alias="X-StockPilot-Owner")] = None,
     owner=Depends(require_identity),
     session=Depends(get_session),
 ):
     private(response)
+    verify_saved_owner(expected_owner, owner)
     data = await canonical_saved(kind, key, payload.data)
     await account(
         session, owner, lock=True
@@ -276,10 +296,12 @@ async def saved_delete(
     key: str,
     response: Response,
     version: int = Query(ge=0),
+    expected_owner: Annotated[str | None, Header(alias="X-StockPilot-Owner")] = None,
     owner=Depends(require_identity),
     session=Depends(get_session),
 ):
     private(response)
+    verify_saved_owner(expected_owner, owner)
     if len(key) > 200:
         raise HTTPException(422, "식별자를 확인해 주세요.")
     await account(session, owner, lock=True)

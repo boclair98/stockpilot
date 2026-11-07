@@ -5,11 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { appendHistory, historyCsv, orderStatusLabels, validHistoryPage, type HistoryPage } from "@/lib/order-history";
 import OrderTimeline from "./OrderTimeline";
-import TradeCalendar from "./TradeCalendar";
+import TradeCalendar, { type CalendarContext } from "./TradeCalendar";
 
 const emptyFilters = {q:"",side:"",status:"",market:"",from:"",to:"",dateBasis:"created"};
 export default function InvestmentHistory({authenticated}: {authenticated: boolean}) {
   const [view,setView] = useState<"list"|"calendar">("list");
+  // Kept only in this owner-keyed history mount, never in a URL or browser store.
+  const [calendarContext,setCalendarContext] = useState<CalendarContext|null>(null);
   const [draft,setDraft] = useState(emptyFilters);
   const [filters,setFilters] = useState(emptyFilters);
   const [page,setPage] = useState<HistoryPage|null>(null);
@@ -48,6 +50,11 @@ export default function InvestmentHistory({authenticated}: {authenticated: boole
     // Synchronize the authenticated query with the server; load also sets its pending state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if(authenticated && view === "list") void load();
+    if(!authenticated) {
+      setCalendarContext(null); setDraft(emptyFilters); setFilters(emptyFilters);
+      setPage(null); setError(""); setExpired(false); setFormError(""); setDownloadNotice(""); setBusy(false);
+      returnFocus.current=false;
+    }
     return ()=>{active.current?.abort();};
   },[authenticated,load,view]);
   useEffect(()=>{
@@ -55,6 +62,7 @@ export default function InvestmentHistory({authenticated}: {authenticated: boole
   },[view]);
   function selectCalendarDate(date: string) {
     const selected = {...emptyFilters,from:date,to:date,status:"FILLED",dateBasis:"execution"};
+    setCalendarContext({month:date.slice(0,7),selected:date});
     returnFocus.current=true;
     setDraft(selected); setFilters(selected); setFormError(""); setPage(null); setView("list");
   }
@@ -80,7 +88,7 @@ export default function InvestmentHistory({authenticated}: {authenticated: boole
       <button type="button" aria-pressed={view==="list"} onClick={()=>setView("list")}><List size={17} aria-hidden="true"/>주문 목록</button>
       <button type="button" aria-pressed={view==="calendar"} onClick={()=>setView("calendar")}><CalendarDays size={17} aria-hidden="true"/>매매 캘린더</button>
     </div>
-    {view==="calendar" ? <TradeCalendar authenticated={authenticated} onSelectDate={selectCalendarDate}/> : <>
+    {view==="calendar" ? <TradeCalendar authenticated={authenticated} context={calendarContext ?? undefined} onContextChange={setCalendarContext} onSelectDate={selectCalendarDate}/> : <>
     {!authenticated||expired ? <div className="history-empty"><h3>{expired?"로그인이 만료됐어요":"내 투자 기록을 모아보세요"}</h3><p>로그인한 계정의 모의 주문만 표시해요.</p><a href="/api/auth/google/login?return_to=%2F%3Fview%3Drecords%23decision-review">로그인하고 확인하기</a></div> : <>
       <form className="history-filters" onSubmit={e=>{
         e.preventDefault();

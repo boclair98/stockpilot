@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCloudSaved } from "@/lib/cloud-saved";
 import { BookOpen, Check, FileText } from "lucide-react";
 type Entry = {
@@ -20,23 +20,33 @@ const labels: Record<string, string> = {
   CANCELED: "취소",
   REJECTED: "거절",
 };
-export default function DecisionNotebook({
-  symbol,
-  exchange,
-  orders,
-}: {
+type NotebookProps = {
   symbol: string;
   exchange: string;
   orders: Entry[];
-}) {
-  const key = `stockpilot:decision:v1:${exchange}:${symbol}`;
+};
+type NoteCloud = ReturnType<typeof useCloudSaved<{ note: string }>>;
+
+export default function DecisionNotebook(props: NotebookProps) {
   const cloud = useCloudSaved<{ note: string }>("NOTE");
+  // The editor's private draft and save acknowledgements belong to exactly one
+  // instrument and owner. Neither a sign-in nor a sign-out inherits that draft.
+  const owner = cloud.authenticated === true ? `account:${cloud.owner}` : cloud.authenticated === false ? "browser" : "pending";
+  return <NotebookEditor key={`${props.exchange}:${props.symbol}:${owner}`} {...props} cloud={cloud}/>;
+}
+
+function NotebookEditor({
+  symbol,
+  exchange,
+  orders,
+  cloud,
+}: NotebookProps & { cloud: NoteCloud }) {
+  const key = `stockpilot:decision:v1:${exchange}:${symbol}`;
   const cloudKey = `${exchange}:${symbol}`;
   const [dirty, setDirty] = useState(false);
-  const [draftOwner, setDraftOwner] = useState<string | null>(null);
   const [draft, setDraft] = useState(() => {
     try {
-      return typeof window !== "undefined"
+      return cloud.authenticated === false && typeof window !== "undefined"
         ? localStorage.getItem(key) || ""
         : "";
     } catch {
@@ -44,37 +54,52 @@ export default function DecisionNotebook({
     }
   });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
   const [error, setError] = useState("");
+  const editRevision = useRef(0);
+  const saveLock = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const storedNote = cloud.items.find((row) => row.key === cloudKey && !row.deleted)?.data?.note;
   const displayed =
     cloud.authenticated === true
-      ? dirty && draftOwner === cloud.owner
+      ? dirty
         ? draft
-        : cloud.items.find((row) => row.key === cloudKey && !row.deleted)?.data
-            .note || ""
-      : cloud.authenticated === false && draftOwner === null
+        : typeof storedNote === "string" ? storedNote : ""
+      : cloud.authenticated === false
         ? draft
         : "";
   const events = orders.filter(
     (o) => o.symbol === symbol && o.exchange === exchange,
   );
   async function save() {
-    if (cloud.authenticated !== false) {
-      if (await cloud.save(cloudKey, { note: displayed })) {
-        setSaved(true);
-        setDirty(false);
-        setError("");
-      }
-      return;
-    }
+    if (saveLock.current || cloud.busy || cloud.authenticated === null) return;
+    saveLock.current = true;
+    setSaving(true);
+    setSaveNotice("");
+    const submittedRevision = editRevision.current;
     try {
-      localStorage.setItem(key, draft);
-      setSaved(true);
+      if (cloud.authenticated === true) {
+        if (!await cloud.save(cloudKey, { note: displayed }) || !mounted.current) return;
+      } else localStorage.setItem(key, displayed);
+      const unchanged = editRevision.current === submittedRevision;
+      setSaved(unchanged);
+      if (unchanged) setDirty(false);
+      setSaveNotice(unchanged ? "메모를 저장했어요." : "이전 내용은 저장됐어요. 추가로 입력한 내용은 아직 저장하지 않았어요.");
       setError("");
     } catch {
+      if (!mounted.current) return;
       setSaved(false);
-      setError(
-        "기록을 저장하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.",
-      );
+      setError(cloud.authenticated === false
+        ? "기록을 저장하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요."
+        : "기록을 저장하지 못했어요. 입력한 내용을 유지했으니 저장 상태를 확인해 주세요.");
+    } finally {
+      saveLock.current = false;
+      if (mounted.current) setSaving(false);
     }
   }
   return (
@@ -103,13 +128,15 @@ export default function DecisionNotebook({
       <textarea
         id="decision-note"
         value={displayed}
+        disabled={cloud.authenticated === null}
         maxLength={1200}
         placeholder="어떤 점을 보고 판단했나요? 나중에 결과와 비교해 보세요."
         onChange={(e) => {
+          editRevision.current++;
           setDraft(e.target.value);
           setSaved(false);
           setDirty(true);
-          setDraftOwner(cloud.owner);
+          setSaveNotice("");
         }}
       />
       <div className="notebook-actions">
@@ -117,9 +144,9 @@ export default function DecisionNotebook({
         <button
           type="button"
           onClick={() => void save()}
-          disabled={cloud.busy || cloud.authenticated === null}
+          disabled={saving || cloud.busy || cloud.authenticated === null}
         >
-          {saved ? (
+          {saving ? "저장 중…" : saved ? (
             <>
               <Check size={15} /> 저장됨
             </>
@@ -130,6 +157,7 @@ export default function DecisionNotebook({
           )}
         </button>
       </div>
+      {saveNotice ? <p role="status">{saveNotice}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {cloud.error ? (
         <div role="alert">
@@ -139,7 +167,8 @@ export default function DecisionNotebook({
           </button>
         </div>
       ) : null}
-      {cloud.authenticated===true?<button type="button" disabled={cloud.busy} onClick={()=>{try{const local=localStorage.getItem(key);if(local){setDraft(local.slice(0,1200));setDraftOwner(cloud.owner);setDirty(true);setSaved(false);}else setError("이 브라우저에 저장된 메모가 없어요.");}catch{setError("브라우저 기록을 읽지 못했어요.");}}}>이 브라우저의 메모 가져오기</button>:null}
+      {cloud.authenticated===true?<button type="button" disabled={saving || cloud.busy} onClick={()=>{try{const local=localStorage.getItem(key);if(local){editRevision.current++;setDraft(local.slice(0,1200));setDirty(true);setSaved(false);setSaveNotice("");setError("");}else setError("이 브라우저에 저장된 메모가 없어요.");}catch{setError("브라우저 기록을 읽지 못했어요.");}}}>이 브라우저의 메모 가져오기</button>:null}
+      <p className="comparison-basis">불러온 최근 전체 주문 최대 30건 중 이 종목의 최대 20건을 표시해요. <a href="#decision-review">전체 투자 기록 확인</a></p>
       <ol className="decision-events">
         {events.length ? (
           events.slice(0, 20).map((o) => (
@@ -151,7 +180,7 @@ export default function DecisionNotebook({
                   {o.quantity.toLocaleString("ko-KR")}주
                 </b>
                 <small>
-                  {new Date(o.createdAt).toLocaleString("ko-KR")} ·{" "}
+                  {new Date(o.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} ·{" "}
                   {labels[o.status] || o.status}
                 </small>
               </div>
@@ -164,7 +193,7 @@ export default function DecisionNotebook({
           ))
         ) : (
           <li className="notebook-empty">
-            이 종목의 주문 기록이 아직 없어요. 판단과 결과를 함께 남겨보세요.
+            불러온 최근 주문에는 이 종목의 기록이 없어요. 이전 주문은 전체 투자 기록에서 확인해 주세요.
           </li>
         )}
       </ol>

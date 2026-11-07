@@ -24,9 +24,10 @@ type Props = {
   onSelect: (item: WatchlistItem) => void;
   onRemove: (item: WatchlistItem) => void;
   accountSaved?: boolean;
+  loadState?: "loading" | "error" | "ready";
 };
 
-function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }: Props) {
+function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved, loadState = "ready" }: Props) {
   const [market, setMarket] = useState("ALL");
   const [sort, setSort] = useState("saved");
   const [query, setQuery] = useState("");
@@ -44,13 +45,13 @@ function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }
     return result;
   }, [items, market, sort, query]);
   return (
-    <section className="favorite-board watchlist-board" aria-labelledby="favorite-board-title">
+    <section className="favorite-board watchlist-board" aria-labelledby="favorite-board-title" aria-busy={loadState === "loading"}>
       <div className="favorite-board-head">
         <div>
           <span>MY WATCHLIST</span>
           <h2 id="favorite-board-title">내 관심종목</h2>
         </div>
-        <small>{items.length}/{accountSaved?50:12} · {accountSaved?"내 계정":"이 브라우저"}</small>
+        <small>{loadState === "loading" ? "저장 목록 확인 중" : loadState === "error" ? "조회 확인 필요" : `${items.length}/${accountSaved?50:12} · ${accountSaved?"내 계정":"이 브라우저"}`}</small>
       </div>
       {items.length > 0 && <div className="watchlist-toolbar">
         <div className="watchlist-fields">
@@ -77,6 +78,8 @@ function MarketWatchlist({ items, selectedId, onSelect, onRemove, accountSaved }
             />
           ))}
         </div>
+      ) : loadState !== "ready" ? (
+        <div className="favorite-empty" role="status"><p><b>{loadState === "loading" ? "관심종목을 불러오고 있어요." : "저장된 관심종목을 확인하지 못했어요."}</b><span>{loadState === "loading" ? "계정의 저장 목록을 확인한 뒤 보여드릴게요." : "아래에서 다시 조회할 수 있어요. 기존 저장 기록은 바뀌지 않아요."}</span></p></div>
       ) : (
         <div className="favorite-empty">
           <span className="friendly-empty-icon">

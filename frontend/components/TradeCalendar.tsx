@@ -15,16 +15,32 @@ function Summary({ item }: { item: ActivitySummary }) {
   </article>;
 }
 
-export default function TradeCalendar({ authenticated, onSelectDate }: { authenticated: boolean; onSelectDate: (date: string) => void }) {
-  const [month, setMonth] = useState(currentKstMonth);
-  const [selected, setSelected] = useState<string | null>(null);
+export type CalendarContext = { month: string; selected: string | null };
+
+export default function TradeCalendar({ authenticated, onSelectDate, context, onContextChange }: {
+  authenticated: boolean;
+  onSelectDate: (date: string) => void;
+  context?: CalendarContext;
+  onContextChange?: (context: CalendarContext) => void;
+}) {
+  const [localContext, setLocalContext] = useState<CalendarContext>(() => ({month:currentKstMonth(),selected:null}));
+  const {month,selected} = context ?? localContext;
+  const updateContext = (next: CalendarContext) => {
+    setLocalContext(next);
+    onContextChange?.(next);
+  };
   const [reload, setReload] = useState(0);
   const [result, setResult] = useState<{ month: string; data: TradeActivity | null; error: string; expired: boolean; loading: boolean }>({ month: "", data: null, error: "", expired: false, loading: false });
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated) {
+      // The standalone fallback also discards private navigation/data on logout.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocalContext({month:currentKstMonth(),selected:null});
+      setResult({month:"",data:null,error:"",expired:false,loading:false});
+      return;
+    }
     const controller = new AbortController();
     // Query state belongs to the month/auth context; stale responses are discarded.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setResult({ month, data: null, error: "", expired: false, loading: true });
     void requestJson<unknown>(`/api/trading/activity?month=${month}`, { credentials: "include", cache: "no-store", signal: controller.signal })
       .then(data => {
@@ -38,7 +54,7 @@ export default function TradeCalendar({ authenticated, onSelectDate }: { authent
   const data = result.month === month ? result.data : null;
   const day = data?.days.find(item => item.date === selected);
   const loading = result.month !== month || result.loading;
-  function changeMonth(next: string) { if (isCalendarMonth(next)) { setMonth(next); setSelected(null); } }
+  function changeMonth(next: string) { if (isCalendarMonth(next)) updateContext({month:next,selected:null}); }
   if (!authenticated) return <section className="trade-calendar" aria-label="매매 캘린더"><div className="trade-calendar-body trade-calendar-state"><h3>나의 매매를 달력으로 확인해요</h3><p>로그인하면 날짜별 체결과 실현손익을 확인할 수 있어요.</p><a href="/api/auth/google/login?return_to=%2F%3Fview%3Drecords%23decision-review">로그인하고 확인하기</a></div></section>;
   return <section className="trade-calendar" aria-label="매매 캘린더">
     <header className="trade-calendar-toggle">
@@ -57,7 +73,7 @@ export default function TradeCalendar({ authenticated, onSelectDate }: { authent
           {calendarCells(month).map((date, index) => {
             const record = data.days.find(item => item.date === date);
             const count = record ? record.currencies.reduce((sum, item) => sum + item.count, 0) + record.unknownCurrencyCount : 0;
-            return date ? <button type="button" key={date} aria-pressed={selected === date} aria-label={`${date}, 체결 ${count}건`} data-active={count > 0} onClick={() => setSelected(selected === date ? null : date)}><span>{Number(date.slice(-2))}</span><small>{count ? `${count.toLocaleString("ko-KR")}건` : "—"}</small></button> : <span key={`blank-${index}`} aria-hidden="true"/>;
+            return date ? <button type="button" key={date} aria-pressed={selected === date} aria-label={`${date}, 체결 ${count}건`} data-active={count > 0} onClick={() => updateContext({month,selected:selected === date ? null : date})}><span>{Number(date.slice(-2))}</span><small>{count ? `${count.toLocaleString("ko-KR")}건` : "—"}</small></button> : <span key={`blank-${index}`} aria-hidden="true"/>;
           })}
         </div>
         <div className="trade-calendar-selection"><h3>{selected ? `${Number(selected.slice(5, 7))}월 ${Number(selected.slice(-2))}일` : "이번 조회 월"} 체결 요약</h3>

@@ -12,12 +12,14 @@ const jsx=(type,props)=>({type,props});
 const nodes=t=>Array.isArray(t)?t.flatMap(nodes):t&&typeof t==='object'?[t,...nodes(t.props?.children)]:[];
 const text=t=>Array.isArray(t)?t.map(text).join(' '):t&&typeof t==='object'?text(t.props?.children):typeof t==='string'||typeof t==='number'?String(t):'';
 
-function harness(initial='/?browse=all') {
+function harness(initial='/?browse=all', options={}) {
  const slots=[],requests=[],modules=new Map(),listeners=new Map(),timers=new Map(),destinations=[];
  const location={};let cursor=0,effects=[],dirty=false,tree,timer=0;
  const assign=href=>{const u=new URL(href,'https://example.test');Object.assign(location,{href:u.href,pathname:u.pathname,search:u.search,hash:u.hash});};assign(initial);
  location.replace=href=>{destinations.push(href);assign(href);};
- const window={scrollTo(){},addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);},dispatchEvent(event){listeners.get(event.type)?.forEach(fn=>fn(event));}};
+ const store=new Map(), writes=[];
+ const storage={getItem(key){if(options.storageBlocked)throw Error('blocked');return store.get(key)||null;},setItem(key,value){if(options.storageBlocked||options.writeBlocked)throw Error('quota');writes.push({key,value});store.set(key,value);}};
+ const window={localStorage:storage,scrollTo(){},addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);},dispatchEvent(event){listeners.get(event.type)?.forEach(fn=>fn(event));}};
  const react={
   useState(initial){const i=cursor++;if(!slots[i])slots[i]={value:typeof initial==='function'?initial():initial};return[slots[i].value,value=>{const next=typeof value==='function'?value(slots[i].value):value;if(!Object.is(next,slots[i].value)){slots[i].value=next;dirty=true;}}];},
   useRef(initial){const i=cursor++;if(!slots[i])slots[i]={current:initial};return slots[i];},
@@ -41,10 +43,12 @@ function harness(initial='/?browse=all') {
    target+=fs.existsSync(path.join(root,target+'.ts'))?'.ts':'.tsx';return load(target);
   },out);return out;
  }
- let component=load('components/StockDirectory.tsx').default;
- const render=()=>{cursor=0;effects=[];dirty=false;tree=component({embedded:true});effects.forEach(fn=>fn());};
+ let component=load(options.component||'components/StockDirectory.tsx').default,props=options.props||{embedded:true};
+ const render=()=>{cursor=0;effects=[];dirty=false;tree=component(props);effects.forEach(fn=>fn());};
  const flush=async()=>{for(let n=0;n<8;n++){await new Promise(resolve=>setImmediate(resolve));if(dirty)render();}};
- return {render,flush,requests,destinations,location,load,nodes:()=>nodes(tree),text:()=>text(tree),
+ return {render,flush,requests,destinations,location,load,store,writes,nodes:()=>nodes(tree),text:()=>text(tree),
+  props(value){props=value;render();},
+  storageEvent(key,value){store.set(key,value);window.dispatchEvent({type:'storage',key});},
   respond(index,value,status=200){assert(requests[index],`missing request ${index}`);requests[index].resolve({ok:status>=200&&status<300,status,json:async()=>value});},
   click(label){const n=nodes(tree).find(n=>n.type==='button'&&(n.props['aria-label']===label||text(n).trim()===label));assert(n,`missing ${label}`);assert(!n.props.disabled);n.props.onClick();},
   submit(values){const form=nodes(tree).find(n=>n.type==='form'&&n.props.role==='search');form.props.onSubmit({preventDefault(){},currentTarget:{values}});},
@@ -74,6 +78,8 @@ test('embedded whole-universe search paginates in the market and retains criteri
  assert(prevented);assert.equal(new URL(h.location.href).searchParams.get('view'),'detail');assert.equal(h.requests.length,3,'same directory criteria must not refetch or mutate');
  assert(h.requests.every(r=>!r.init.method||r.init.method==='GET'));
 });
+
+module.exports={harness,pageFor};
 
 test('country history cancels obsolete reads and late responses cannot replace the current market',async t=>{
  const h=harness('/?browse=all&browseMarket=KR&catalogPage=2');t.after(h.unmount);h.render();await h.flush();

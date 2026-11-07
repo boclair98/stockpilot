@@ -632,10 +632,12 @@ function Disclosures() {
     <Panel title="관심종목의 최근 공시">
       <LoadState {...state} retry={state.refresh} />
       {state.data?.failed.length ? (
-        <p role="status">
-          {state.data.failed.join(" · ")} 공시를 조회하지 못했어요. 다시 조회해
-          주세요.
-        </p>
+        <div className="personal-feedback" role="status">
+          <p>{state.data.failed.join(" · ")} 공시를 조회하지 못했어요. 확인된 공시만 표시하고 있어요.</p>
+          <button type="button" disabled={state.loading} onClick={state.refresh}>
+            <RefreshCw size={16} aria-hidden="true" />{state.loading ? "공시 확인 중…" : "공시 다시 조회"}
+          </button>
+        </div>
       ) : null}
       {state.data?.groups.map((group) => (
         <div key={group.instrument.id}>
@@ -663,7 +665,7 @@ function Disclosures() {
           {group.asOf ? <small>{when(group.asOf)} 조회</small> : null}
         </div>
       ))}
-      {!state.loading && !state.error && !state.data?.groups.length ? (
+      {!state.loading && !state.error && !state.data?.groups.length && !state.data?.failed.length ? (
         <p>관심종목을 계정에 저장하면 공시를 모아 볼 수 있어요.</p>
       ) : null}
       <div className="personal-inline-actions">

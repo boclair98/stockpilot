@@ -62,12 +62,18 @@ export default function RankedMarketBrowser({
   const setLens = (value: MarketLensValue) => setLensState({market, value});
   const [failedPage, setFailedPage] = useState<"first" | "more" | null>(null);
   const request = useRef<AbortController | null>(null);
+  const marketHeading = useRef<HTMLHeadingElement>(null);
   const comparisonHref = rankingComparisonHref(comparison);
   const filtered = filterRankedStocks(data?.items ?? [], lens, savedIds, market === "KR" ? "KRW" : "USD");
   function selectForComparison(item: Stock | InstrumentIdentity) {
     const next = toggleComparison(comparison, item);
     setComparison(next.items);
     setSelectionNotice(next.message);
+  }
+  function clearComparison() {
+    marketHeading.current?.focus();
+    setComparison([]);
+    setSelectionNotice("비교 선택을 모두 해제했어요.");
   }
   useEffect(() => {
     if (metric === "ALL" || parseMarketBrowse(readMarketBrowse()).metric === "ALL") return;
@@ -131,7 +137,7 @@ export default function RankedMarketBrowser({
   }
   return (
     <section className={`ranked-browser broker-rankings${metric === "ALL" ? " is-directory" : ""}`} aria-label="시장 종목 탐색">
-      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2>주식 골라보기</h2></div></div>
+      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2 id="market-discovery-title" ref={marketHeading} tabIndex={-1}>주식 골라보기</h2></div></div>
       <header>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
@@ -190,7 +196,15 @@ export default function RankedMarketBrowser({
         </select></label>
       </div></> : null}
       </header>
-      {metric === "ALL" ? <StockDirectory embedded /> : <>
+      <section className={`ranking-comparison${comparison.length ? " has-selection" : " is-empty"}`} aria-labelledby="ranking-comparison-title">
+        <div className="ranking-comparison-heading"><div><h3 id="ranking-comparison-title">함께 비교하기 <span>{comparison.length}/3</span></h3><p>종목 옆 비교 버튼으로 2~3개를 골라보세요.</p></div>
+          {comparison.length ? <button className="ranking-comparison-clear" type="button" onClick={clearComparison}>선택 초기화</button> : null}
+        </div>
+        {comparison.length ? <ul className="ranking-comparison-items">{comparison.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span><button type="button" aria-label={`${item.name} 비교 선택 해제`} onClick={() => { marketHeading.current?.focus(); selectForComparison(item); }}><X size={16} aria-hidden="true" /></button></li>)}</ul> : null}
+        {comparison.length ? <div className="ranking-comparison-action">{comparisonHref ? <Link href={comparisonHref}>선택한 {comparison.length}개 비교 <ArrowUpRight size={16} aria-hidden="true" /></Link> : <button type="button" disabled>2개부터 비교할 수 있어요</button>}<small>계좌·보유 정보는 전달하지 않아요.</small></div> : null}
+      </section>
+      <p className="ranking-selection-status" role="status">{selectionNotice}</p>
+      {metric === "ALL" ? <StockDirectory embedded comparison={comparison} onCompare={selectForComparison} /> : <>
       <label className="ranked-sort">
         정렬 기준
         <select
@@ -219,14 +233,6 @@ export default function RankedMarketBrowser({
               : "전일 대비 하락률 순서"}{" "}
         · 제공 자료 기준
       </p>
-      <section className={`ranking-comparison${comparison.length ? " has-selection" : " is-empty"}`} aria-labelledby="ranking-comparison-title">
-        <div className="ranking-comparison-heading"><div><h3 id="ranking-comparison-title">함께 비교하기 <span>{comparison.length}/3</span></h3><p>종목 옆 비교 버튼으로 2~3개를 골라보세요.</p></div>
-          {comparison.length ? <button className="ranking-comparison-clear" type="button" onClick={() => { setComparison([]); setSelectionNotice("비교 선택을 모두 해제했어요."); }}>선택 초기화</button> : null}
-        </div>
-        {comparison.length ? <ul className="ranking-comparison-items">{comparison.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span><button type="button" aria-label={`${item.name} 비교 선택 해제`} onClick={() => selectForComparison(item)}><X size={16} aria-hidden="true" /></button></li>)}</ul> : null}
-        {comparison.length ? <div className="ranking-comparison-action">{comparisonHref ? <Link href={comparisonHref}>선택한 {comparison.length}개 비교 <ArrowUpRight size={16} aria-hidden="true" /></Link> : <button type="button" disabled>2개부터 비교할 수 있어요</button>}<small>계좌·보유 정보는 전달하지 않아요.</small></div> : null}
-        <p className="ranking-selection-status" role="status">{selectionNotice}</p>
-      </section>
       <MarketLens items={data?.items ?? []} value={lens} currency={market === "KR" ? "KRW" : "USD"} matched={filtered.items.length} error={filtered.error} onChange={setLens}/>
       <div
         className={`stock-list-heading${metric === "CAP" || metric === "VOLUME" ? " with-metric" : ""}`}
@@ -323,8 +329,8 @@ export default function RankedMarketBrowser({
           {!data.hasMore ? " · 제공 자료 끝" : ""}
         </p>
       ) : null}
-      {comparisonHref && data?.items.length ? <div className="ranking-comparison-bottom"><span>{comparison.length}개 종목 선택</span><Link href={comparisonHref}>나란히 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link><button type="button" aria-label="비교 선택 모두 해제" onClick={() => { setComparison([]); setSelectionNotice("비교 선택을 모두 해제했어요."); }}><X size={17} aria-hidden="true"/></button></div> : null}
       </>}
+      {comparisonHref ? <div className="ranking-comparison-bottom"><span>{comparison.length}개 종목 선택</span><Link href={comparisonHref}>나란히 비교하기 <ArrowUpRight size={16} aria-hidden="true" /></Link><button type="button" aria-label="비교 선택 모두 해제" onClick={clearComparison}><X size={17} aria-hidden="true"/></button></div> : null}
     </section>
   );
 }

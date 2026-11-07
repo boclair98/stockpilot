@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
-import { ArrowLeft, ArrowUpRight, ChartNoAxesColumnIncreasing, ChevronLeft, ChevronRight, ChevronsRight, ListFilter, RefreshCw, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChartNoAxesColumnIncreasing, ChevronLeft, ChevronRight, ChevronsRight, GitCompareArrows, Check, ListFilter, RefreshCw, Search, X } from "lucide-react";
 import WorkspaceControls from "./WorkspaceControls";
 import StockLogo from "./StockLogo";
+import DirectoryPresets from "./DirectoryPresets";
+import type { InstrumentIdentity } from "@/lib/instrument-identity";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { DIRECTORY_EXCHANGES, directoryRequest, directorySearch, embeddedDirectoryCriteria, embeddedDirectoryHref, instrumentDetailHref, parseDirectoryCriteria, validateDirectoryPage, type DirectoryCriteria, type DirectoryPage } from "@/lib/stock-directory";
 import { MARKET_BROWSE_EVENT, followInstrumentDetailLink, navigateMarketBrowse, readMarketBrowse } from "@/lib/market-browse";
@@ -21,7 +23,7 @@ const readSearch = () => location.search;
 const serverSearch = () => "";
 const number = (value: number) => value.toLocaleString("ko-KR");
 
-export default function StockDirectory({ embedded = false }: { embedded?: boolean } = {}) {
+export default function StockDirectory({ embedded = false, comparison = [], onCompare }: { embedded?: boolean; comparison?: InstrumentIdentity[]; onCompare?: (item: InstrumentIdentity) => void } = {}) {
   const search = useSyncExternalStore(subscribe, embedded ? readMarketBrowse : readSearch, serverSearch);
   const criteria = embedded ? embeddedDirectoryCriteria(search) : parseDirectoryCriteria(search);
   const key = directorySearch(criteria);
@@ -114,6 +116,7 @@ export default function StockDirectory({ embedded = false }: { embedded?: boolea
         <div className="directory-exchanges" aria-label="거래소 선택">{DIRECTORY_EXCHANGES[criteria.market].map(([exchange, label]) => <button key={exchange} type="button" aria-pressed={criteria.exchange === exchange} onClick={() => navigate({exchange, page: 1})}>{label}</button>)}</div>
         <label className="directory-size"><ListFilter size={16} aria-hidden="true" /><span>표시</span><select aria-label="한 페이지 종목 수" value={criteria.limit} onChange={event => navigate({limit: Number(event.target.value), page: 1})}>{[20,50,100].map(limit => <option key={limit} value={limit}>{limit}개씩</option>)}</select></label>
       </div>
+      <DirectoryPresets criteria={criteria} onApply={navigate}/>
       <div className="directory-list-status">
         <div role="status" aria-live="polite" ref={statusRef} tabIndex={-1}>{page ? <><strong>{criteria.q ? `검색 결과 ${number(page.total)}개` : `${page.partial ? "조회된" : "전체"} ${number(page.total)}개`}</strong><span>{page.items.length > 0 ? `${number(page.offset + 1)}–${number(page.offset + page.items.length)}번째` : page.total > 0 ? "페이지 범위를 확인해 주세요" : "조건에 맞는 종목 없음"} · {criteria.q ? "일치도순" : "종목코드순"}</span></> : <strong>{failure ? "목록을 확인해 주세요" : "종목 목록을 준비하고 있어요"}</strong>}</div>
         <button className="directory-refresh" type="button" aria-label="전체 종목 새로 조회" disabled={loading || refreshing} onClick={retry}><RefreshCw size={17} /></button>
@@ -123,13 +126,13 @@ export default function StockDirectory({ embedded = false }: { embedded?: boolea
       {loading ? <div className="directory-skeleton" aria-label="종목 목록 불러오는 중" aria-busy="true">{Array.from({length: 8}, (_, i) => <div key={i}><span/><i/><b/></div>)}</div> : null}
       {page ? <>
         {page.partial ? <p className="directory-warning" role="status">일부 거래소 자료를 받지 못했어요. 현재 {number(page.universeTotal)}개는 전체 목록이 아닐 수 있어요. 새로 조회해 주세요.</p> : null}
-        <div className="directory-columns" aria-hidden="true"><span>종목 / 티커</span><span>거래소</span><span>시세 · 차트</span></div>
-        <ul className="directory-list">{page.items.map(item => <li key={item.id}><Link className="directory-instrument" href={instrumentDetailHref(item, embedded ? criteria : undefined)} prefetch={false} onClick={embedded ? followInstrumentDetailLink : undefined}>
+        <div className={`directory-columns${onCompare ? " has-comparison" : ""}`} aria-hidden="true"><span>종목 / 티커</span><span>거래소</span><span>시세 · 차트</span>{onCompare ? <span>비교</span> : null}</div>
+        <ul className={`directory-list${onCompare ? " has-comparison" : ""}`}>{page.items.map(item => <li key={item.id}><Link className="directory-instrument" href={instrumentDetailHref(item, embedded ? criteria : undefined)} prefetch={false} onClick={embedded ? followInstrumentDetailLink : undefined}>
           <StockLogo name={item.name} symbol={item.symbol} logoUrl={item.logoUrl} color="#5262db" />
           <span className="directory-identity"><strong>{item.name}</strong><span><b>{item.symbol}</b>{item.englishName && item.englishName !== item.name ? <small>{item.englishName}</small> : null}</span></span>
           <span className="directory-exchange">{item.listingMarket || item.exchange}<small>{item.currency}</small></span>
           <span className="directory-open">시세 보기<ArrowUpRight size={17} aria-hidden="true" /></span>
-        </Link></li>)}</ul>
+        </Link>{onCompare ? <button className="directory-compare" type="button" aria-label={`${item.name} 비교 ${comparison.some(entry => entry.id === item.id) ? "선택 해제" : "추가"}`} aria-pressed={comparison.some(entry => entry.id === item.id)} onClick={() => onCompare(item)}>{comparison.some(entry => entry.id === item.id) ? <Check size={17} aria-hidden="true"/> : <GitCompareArrows size={17} aria-hidden="true"/>}<span>비교</span></button> : null}</li>)}</ul>
         {!page.items.length ? <div className="directory-state"><Search size={26}/><h2>{page.total > 0 ? "이 페이지에는 종목이 없어요" : "찾는 종목이 없어요"}</h2><p>{page.total > 0 ? "목록 범위 안의 페이지로 돌아가 주세요." : "검색어를 줄이거나 다른 거래소를 선택해 보세요."}</p><button type="button" onClick={() => navigate({page: 1, ...(page.total === 0 ? {q: "", exchange: "ALL"} : {})})}>목록 다시 보기</button></div> : null}
         <nav className="directory-pagination" aria-label="종목 목록 페이지">
           <div className="directory-page-actions"><button type="button" disabled={criteria.page <= 1} onClick={() => navigate({page: 1})}>처음</button><button type="button" aria-label="이전 종목 페이지" disabled={criteria.page <= 1} onClick={() => navigate({page: criteria.page - 1})}><ChevronLeft size={18}/></button><span><b>{number(criteria.page)}</b> / {number(pages)}</span><button type="button" aria-label="다음 종목 페이지" disabled={criteria.page >= pages} onClick={() => navigate({page: criteria.page + 1})}><ChevronRight size={18}/></button><button type="button" aria-label="마지막 종목 페이지" disabled={criteria.page >= pages} onClick={() => navigate({page: pages})}><ChevronsRight size={18}/></button></div>

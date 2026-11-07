@@ -21,6 +21,7 @@ function harness(file, initialProps = {}, named = "default") {
   let cursor = 0, effects = [], dirty = false, tree, props = initialProps, timerId = 0, user = null;
   const react = {
     memo: component => component,
+    useId() { const i = cursor++; if (!slots[i]) slots[i] = { value: `isolated-id-${i}` }; return slots[i].value; },
     useState(initial) { const i = cursor++; if (!slots[i]) slots[i] = { value: typeof initial === "function" ? initial() : initial }; return [slots[i].value, value => { const next = typeof value === "function" ? value(slots[i].value) : value; if (!Object.is(next, slots[i].value)) { slots[i].value = next; dirty = true; } }]; },
     useRef(initial) { const i = cursor++; if (!slots[i]) slots[i] = { current: initial }; return slots[i]; },
     useMemo(fn, deps) { const i = cursor++; if (!slots[i] || !same(slots[i].deps, deps)) slots[i] = { value: fn(), deps }; return slots[i].value; },
@@ -239,6 +240,81 @@ test("saved data ignores a delayed pre-write read and reconciles the confirmed s
   h.respond(1, { owner: "isolated-user", items: [] }); await h.flush();
   assert.equal(h.tree().items.length, 1, "a read begun before the write must not erase it");
   h.respond(3, { owner: "isolated-user", items: [{ key: KR.id, data: KR, version: 1, deleted: false, updatedAt: stamp }] }); await h.flush(); assert.equal(h.tree().items.length, 1);
+});
+
+test("saved response rejects malformed rows, duplicate keys and wrong deletion receipts without losing valid records", async t => {
+  const h = harness("lib/cloud-saved.ts", "FAVORITE", "useCloudSaved"); t.after(h.unmount); h.render();
+  h.respond(0, { owner: "isolated-user", items: [null] }); await h.flush();
+  assert.equal(h.tree().authenticated, null); assert(h.tree().error.includes("응답")); assert.equal(h.tree().items.length, 0);
+  const row = { key: KR.id, data: KR, version: 1, deleted: false, updatedAt: stamp };
+  h.tree().refresh(); await h.flush(); h.respond(1, { owner: "isolated-user", items: [row] }); await h.flush();
+  assert.equal(h.tree().authenticated, true);
+  h.tree().refresh(); await h.flush(); h.respond(2, { owner: "isolated-user", items: [row, row] }); await h.flush();
+  assert.equal(h.tree().items.length, 1); assert(h.tree().error);
+  const deletion = h.tree().save(KR.id, null); await h.flush();
+  h.respond(3, { ...row, version: 2, deleted: false }); assert.equal(await deletion, false); await h.flush();
+  assert.equal(h.tree().items[0].deleted, false); assert.equal(h.tree().items[0].version, 1);
+  assert.equal(h.requests.length, 4, "a malformed write receipt must not trigger a repeat write");
+});
+
+test("saved item guards accept legacy versions and compare periods but reject invalid domain fields", () => {
+  const guard = harness().load("lib/cloud-saved-response.ts");
+  const row = { key: KR.id, data: KR, version: 0, deleted: false, updatedAt: null };
+  assert(guard.validCloudItem(row, "FAVORITE"));
+  for (const bad of [null, { ...row, data: null }, { ...row, data: [] }, { ...row, version: -1 }, { ...row, version: .5 }, { ...row, updatedAt: "invalid" }, { ...row, key: US.id }]) assert.equal(guard.validCloudItem(bad, "FAVORITE"), false);
+  assert(guard.validCloudItem({ ...row, data: {}, deleted: true }, "FAVORITE"));
+  assert(guard.validCloudItem({ ...row, data: { note: "" } }, "NOTE"));
+  assert(guard.validCloudItem({ ...row, data: { note: "가".repeat(700) + "😀".repeat(500) } }, "NOTE"), "server limits Unicode code points, not UTF-16 units");
+  assert.equal(guard.validCloudItem({ ...row, data: { note: null } }, "NOTE"), false);
+  const comparison = { ...row, key: `${KR.id},${US.id}`, data: { id: `${KR.id},${US.id}`, name: "비교", note: "", instruments: [KR, US] } };
+  for (const days of [undefined, 5, 20, 60]) assert(guard.validCloudItem({ ...comparison, data: { ...comparison.data, days } }, "COMPARE"));
+  assert.equal(guard.validCloudItem({ ...comparison, data: { ...comparison.data, days: 21 } }, "COMPARE"), false);
+  assert.equal(guard.validCloudItem({ ...comparison, key: KR.id, data: { ...comparison.data, id: KR.id } }, "COMPARE"), false);
+});
+
+test("watchlist distinguishes initial loading and error from an actually empty saved list", () => {
+  const props = { items: [], selectedId: "", onSelect() {}, onRemove() {}, colorFor() {} };
+  const h = harness("components/MarketWatchlist.tsx", { ...props, loadState: "loading" }); h.render();
+  assert(h.text().includes("확인 중")); assert(!h.text().includes("0/12")); assert(!h.text().includes("모아보세요"));
+  h.props({ ...props, loadState: "error" }); assert(h.text().includes("확인하지 못했어요")); assert(!h.text().includes("0/12"));
+  h.props({ ...props, loadState: "ready", accountSaved: true }); assert(h.text().includes("0/50")); assert(h.text().includes("모아보세요"));
+});
+
+test("comparison inspection uses only common dates and preserves currency precision", () => {
+  const h = harness();
+  const { compareHistories } = h.load("lib/stock-comparison.ts");
+  const { comparisonInspection, inspectionMoney } = h.load("lib/comparison-inspection.ts");
+  const comparison = compareHistories([
+    [{ date: "2026-01-02", close: 100 }, { date: "2026-01-03", close: 99 }, { date: "2026-01-05", close: 120 }],
+    [{ date: "2026-01-02", close: 10.125 }, { date: "2026-01-05", close: 9.8125 }],
+  ], 20);
+  const end = comparisonInspection(comparison, [KR, US], "2026-01-03");
+  assert.equal(end.date, "2026-01-05"); assert.equal(end.index, 1); assert.equal(end.rows[1].close, 9.8125);
+  assert(inspectionMoney(end.rows[1].close, "USD").includes("9.8125"));
+  const start = comparisonInspection(comparison, [KR, US], "2026-01-02"); assert.equal(start.rows[0].change, 0);
+  assert.equal(comparisonInspection(comparison, [KR], null), null);
+  comparison.series[0].points[1].date = "2026-01-06";
+  assert.equal(comparisonInspection(comparison, [KR, US], null), null, "misaligned dates are not interchangeable");
+});
+
+test("comparison date controls track the actual chart selection and reset when identities change", async t => {
+  const helper = harness().load("lib/stock-comparison.ts");
+  const comparison = helper.compareHistories([
+    [{ date: "2026-01-02", close: 100 }, { date: "2026-01-05", close: 120 }],
+    [{ date: "2026-01-02", close: 200 }, { date: "2026-01-05", close: 180 }],
+  ], 20);
+  const props = { comparison, items: [KR, US] };
+  const h = harness("components/ComparisonInspector.tsx", props); t.after(h.unmount); h.render();
+  const picker = () => h.nodes().find(node => node.type === "select");
+  assert.equal(picker().props.value, "2026-01-05"); assert.equal(h.button("다음 공통 거래일").props.disabled, true);
+  h.click("이전 공통 거래일"); await h.flush(); assert.equal(picker().props.value, "2026-01-02");
+  assert.equal(h.button("이전 공통 거래일").props.disabled, true); assert(h.text().includes("+0.00%"));
+  const earlyX = h.nodes().find(node => node.type === "line" && node.props.className === "comparison-cursor").props.x1;
+  picker().props.onChange({ target: { value: "2026-01-05" } }); await h.flush();
+  assert(h.nodes().find(node => node.type === "line" && node.props.className === "comparison-cursor").props.x1 > earlyX);
+  h.click("이전 공통 거래일"); await h.flush();
+  h.props({ ...props, items: [{ ...KR, id: "KR:KRX:000660", symbol: "000660", name: "SK하이닉스" }, US] });
+  assert.equal(picker().props.value, "2026-01-05"); assert.equal(h.requests.length, 0, "inspection must not make requests or write accounts");
 });
 
 test("watchlist layout uses its own container and status row; no 112px phantom quote column", () => {

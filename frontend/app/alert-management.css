@@ -1,0 +1,38 @@
+/* Shared alert management: responsive to the panel, not just the viewport. */
+.consumer-app .alert-maker { container: alert-management / inline-size; min-width:0; }
+.consumer-app .alert-maker :is(input,select) { min-width:0; width:100%; min-height:44px; height:auto; box-sizing:border-box; padding:10px 12px; font:inherit; font-size:16px; color:var(--ws-ink); background:var(--ws-surface); border:1px solid var(--ws-line); border-radius:12px; }
+.consumer-app .alert-maker :is(button,input,select):focus-visible { outline:2px solid var(--ws-brand); outline-offset:3px; }
+.consumer-app .alert-maker button { min-height:44px; font-size:14px; }
+.consumer-app .alert-maker button:disabled { opacity:.6; cursor:default; }
+.consumer-app .alert-maker form { background:var(--ws-soft); }
+.consumer-app .alert-maker form>p { color:var(--ws-ink); font-size:14px; line-height:1.6; word-break:keep-all; overflow-wrap:anywhere; }
+.consumer-app .alert-maker form>div { grid-template-columns:minmax(120px,.8fr) minmax(0,1fr) auto; gap:8px; }
+.consumer-app .alert-maker form button { background:var(--ws-brand-solid); color:var(--ws-on-brand); }
+.consumer-app .alert-management-actions { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 8px; }
+.consumer-app :is(.alert-management-actions,.alert-list-scope) button { padding:10px 12px; border:1px solid var(--ws-line); border-radius:12px; background:var(--ws-surface); color:var(--ws-ink); font:inherit; font-size:14px; cursor:pointer; }
+.consumer-app :is(.alert-list-scope,.alert-read-status) { margin:8px 0 16px; color:var(--ws-muted); font-size:13px; line-height:1.65; word-break:keep-all; overflow-wrap:anywhere; }
+.consumer-app .alert-list-scope button { margin-left:8px; }
+.consumer-app .alert-read-status[role="alert"] { padding:12px; color:var(--ws-ink); background:var(--ws-soft); border:1px solid var(--ws-line); border-radius:12px; }
+.consumer-app .alert-filters { display:grid; grid-template-columns:minmax(0,1fr) minmax(140px,.55fr); gap:12px; }
+.consumer-app .alert-filters label { display:grid; gap:8px; min-width:0; font-size:14px; color:var(--ws-ink); }
+.consumer-app .alert-list { gap:8px; }
+.consumer-app .alert-list article { grid-template-columns:32px minmax(0,1fr) auto 44px; gap:10px; padding:12px; border:1px solid var(--ws-line); background:var(--ws-surface); color:var(--ws-ink); }
+.consumer-app .alert-list article.triggered { border-color:var(--ws-line); background:var(--ws-soft); }
+.consumer-app .alert-state { width:32px; height:32px; background:var(--ws-tint); color:var(--ws-brand); }
+.consumer-app .alert-list .alert-identity { min-width:0; gap:5px; word-break:keep-all; overflow-wrap:anywhere; }
+.consumer-app .alert-list b { color:var(--ws-ink); font-size:15px; line-height:1.5; }
+.consumer-app .alert-list small { color:var(--ws-muted); font-size:13px; line-height:1.5; font-variant-numeric:tabular-nums; }
+.consumer-app .alert-list em { color:var(--ws-muted); font-size:13px; line-height:1.5; font-weight:500; white-space:nowrap; }
+.consumer-app .alert-list button { display:grid; place-items:center; min-width:44px; min-height:44px; padding:10px; border:1px solid var(--ws-line); border-radius:12px; background:var(--ws-surface); color:var(--ws-muted); }
+.consumer-app .alert-list button svg { width:18px; height:18px; }
+.consumer-app .alert-list .tool-empty { color:var(--ws-muted); font-size:14px; line-height:1.65; }
+@container alert-management (max-width:430px) {
+  .consumer-app .alert-filters { grid-template-columns:minmax(0,1fr); }
+  .consumer-app .alert-maker form>div { grid-template-columns:minmax(0,1fr); }
+  .consumer-app .alert-maker form button { grid-column:auto; }
+  .consumer-app .alert-list article { grid-template-columns:32px minmax(0,1fr) 44px; gap:8px; }
+  .consumer-app .alert-list .alert-state { grid-column:1; grid-row:1; }
+  .consumer-app .alert-list .alert-identity { grid-column:2; grid-row:1; }
+  .consumer-app .alert-list em { grid-column:2; grid-row:2; white-space:normal; }
+  .consumer-app .alert-list button { grid-column:3; grid-row:1 / 3; }
+}

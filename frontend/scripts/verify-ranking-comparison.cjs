@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS verification runner. */
 // Actual ranking/row/helper code; isolated hooks, timers and API responses only.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -70,6 +71,18 @@ test("whole-universe tab stays in the market, avoids ranking reads and restores 
   h.click("시가총액");await h.flush();assert(h.requests[1].url.includes("market=US"));h.respond(1,page([us()]));await h.flush();assert(h.text().includes("애플"));
   h.pop("/?browse=cap&browseMarket=KR#market-rankings");await h.flush();assert(!h.text().includes("애플"));
   h.respond(2,page([kr()]));await h.flush();assert(h.text().includes("삼성전자"));
+});
+
+test("catalog comparison selection persists across countries and ranking tabs without extra quotes",async t=>{
+ const h=harness();t.after(h.unmount);h.render();await h.flush();h.respond(0,page([kr()]));await h.flush();
+ h.click("전체 종목");await h.flush();let catalog=h.nodes().find(n=>n.type==="catalog");catalog.props.onCompare(kr());await h.flush();
+ h.click("미국");await h.flush();catalog=h.nodes().find(n=>n.type==="catalog");assert.equal(catalog.props.comparison.length,1);catalog.props.onCompare(us());await h.flush();
+ assert(h.nodes().some(n=>n.type==="a"&&n.props.href?.includes("items=KR%3AKRX%3A005930%2CUS%3ANAS%3AAAPL")));assert.equal(h.requests.length,1);
+ h.click("시가총액");await h.flush();h.respond(1,page([us()]));await h.flush();assert(h.text().includes("2/3"));
+ h.click("전체 종목");await h.flush();assert.equal(h.nodes().find(n=>n.type==="catalog").props.comparison.length,2);
+ let focused=0;h.nodes().find(n=>n.props?.id==="market-discovery-title").props.ref.current={focus(){focused++;}};
+ h.click("삼성전자 비교 선택 해제");await h.flush();assert.equal(focused,1);
+ h.click("선택 초기화");await h.flush();assert.equal(h.nodes().find(n=>n.type==="catalog").props.comparison.length,0);assert.equal(focused,2);
 });
 
 test("comparison accepts canonical public identities only and caps two-to-three-item URLs", t => {

@@ -29,6 +29,8 @@ import {
   restoreBrowserPush,
 } from "@/lib/firebase-push";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
+import { alertPrice, filterPriceAlerts, validAlertReadReceipt, validAlertScope, validPriceAlerts, type AlertScope, type PriceAlert } from "@/lib/price-alerts";
+import { incompleteReportValuation, validInvestorReport, type InvestorReport } from "@/lib/investor-report";
 
 type Currency = "KRW" | "USD";
 type Market = "KR" | "US";
@@ -44,18 +46,6 @@ type WatchItem = SelectedStock & {
   id: string;
   changePercent: number | null;
 };
-type AlertItem = {
-  id: string;
-  symbol: string;
-  name: string;
-  currency: Currency;
-  direction: "ABOVE" | "BELOW";
-  targetPrice: number;
-  currentPrice: number | null;
-  status: "ACTIVE" | "TRIGGERED";
-  read: boolean;
-  triggeredAt: string | null;
-};
 type Mission = {
   key: string;
   title: string;
@@ -67,28 +57,14 @@ type Mission = {
 type Dashboard = {
   authenticated: boolean;
   watchlist: WatchItem[];
-  alerts: AlertItem[];
+  alerts: PriceAlert[];
+  alertScope?: AlertScope;
   unreadAlerts: number;
   push: {
     configured: boolean;
     deviceCount: number;
   };
-  report: {
-    equity: Record<Currency, number>;
-    returnRate: { KRW: number; USD: number; combined: number };
-    tradeCount: number;
-    realizedPnl: Record<Currency, number>;
-    winRate: number;
-    totalCosts: Record<Currency, number>;
-    allocations: Array<{
-      symbol: string;
-      name: string;
-      market: Market;
-      currency: Currency;
-      value: number;
-    }>;
-    history: Array<{ date: string; returnRate: number }>;
-  } | null;
+  report: InvestorReport | null;
   missions: Mission[];
 };
 type NewsItem = {
@@ -155,6 +131,12 @@ export default function InvestorTools({
   const [targetPrice, setTargetPrice] = useState("");
   const [direction, setDirection] = useState<"ABOVE" | "BELOW">("ABOVE");
   const [busy, setBusy] = useState(false);
+  const [alertQuery, setAlertQuery] = useState("");
+  const [alertStatus, setAlertStatus] = useState("ALL");
+  const [alertReadBusy, setAlertReadBusy] = useState(false);
+  const [alertReadError, setAlertReadError] = useState("");
+  const [alertReadMessage, setAlertReadMessage] = useState("");
+  const [alertReadUncertain, setAlertReadUncertain] = useState(false);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsRefreshing, setNewsRefreshing] = useState(false);
@@ -187,10 +169,12 @@ export default function InvestorTools({
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!next || typeof next.authenticated !== "boolean" || ![next.alerts,next.watchlist,next.missions].every(Array.isArray) || !next.push || !Number.isFinite(next.unreadAlerts)) throw new Error("투자 도구 응답을 확인하지 못했어요. 다시 조회해 주세요.");
-    if (controller.signal.aborted) return;
+    if (!next || typeof next.authenticated !== "boolean" || ![next.watchlist,next.missions].every(Array.isArray) || !validPriceAlerts(next.alerts) || !validAlertScope(next.alertScope) || !validInvestorReport(next.report) || !next.push || !Number.isSafeInteger(next.unreadAlerts) || next.unreadAlerts<0) throw new Error("투자 도구 응답을 확인하지 못했어요. 다시 조회해 주세요.");
+    if (controller.signal.aborted) return false;
     setData(next);
     setDashboardError("");
+    setAlertReadUncertain(false);
+    setAlertReadError("");
     onAlertSummaryRef.current({
       unread: next.unreadAlerts,
       pushConfigured: next.push.configured,
@@ -210,8 +194,10 @@ export default function InvestorTools({
       }
     }
     seenTriggered.current = new Set(triggered.map((item) => item.id));
+    return true;
     } catch (reason) {
       if (!controller.signal.aborted) setDashboardError(reason instanceof Error ? reason.message : "투자 도구를 불러오지 못했어요.");
+      return false;
     } finally {
       if (dashboardRead.current === controller) dashboardRead.current = null;
     }
@@ -219,7 +205,7 @@ export default function InvestorTools({
 
   useEffect(() => {
     const initial = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => { if (!document.hidden && !dashboardRead.current) void load(); }, 15_000);
+    const timer = window.setInterval(() => { if (!document.hidden && !dashboardRead.current && !writeLock.current) void load(); }, 15_000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
@@ -291,15 +277,11 @@ export default function InvestorTools({
       setActiveTab("WATCH");
       document
         .getElementById("investor-tools")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (!authenticated || !data?.unreadAlerts) return;
-      void requestJson<unknown>("/api/features/alerts/read", {
-        method: "POST",
-        credentials: "include",
-      }).then(() => void load()).catch(() => onNoticeRef.current("알림 읽음 상태를 저장하지 못했어요. 다시 확인해 주세요."));
+        ?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "start" });
+      document.getElementById("price-alerts-title")?.focus?.();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [authenticated, data?.unreadAlerts, focusAlertsKey, load]);
+  }, [focusAlertsKey]);
 
   useEffect(() => { alertSelection.current = selected; }, [selected]);
   useEffect(() => {
@@ -443,6 +425,29 @@ export default function InvestorTools({
     );
   }
 
+  async function markAlertsRead() {
+    if (!authenticated || !data?.authenticated || !data.unreadAlerts || writeLock.current || alertReadUncertain) return;
+    writeLock.current=true;
+    dashboardRead.current?.abort();
+    setBusy(true);
+    setAlertReadBusy(true);
+    setAlertReadError("");
+    setAlertReadMessage("");
+    try {
+      const receipt=await requestJson<unknown>("/api/features/alerts/read",{method:"POST",credentials:"include"});
+      if(!validAlertReadReceipt(receipt)) throw new ApiRequestError("읽음 처리 결과를 확인하지 못했어요. 다시 처리하기 전에 목록을 조회해 주세요.",null,true);
+      setAlertReadMessage(`도달한 알림 ${receipt.read}건을 읽음으로 처리했어요.`);
+      await load();
+    } catch(reason) {
+      setAlertReadUncertain(reason instanceof ApiRequestError&&reason.uncertain);
+      setAlertReadError(reason instanceof ApiRequestError&&reason.uncertain ? "읽음 처리 결과가 불확실해요. 같은 요청을 다시 보내기 전에 알림 목록을 조회해 주세요." : reason instanceof Error ? reason.message : "읽음 상태를 저장하지 못했어요. 알림 목록을 확인해 주세요.");
+    } finally {
+      writeLock.current=false;
+      setBusy(false);
+      setAlertReadBusy(false);
+    }
+  }
+
   async function togglePush() {
     if (writeLock.current) return;
     if (!authenticated) {
@@ -492,7 +497,9 @@ export default function InvestorTools({
   }
 
   const report = data?.report;
+  const incompleteValuation = report ? incompleteReportValuation(report) : false;
   const completed = data?.missions.filter((mission) => mission.completed).length ?? 0;
+  const visibleAlerts=useMemo(()=>filterPriceAlerts(data?.alerts||[],alertQuery,alertStatus),[data?.alerts,alertQuery,alertStatus]);
 
   return (
     <section className="investor-tools" id="investor-tools">
@@ -521,7 +528,7 @@ export default function InvestorTools({
       </div>
 
       {dashboardError && <div className="tool-read-error" role="alert"><p>{dashboardError}</p>{data && <p>이전에 불러온 기록을 표시하고 있어요.</p>}<button type="button" disabled={busy} onClick={() => void load()}>다시 조회</button></div>}
-      {!authenticated ? (
+      {!authenticated || data?.authenticated===false ? (
         <div className="tools-login">
           <span>🧭</span>
           <div><b>로그인하면 나만의 투자 도구가 열려요</b><p>관심종목, 가격 알림, 리포트와 미션이 계정에 저장됩니다.</p></div>
@@ -563,7 +570,7 @@ export default function InvestorTools({
 
           <div className="alert-maker">
             <div className="tool-card-title">
-              <span><BellRing size={16} /><b>가격 알림</b></span>
+              <span><BellRing size={16} /><b id="price-alerts-title" tabIndex={-1}>가격 알림</b></span>
               <button
                 type="button"
                 className={`push-toggle ${thisDeviceEnabled ? "enabled" : ""} ${pushPermission === "denied" ? "blocked" : ""}`}
@@ -582,14 +589,14 @@ export default function InvestorTools({
             <form onSubmit={addAlert}>
               <p>{selected ? `${selected.name} · ${money(selected.price, selected.currency)}` : "종목을 먼저 선택하세요"}</p>
               <div>
-                <select value={direction} onChange={(event) => setDirection(event.target.value as "ABOVE" | "BELOW")}>
+                <select aria-label="가격 알림 조건" value={direction} onChange={(event) => setDirection(event.target.value as "ABOVE" | "BELOW")}>
                   <option value="ABOVE">이 가격 이상</option>
                   <option value="BELOW">이 가격 이하</option>
                 </select>
                 <input
                   aria-label="목표 가격"
                   type="number"
-                  min="0.01"
+                  min={selected?.currency === "KRW" ? "1" : "0.01"}
                   step={selected?.currency === "KRW" ? "1" : "0.01"}
                   inputMode="decimal"
                   required
@@ -599,15 +606,28 @@ export default function InvestorTools({
                 <button disabled={busy || !selected}>알림 만들기</button>
               </div>
             </form>
-            <div className="alert-list">
-              {data.alerts.slice(0, 5).map((item) => (
+            <div className="alert-management-actions">
+              <button type="button" disabled={busy||!data.unreadAlerts||alertReadUncertain} onClick={()=>void markAlertsRead()}>{alertReadBusy?"읽음 처리 중…":`도달한 알림 모두 읽음${data.unreadAlerts?` (${data.unreadAlerts})`:""}`}</button>
+              <button type="button" disabled={busy} onClick={()=>void load()}>알림 목록 다시 조회</button>
+            </div>
+            <p className="alert-list-scope">{data.alertScope?<>감시 중 {data.alertScope.activeCount}개 중 {data.alerts.filter(item=>item.status==="ACTIVE").length}개와 도달 기록 {data.alertScope.triggeredCount}개 중 최근 {data.alerts.filter(item=>item.status==="TRIGGERED").length}개를 불러왔어요. 도달 기록은 최근 {data.alertScope.recentTriggeredLimit}개까지 표시해요.{data.alertScope.activeHasMore?" 감시 중 목록도 일부만 표시 중이에요.":""}</>:<>불러온 알림 {data.alerts.length}개예요. 이전 서버에서는 전체 조회 범위를 제공하지 않아요.</>} 모두 읽음은 목록에 보이지 않는 도달 기록도 포함해요.</p>
+            {alertReadMessage&&<p className="alert-read-status" role="status">{alertReadMessage}</p>}
+            {alertReadError&&<p className="alert-read-status" role="alert">{alertReadError}</p>}
+            <div className="alert-filters">
+              <label>알림 종목 찾기<input type="search" maxLength={100} value={alertQuery} placeholder="회사명·종목 코드·거래소" onChange={event=>setAlertQuery(event.target.value)}/></label>
+              <label>알림 상태<select value={alertStatus} onChange={event=>setAlertStatus(event.target.value)}><option value="ALL">전체</option><option value="ACTIVE">감시 중</option><option value="TRIGGERED">도달</option><option value="UNREAD">읽지 않은 도달</option></select></label>
+            </div>
+            <p className="alert-list-scope" role="status">불러온 {data.alerts.length}개 중 조건에 맞는 {visibleAlerts.length}개 표시 {(alertQuery||alertStatus!=="ALL")&&<button type="button" onClick={()=>{setAlertQuery("");setAlertStatus("ALL");}}>조건 초기화</button>}</p>
+            <div className="alert-list" aria-label="가격 알림 목록" aria-busy={busy}>
+              {visibleAlerts.map((item) => (
                 <article className={item.status === "TRIGGERED" ? "triggered" : ""} key={item.id}>
                   <span className="alert-state">{item.status === "TRIGGERED" ? <BellRing size={14} /> : <Target size={14} />}</span>
-                  <span><b>{item.name}</b><small>{item.direction === "ABOVE" ? "이상" : "이하"} {money(item.targetPrice, item.currency)}</small></span>
-                  <em>{item.status === "TRIGGERED" ? "도달" : "감시 중"}</em>
-                  <button aria-label={`${item.name} 알림 삭제`} onClick={() => mutate(`/api/features/alerts/${item.id}`, { method: "DELETE" }, "가격 알림을 삭제했어요.")}><Trash2 size={12} /></button>
+                  <span className="alert-identity"><b>{item.name}</b><small>{item.symbol} · {item.market==="KR"?"한국":item.market==="US"?"미국":"시장 미제공"} · {item.exchange||"거래소 미제공"}</small><small>{item.direction === "ABOVE" ? "이상" : "이하"} {alertPrice(item.targetPrice, item.currency)}</small></span>
+                  <em>{item.status === "TRIGGERED" ? item.read?"도달 · 읽음":"도달 · 안 읽음" : "감시 중"}</em>
+                  <button type="button" disabled={busy} aria-label={`${item.name} ${item.exchange||item.symbol} ${alertPrice(item.targetPrice,item.currency)} ${item.direction==="ABOVE"?"이상":"이하"} 알림 삭제`} onClick={() => mutate(`/api/features/alerts/${item.id}`, { method: "DELETE" }, "가격 알림을 삭제했어요.")}><Trash2 size={12} /></button>
                 </article>
               ))}
+              {!visibleAlerts.length&&<p className="tool-empty">{data.alerts.length?"조건에 맞는 알림이 없어요. 검색어나 상태를 바꿔 주세요.":"아직 가격 알림이 없어요. 종목과 목표 가격을 선택해 만들어 보세요."}</p>}
             </div>
           </div>
         </div>
@@ -615,11 +635,19 @@ export default function InvestorTools({
         <div className="report-tools">
           <article className="return-report">
             <small>통합 누적 수익률</small>
+            {incompleteValuation ? <>
+              <strong>시세 확인 필요</strong>
+              <p className="report-valuation-notice" role="status">보유 종목의 평가가 완전하지 않아 현재 수익률과 추이를 표시하지 않아요.
+                {!!report.estimatedPositions && <> 시세 미확인 {report.estimatedPositions}종목은 매입금액 기준 참고액이에요.</>}
+                {!!report.unavailablePositions && <> 종목 정보를 확인할 수 없는 {report.unavailablePositions}종목은 평가액에서 제외돼 있어요.</>}
+              </p>
+            </> : <>
             <strong className={report.returnRate.combined >= 0 ? "up" : "down"}>
               {report.returnRate.combined >= 0 ? "+" : ""}{report.returnRate.combined.toFixed(2)}%
             </strong>
             <Sparkline values={report.history.map((item) => item.returnRate)} />
             <div><span>한국 <b>{report.returnRate.KRW.toFixed(2)}%</b></span><span>미국 <b>{report.returnRate.USD.toFixed(2)}%</b></span></div>
+            </>}
           </article>
           <article className="trade-report">
             <span><small>체결 주문</small><b>{report.tradeCount}건</b></span>
@@ -628,13 +656,13 @@ export default function InvestorTools({
             <span><small>모의 비용</small><b>{money(report.totalCosts.KRW, "KRW")}<em>{money(report.totalCosts.USD, "USD")}</em></b></span>
           </article>
           <article className="allocation-report">
-            <b>보유 비중</b>
+            <b>{incompleteValuation ? "보유 평가 · 참고" : "보유 비중"}</b>
             {report.allocations.length ? report.allocations.slice(0, 6).map((item) => (
               <div key={`${item.market}:${item.symbol}`}>
                 <span>{item.name}<small>{item.market}</small></span>
-                <b>{money(item.value, item.currency)}</b>
+                <b>{money(item.value, item.currency)}{item.valuationBasis === "COST" && <small className="allocation-reference">매입금액 기준 참고액</small>}</b>
               </div>
-            )) : <p className="tool-empty">보유 종목이 생기면 투자 비중을 분석해 드려요.</p>}
+            )) : <p className="tool-empty">{report.unavailablePositions ? "종목 정보를 확인할 수 없어 보유 평가액을 표시하지 못했어요." : "보유 종목이 생기면 투자 비중을 분석해 드려요."}</p>}
           </article>
         </div>
       ) : activeTab === "NEWS" ? (

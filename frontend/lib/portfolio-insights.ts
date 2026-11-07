@@ -2,6 +2,7 @@ export type HoldingRecord = {
   symbol: string; name: string; exchange: string; market: "KR" | "US";
   currency: "KRW" | "USD"; quantity: number; averagePrice: number;
   currentPrice: number; marketValue: number; profit: number; returnRate: number;
+  valuationBasis?: "QUOTE" | "COST"; quoteAsOf?: string | null;
   logoUrl?: string | null;
 };
 type Currency = HoldingRecord["currency"];
@@ -39,6 +40,18 @@ export function findHoldings(holdings: HoldingRecord[], query: string, market: s
   const needle=normalize(query.trim());
   const rows=holdings.filter(item=>(market==="ALL"||item.market===market)&&(!needle||[item.name,item.symbol,item.exchange].some(value=>normalize(value).includes(needle))));
   if(sort==="name") rows.sort((a,b)=>a.name.localeCompare(b.name,"ko"));
-  if(sort==="return-high"||sort==="return-low") rows.sort((a,b)=>(sort==="return-high"?-1:1)*(a.returnRate-b.returnRate));
+  if(sort==="return-high"||sort==="return-low") rows.sort((a,b)=>{
+    // A cost fallback is not a genuine zero return. Keep these rows last in
+    // either direction, without changing values or legacy-server behavior.
+    const aEstimated=a.valuationBasis==="COST",bEstimated=b.valuationBasis==="COST";
+    if(aEstimated!==bEstimated) return aEstimated?1:-1;
+    if(aEstimated&&bEstimated) return 0;
+    return (sort==="return-high"?-1:1)*(a.returnRate-b.returnRate);
+  });
   return rows;
+}
+
+export function holdingQuoteTime(position: HoldingRecord): string | null {
+  if(position.valuationBasis!=="QUOTE"||!position.quoteAsOf||!Number.isFinite(Date.parse(position.quoteAsOf))) return null;
+  return new Intl.DateTimeFormat("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(position.quoteAsOf));
 }

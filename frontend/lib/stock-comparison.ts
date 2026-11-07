@@ -1,5 +1,51 @@
+import type { InstrumentIdentity } from "./instrument-identity";
+
 export type DailyClose = { date: string; close: number };
 export type ComparisonSeries = { points: Array<DailyClose & { change: number }>; returnRate: number; maxDrawdown: number };
+export type ComparisonDays = 5 | 20 | 60;
+export type ComparisonInstrument = InstrumentIdentity & { logoUrl?: string | null };
+export type SavedComparison = { id: string; name: string; instruments: ComparisonInstrument[]; note: string; days: ComparisonDays };
+
+export function comparisonDays(value: unknown): ComparisonDays {
+  return value === 5 || value === "5" ? 5 : value === 60 || value === "60" ? 60 : 20;
+}
+
+/** A shared identity remains selected even when its quote is temporarily unavailable. */
+export function comparisonInstruments(value: string): ComparisonInstrument[] {
+  return parseComparisonIds(value).map(({market, exchange, symbol}) => ({
+    id: `${market}:${exchange}:${symbol}`, market, exchange, symbol,
+    currency: market === "KR" ? "KRW" : "USD", name: symbol,
+  }));
+}
+
+export function comparisonInstrument(value: unknown): ComparisonInstrument | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== "string" || typeof row.name !== "string" || !row.name.trim()) return null;
+  const identity = comparisonInstruments(row.id)[0];
+  if (!identity || identity.id !== row.id || identity.market !== row.market || identity.symbol !== row.symbol || identity.exchange !== row.exchange || identity.currency !== row.currency) return null;
+  return {...identity, name: row.name, logoUrl: typeof row.logoUrl === "string" ? row.logoUrl : null};
+}
+
+/** Only public symbols and the selected period enter a comparison URL. */
+export function comparisonHref(ids: string, days: unknown): string {
+  const safe = comparisonInstruments(ids).map(item => item.id).join(",");
+  const params = new URLSearchParams({days: String(comparisonDays(days))});
+  if (safe) params.set("items", safe);
+  return `/compare?${params}`;
+}
+
+/** Older browser/account records have no days field and retain the old 20-day default. */
+export function savedComparison(value: unknown): SavedComparison | null {
+  if (!value || typeof value !== "object") return null;
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.id !== "string" || typeof entry.name !== "string" || typeof entry.note !== "string" || entry.note.length > 2400 || [...entry.note].length > 1200 ||
+      !Array.isArray(entry.instruments) || entry.instruments.length < 2 || entry.instruments.length > 3 ||
+      (entry.days !== undefined && ![5,20,60].includes(entry.days as number))) return null;
+  const instruments = entry.instruments.map(comparisonInstrument);
+  if (instruments.some(item => !item) || new Set(instruments.map(item => item!.id)).size !== instruments.length || instruments.map(item => item!.id).join(",") !== entry.id) return null;
+  return {id: entry.id, name: entry.name, instruments: instruments as ComparisonInstrument[], note: entry.note, days: comparisonDays(entry.days)};
+}
 
 export function normalizeHistory(input: unknown): DailyClose[] {
   if (!Array.isArray(input)) return [];

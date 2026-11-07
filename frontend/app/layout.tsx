@@ -62,6 +62,7 @@ import "./service-readability.css";
 import "./product-workspace.css";
 import "./stock-directory.css";
 import "./company-filings.css";
+import "./alert-management.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -34,10 +34,21 @@ const holdingRows=Array.from({length:25},(_,i)=>{
   return {symbol:i<3?quote.symbol:String(900000+i),name:i<3?quote.name:`검증 보유 종목 ${i+1}`,market:quote.market,currency:quote.currency,exchange:quote.exchange,quantity,averagePrice,currentPrice:quote.price,costBasis:averagePrice*quantity,marketValue:quote.price*quantity,profit:(quote.price-averagePrice)*quantity,returnRate:(quote.price/averagePrice-1)*100};
 });
 const analyticsFixture={dataQuality:'TRACKING',periodDays:3,openPositionCount:25,totalReturn:2,maxDrawdown:1,dailyVolatility:1.5,annualizedVolatility:23.81,sharpeRatio:.4,winRate:50,profitFactor:1.2,fillRate:80,averageSlippageBps:2,averageSpreadBps:3,filledOrderCount:8,closedTradeCount:4,dailySeries:[{date:'2026-10-20',returnRate:0,change:null},{date:'2026-10-21',returnRate:3,change:3},{date:'2026-10-22',returnRate:2,change:-1}]};
+const alertFixtures=Array.from({length:10},(_,i)=>{
+  const {symbol,name,currency,market,exchange,price}=quotes[i%3],reached=i>=7;
+  return {id:`local-alert-${i}`,symbol,name,currency,market,exchange,direction:i%2?'BELOW':'ABOVE',targetPrice:price+i+1,currentPrice:price,status:reached?'TRIGGERED':'ACTIVE',read:i===9,triggeredAt:reached?'2026-11-06T00:00:00Z':null};
+});
+function reportFixture(incomplete) {
+  return {valuationComplete:!incomplete,estimatedPositions:incomplete?1:0,unavailablePositions:incomplete?1:0,
+    equity:{KRW:101000000,USD:100220},returnRate:{KRW:1,USD:.22,combined:.61},tradeCount:8,winRate:50,
+    realizedPnl:{KRW:10000,USD:12.34},totalCosts:{KRW:1000,USD:1.2},
+    allocations:[{symbol:'005930',name:'삼성전자',market:'KR',currency:'KRW',value:72000,valuationBasis:incomplete?'COST':'QUOTE'},
+      {symbol:'AAPL',name:'애플',market:'US',currency:'USD',value:220,valuationBasis:'QUOTE'}],history:[{date:'2026-11-05',returnRate:.5},{date:'2026-11-06',returnRate:.61}]};
+}
 // Explicit opt-in fault fixtures. These are local, in-memory receipts only;
 // this server never connects to the production backend or writes a database.
 const fixtureReceipts = new Map();
-const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','statement-large','calendar-error','calendar-malformed','calendar-expired','personal-malformed','catalog-retry','normal']);
+const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','statement-large','calendar-error','calendar-malformed','calendar-expired','personal-malformed','catalog-retry','valuation-cost','profile-retry','disclosure-retry','disclosure-all-failed','normal']);
 let receiptWrites = 0;
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.webmanifest':'application/manifest+json'};
 http.createServer(async(req,res) => {
@@ -93,6 +104,12 @@ http.createServer(async(req,res) => {
     }
     if(upgradeFixture&&p==='/api/personal/recurring')return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(scenario==='personal-malformed'?{items:null}:{items:[],runs:[],worker:null}));
     if(upgradeFixture&&p==='/api/personal/notices')return res.writeHead(200,{'Content-Type':'application/json'}).end('{"items":[]}');
+    if(upgradeFixture&&p==='/api/personal/disclosures') {
+      const failed=(scenario==='disclosure-retry'||scenario==='disclosure-all-failed')&&!upgradeFailures.has(scenario);
+      if(failed)upgradeFailures.add(scenario);
+      const groups=failed&&scenario==='disclosure-all-failed'?[]:[{instrument:quotes[0],items:[{title:'격리 검증 공시',date:'20261106',receiptNo:'synthetic-filing',url:'https://example.test/filing'}],source:'DART',asOf:'2026-11-06T00:00:00Z'}];
+      return res.writeHead(200,{'Content-Type':'application/json','X-StockPilot-Fixture':'synthetic-only'}).end(JSON.stringify({groups,failed:failed?['격리 검증 종목']:[],hasMore:false}));
+    }
     if(upgradeFixture&&p==='/api/personal/saved')return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({owner:'local-verification',items:url.searchParams.get('kind')==='FAVORITE'?[quotes[0],quotes[2]].map(quote=>({key:quote.id,data:quote,version:1,deleted:false,updatedAt:'2026-10-22T01:00:00Z'})):[]}));
     if(upgradeFixture&&p==='/api/growth/analytics') {
       if(scenario==='analytics-error'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 분석 조회 실패"}');}
@@ -149,6 +166,7 @@ http.createServer(async(req,res) => {
       return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items,hasMore,nextCursor:hasMore?String(offset+20):null,asOf:new Date().toISOString()}));
     }
     if (p === '/api/me') {
+      if(upgradeFixture&&scenario==='profile-retry'&&!upgradeFailures.has(scenario)){upgradeFailures.add(scenario);return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 프로필 일시 조회 실패"}');}
       if (process.env.VISITOR_FIXTURE === '1') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리된 방문자 화면 검증"}');
       data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
     }
@@ -160,7 +178,8 @@ http.createServer(async(req,res) => {
     };
     else if (p === '/api/trading/portfolio') {
       if (scenario === 'portfolio-error') return res.writeHead(503,{'Content-Type':'application/json'}).end('{}');
-      data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions:upgradeFixture?holdingRows:[],orders:[],protections:[]};
+      const positions=upgradeFixture?holdingRows.map((row,i)=>scenario==='valuation-cost'&&i===0?{...row,currentPrice:row.averagePrice,marketValue:row.costBasis,profit:0,returnRate:0,valuationBasis:'COST',quoteAsOf:null}:{...row,valuationBasis:'QUOTE',quoteAsOf:'2026-11-06T00:00:00Z'}):[];
+      data = {authenticated:process.env.VISITOR_FIXTURE !== '1',cash:{KRW:100000000,USD:100000},positions,estimatedPositions:positions.filter(row=>row.valuationBasis==='COST').length,orders:[],protections:[]};
     }
     else if (p.startsWith('/api/trading/orders/request/')) {
       data = fixtureReceipts.get(p.split('/').pop());
@@ -196,7 +215,7 @@ http.createServer(async(req,res) => {
     }
     else if (p.includes('company')) data = {symbol:url.searchParams.get('symbol')||decodeURIComponent(p.split('/').pop()),available:false,configured:false};
     else if (p.includes('news')) data = {items:[]};
-    else if (p === '/api/features/dashboard') data = {authenticated:true,watchlist:[],alerts:[],unreadAlerts:0,push:{configured:false},missions:[],report:{returnRate:{combined:0,KRW:0,USD:0},tradeCount:0,allocation:[]}};
+    else if (p === '/api/features/dashboard') data = {authenticated:true,watchlist:[],alerts:upgradeFixture?alertFixtures:[],alertScope:{activeLimit:20,recentTriggeredLimit:30,activeCount:upgradeFixture?7:0,triggeredCount:upgradeFixture?3:0,activeHasMore:false,triggeredHasMore:false},unreadAlerts:upgradeFixture?2:0,push:{configured:false,deviceCount:0},missions:[],report:upgradeFixture?reportFixture(scenario==='valuation-cost'):null};
     else return res.writeHead(404,{'Content-Type':'application/json'}).end('{}');
     return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify(data));
   }

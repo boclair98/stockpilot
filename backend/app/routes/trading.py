@@ -676,6 +676,7 @@ async def portfolio(
             "positions": [],
             "orders": [],
             "protections": [],
+            "estimatedPositions": 0,
         }
 
     await process_open_orders(session, owner)
@@ -711,6 +712,7 @@ async def portfolio(
     )
 
     position_rows = []
+    estimated_positions = 0
     equity_krw = Decimal(wallet.cash_krw)
     equity_usd = Decimal(wallet.cash)
     for position in positions:
@@ -728,6 +730,11 @@ async def portfolio(
             if current
             else Decimal(position.average_price)
         )
+        # Preserve valuation arithmetic, but distinguish a cost fallback from
+        # an observed quote. A cached quote is not a promise of live pricing.
+        valuation_basis = "QUOTE" if current else "COST"
+        if valuation_basis == "COST":
+            estimated_positions += 1
         quantity = Decimal(position.quantity)
         average_price = Decimal(position.average_price)
         cost_basis = quantity * average_price
@@ -748,6 +755,8 @@ async def portfolio(
                 "quantity": float(quantity),
                 "averagePrice": float(average_price),
                 "currentPrice": float(current_price),
+                "valuationBasis": valuation_basis,
+                "quoteAsOf": current.get("asOf") if current else None,
                 "costBasis": float(cost_basis),
                 "marketValue": float(market_value),
                 "profit": float(profit),
@@ -766,6 +775,7 @@ async def portfolio(
         "authenticated": True,
         "cash": {"KRW": float(wallet.cash_krw), "USD": float(wallet.cash)},
         "positions": position_rows,
+        "estimatedPositions": estimated_positions,
         "orders": [
             {
                 "id": str(order.id),

@@ -14,12 +14,15 @@ export function isValidPortfolio(value: unknown): boolean {
   const cash = item.cash as Record<string, unknown> | null;
   if (typeof item.authenticated !== "boolean" || !cash || ![cash.KRW, cash.USD].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0)) return false;
   if (![item.positions, item.orders, item.protections].every(Array.isArray)) return false;
+  if (item.estimatedPositions !== undefined && (typeof item.estimatedPositions !== "number" || !Number.isSafeInteger(item.estimatedPositions) || item.estimatedPositions < 0 || item.estimatedPositions > (item.positions as unknown[]).length)) return false;
   return (item.positions as unknown[]).every(row => {
     if (!row || typeof row !== "object") return false;
     const position = row as Record<string, unknown>;
     return [position.symbol, position.exchange, position.name].every(s => typeof s === "string" && s.length > 0)
       && (position.currency === "KRW" || position.currency === "USD")
       && [position.quantity, position.averagePrice, position.currentPrice, position.marketValue, position.profit, position.returnRate].every(n => typeof n === "number" && Number.isFinite(n))
+      && (position.valuationBasis === undefined || position.valuationBasis === "QUOTE" || position.valuationBasis === "COST")
+      && (position.quoteAsOf === undefined || position.quoteAsOf === null || typeof position.quoteAsOf === "string" && Number.isFinite(Date.parse(position.quoteAsOf)))
       && (position.quantity as number) >= 0;
   }) && (item.orders as unknown[]).every(row => !!row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string")
     && (item.protections as unknown[]).every(row => !!row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string");

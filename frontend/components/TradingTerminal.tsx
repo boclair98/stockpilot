@@ -47,7 +47,7 @@ import WorkspaceControls from "./WorkspaceControls";
 import CommandSearch from "./CommandSearch";
 import DecisionNotebook from "./DecisionNotebook";
 import RankedMarketBrowser from "./RankedMarketBrowser";
-import { ALL_INSTRUMENTS_HREF, MARKET_BROWSE_EVENT, followMarketBrowseLink, marketReturnHref } from "@/lib/market-browse";
+import { ALL_INSTRUMENTS_HREF, MARKET_BROWSE_EVENT, followMarketBrowseLink, marketBrowseHref, marketReturnHref } from "@/lib/market-browse";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
@@ -155,6 +155,8 @@ type Position = {
   returnRate: number;
   exchange: string;
   logoUrl?: string | null;
+  valuationBasis?: "QUOTE" | "COST";
+  quoteAsOf?: string | null;
 };
 type Order = {
   id: string;
@@ -190,6 +192,7 @@ type Portfolio = {
   positions: Position[];
   orders: Order[];
   protections: Protection[];
+  estimatedPositions?: number;
 };
 type MarketStatus = {
   configured: boolean;
@@ -215,6 +218,91 @@ type Me = {
   email: string | null;
   picture: string | null;
 };
+type TerminalProfile = {
+  kind: "loading" | "error" | "guest" | "ready";
+  me: Me | null;
+  message: string;
+};
+
+function isTerminalProfile(value: unknown): value is Me {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const profile = value as Record<string, unknown>;
+  return typeof profile.coders_id === "string" && profile.coders_id.trim().length > 0
+    && typeof profile.display_name === "string" && profile.display_name.trim().length > 0
+    && (profile.email === null || typeof profile.email === "string")
+    && (profile.picture === null || typeof profile.picture === "string" && /^https?:\/\//.test(profile.picture));
+}
+
+function useTerminalProfile(authenticated: boolean | null) {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<(TerminalProfile & { attempt: number }) | null>(null);
+  useEffect(() => {
+    if (authenticated !== true) {
+      // An account boundary must discard the previous private identity, including
+      // before a later sign-in with a different account.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResult(null);
+      return;
+    }
+    const controller = new AbortController();
+    void requestJson<unknown>("/api/me", {
+      credentials: "include", cache: "no-store", signal: controller.signal,
+    }).then(value => {
+      if (controller.signal.aborted) return;
+      if (!isTerminalProfile(value)) throw new Error("계정 응답을 확인하지 못했어요. 다시 확인해 주세요.");
+      setResult({ attempt, kind: "ready", me: value, message: "" });
+    }).catch(error => {
+      if (controller.signal.aborted) return;
+      const guest = error instanceof ApiRequestError && [401, 403].includes(error.status || 0);
+      setResult({ attempt, kind: guest ? "guest" : "error", me: null,
+        message: guest ? "로그인이 만료됐어요. 다시 로그인한 뒤 기록을 확인해 주세요." : error instanceof Error ? error.message : "계정을 확인하지 못했어요." });
+    });
+    return () => controller.abort();
+  }, [authenticated, attempt]);
+  const state: TerminalProfile = authenticated === false
+    ? { kind: "guest", me: null, message: "" }
+    : authenticated === null || result?.attempt !== attempt
+      ? { kind: "loading", me: null, message: "" }
+      : result;
+  return { ...state, retry: () => setAttempt(value => value + 1) };
+}
+
+function TerminalHistory({ profile, onRetry }: { profile: TerminalProfile; onRetry: () => void }) {
+  if (profile.kind === "loading") return <section className="release-account-status" aria-label="투자 기록 계정 확인" aria-busy="true"><p role="status">투자 기록을 표시할 계정을 확인하고 있어요…</p></section>;
+  if (profile.kind === "error") return <section className="release-account-status is-error" aria-label="투자 기록 계정 확인">
+    <div role="alert"><b>투자 기록의 계정을 확인하지 못했어요</b><p>{profile.message} 계정을 다시 확인한 뒤 기록을 표시해요.</p></div>
+    <button type="button" onClick={onRetry}><RefreshCw size={16} aria-hidden="true"/>계정 다시 확인</button>
+  </section>;
+  return <>{profile.message ? <p role="status">{profile.message}</p> : null}<InvestmentHistory key={profile.me?.coders_id || "visitor"} authenticated={profile.kind === "ready" && Boolean(profile.me)} /></>;
+}
+
+function terminalDetailUrl(href: string, instrument: { symbol: string; market: Market; exchange: string }) {
+  const url = new URL(href);
+  // Legacy #us-top/#kr-top carries the market only in its hash. Materialize
+  // that browse context before replacing the hash with the detail anchor.
+  if (["#us-top", "#kr-top"].includes(url.hash)) {
+    const browse = new URL(marketBrowseHref(url.search + url.hash), url.origin);
+    for (const [key, value] of browse.searchParams) url.searchParams.set(key, value);
+  }
+  url.searchParams.set("view", "detail");
+  url.searchParams.set("symbol", instrument.symbol);
+  url.searchParams.set("market", instrument.market);
+  url.searchParams.set("exchange", instrument.exchange);
+  url.hash = "instrument-workspace";
+  return url;
+}
+
+function terminalValuationStatus(positions: Pick<Position, "currency" | "valuationBasis">[], estimatedPositions = 0) {
+  const costPositions = positions.filter(position => position.valuationBasis === "COST");
+  const count = Math.max(costPositions.length, estimatedPositions);
+  // A summary without matching row metadata cannot identify a safe currency.
+  const unresolvedCurrency = count > costPositions.length;
+  return {
+    count,
+    KRW: unresolvedCurrency || costPositions.some(position => position.currency === "KRW"),
+    USD: unresolvedCurrency || costPositions.some(position => position.currency === "USD"),
+  };
+}
 type OrderSafetyChecks = {
   simulation: boolean;
   quote: boolean;
@@ -288,7 +376,8 @@ export default function TradingTerminal() {
   const accountActionLock = useRef(false);
   const pendingOrder = useRef<{ key: string; body: string; name: string; owner: string | null } | null>(null);
   const [toast, setToast] = useState("");
-  const [me, setMe] = useState<Me | null>(null);
+  const profile = useTerminalProfile(accountUpdatedAt === null ? null : portfolio.authenticated);
+  const me = profile.me;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMarket, setSearchMarket] = useState<"ALL" | Market>("ALL");
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
@@ -447,20 +536,6 @@ export default function TradingTerminal() {
       }
     } catch { /* Private browsing can block session storage. */ }
   }, [me?.coders_id]);
-
-  useEffect(() => {
-    if (!portfolio.authenticated) return;
-    const controller = new AbortController();
-    void fetch("/api/me", {
-      credentials: "include",
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((profile) => setMe(profile))
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [portfolio.authenticated]);
 
   useEffect(() => {
     const initialPortfolioTimer = window.setTimeout(refreshPortfolio, 150);
@@ -836,6 +911,7 @@ export default function TradingTerminal() {
       disabled: side !== "SELL",
     },
   ];
+  const valuation = useMemo(() => terminalValuationStatus(portfolio.positions, portfolio.estimatedPositions), [portfolio.positions, portfolio.estimatedPositions]);
   const positionValues = useMemo(
     () =>
       portfolio.positions.reduce(
@@ -908,6 +984,8 @@ export default function TradingTerminal() {
     } satisfies Record<Currency, number>;
     if (!portfolio.authenticated) {
       notices.push("Google로 로그인하면 내 보유 종목 기준 체크업이 표시돼요.");
+    } else if (valuation.count > 0) {
+      notices.push(`시세 미확인 ${valuation.count}종목이 있어 비중·손익 균형과 보호 범위 안내를 잠시 보류해요. 보유 주식의 평가 기준을 확인해 주세요.`);
     } else if (portfolio.positions.length === 0) {
       notices.push("아직 보유 종목이 없어 현금 중심의 안정 상태예요.");
     } else {
@@ -953,6 +1031,7 @@ export default function TradingTerminal() {
     portfolio.protections,
     positionValues,
     stressMove,
+    valuation.count,
   ]);
 
   const rememberStock = useCallback((item: SearchItem) => {
@@ -1100,12 +1179,7 @@ export default function TradingTerminal() {
       const data = await loadQuote(item);
       if (request !== selectionRequest.current) return;
       setWorkspaceView("DETAIL");
-      const url = new URL(location.href);
-      url.searchParams.set("view", "detail");
-      url.searchParams.set("symbol", data.symbol);
-      url.searchParams.set("market", data.market);
-      url.searchParams.set("exchange", data.exchange);
-      url.hash = "instrument-workspace";
+      const url = terminalDetailUrl(location.href, data);
       history.pushState({ stockpilotView: "DETAIL" }, "", url);
       setQuotes(current => mergeQuoteSnapshots(current, [data]));
       activateInstrument(data.id, data.price);
@@ -1438,7 +1512,12 @@ export default function TradingTerminal() {
               </span>
             )}
           </button>
-          {portfolio.authenticated ? (
+          {accountUpdatedAt === null ? (
+            <button type="button" className="user-chip" disabled={accountRefreshing || accountState === "loading"} onClick={() => void refreshPortfolio()}>
+              <RefreshCw size={16} aria-hidden="true"/>
+              <span>{accountRefreshing || accountState === "loading" ? "계정 확인 중" : "계정 다시 확인"}</span>
+            </button>
+          ) : portfolio.authenticated && profile.kind !== "guest" ? (
             <button className="user-chip" onClick={logout} title="로그아웃">
               {me?.picture ? (
                 <span
@@ -1507,7 +1586,7 @@ export default function TradingTerminal() {
             <span>
               {portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
             </span>
-            <small>원화 평가액 · 달러 별도</small>
+            <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small>
             {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
           </div>
           <strong className="private-value">
@@ -1530,17 +1609,17 @@ export default function TradingTerminal() {
             <span>
               국내 평가손익{" "}
               <b
-                className={`private-value ${performance.KRW >= 0 ? "up" : "down"}`}
+                className={`private-value ${valuation.KRW ? "" : performance.KRW >= 0 ? "up" : "down"}`}
               >
-                {money(performance.KRW, "KRW")}
+                {valuation.KRW ? "시세 확인 필요" : money(performance.KRW, "KRW")}
               </b>
             </span>
             <span>
               미국 평가손익{" "}
               <b
-                className={`private-value ${performance.USD >= 0 ? "up" : "down"}`}
+                className={`private-value ${valuation.USD ? "" : performance.USD >= 0 ? "up" : "down"}`}
               >
-                {money(performance.USD, "USD")}
+                {valuation.USD ? "시세 확인 필요" : money(performance.USD, "USD")}
               </b>
             </span>
           </div>
@@ -1549,6 +1628,11 @@ export default function TradingTerminal() {
           <MarketIndexChart initialData={bootstrapKospi} />
         </div>
       </section>
+
+      {valuation.count > 0 ? <section className="release-account-status" aria-label="자산 평가 기준">
+        <div role="status"><b>일부 자산은 매입금액 기준 참고액이에요</b><p>시세 미확인 {valuation.count}종목이 참고 평가액에 포함돼요. 해당 통화의 평가손익과 시세가 필요한 투자 체크업은 확인할 수 없어요.</p></div>
+        <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} aria-hidden="true"/>{accountRefreshing ? "확인 중" : "평가 기준 다시 확인"}</button>
+      </section> : null}
 
       <details className="advanced-checkup">
         <summary>
@@ -1612,29 +1696,29 @@ export default function TradingTerminal() {
             <div className="checkup-metrics">
               <span>
                 <small>원화 현금</small>
-                <b>{portfolioCheck.cashRatio.KRW===null?"—":portfolioCheck.cashRatio.KRW.toFixed(0)+"%"}</b>
+                <b>{valuation.count || portfolioCheck.cashRatio.KRW===null?"—":portfolioCheck.cashRatio.KRW.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>달러 현금</small>
-                <b>{portfolioCheck.cashRatio.USD===null?"—":portfolioCheck.cashRatio.USD.toFixed(0)+"%"}</b>
+                <b>{valuation.count || portfolioCheck.cashRatio.USD===null?"—":portfolioCheck.cashRatio.USD.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>최대 비중</small>
-                <b>{portfolioCheck.concentration.toFixed(0)}%</b>
+                <b>{valuation.count ? "—" : portfolioCheck.concentration.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>손익 종목</small>
                 <b>
-                  {portfolioCheck.winners}/{portfolioCheck.losers}
+                  {valuation.count ? "—" : `${portfolioCheck.winners}/${portfolioCheck.losers}`}
                 </b>
               </span>
               <span>
                 <small>원화 보호 범위</small>
-                <b>{portfolioCheck.protectionCoverage.KRW===null?"—":portfolioCheck.protectionCoverage.KRW.toFixed(0)+"%"}</b>
+                <b>{valuation.count || portfolioCheck.protectionCoverage.KRW===null?"—":portfolioCheck.protectionCoverage.KRW.toFixed(0)+"%"}</b>
               </span>
               <span>
                 <small>달러 보호 범위</small>
-                <b>{portfolioCheck.protectionCoverage.USD===null?"—":portfolioCheck.protectionCoverage.USD.toFixed(0)+"%"}</b>
+                <b>{valuation.count || portfolioCheck.protectionCoverage.USD===null?"—":portfolioCheck.protectionCoverage.USD.toFixed(0)+"%"}</b>
               </span>
             </div>
             <p className="checkup-currency-note">최대 비중과 보호 범위는 같은 통화 안에서 계산해요.</p>
@@ -1667,11 +1751,11 @@ export default function TradingTerminal() {
               <div className="stress-result">
                 <span>
                   <small>국내 보유분 예상 변동</small>
-                  <b>{money(portfolioCheck.stressLoss.KRW, "KRW")}</b>
+                  <b>{valuation.KRW ? "시세 확인 필요" : money(portfolioCheck.stressLoss.KRW, "KRW")}</b>
                 </span>
                 <span>
                   <small>미국 보유분 예상 변동</small>
-                  <b>{money(portfolioCheck.stressLoss.USD, "USD")}</b>
+                  <b>{valuation.USD ? "시세 확인 필요" : money(portfolioCheck.stressLoss.USD, "USD")}</b>
                 </span>
               </div>
               <p>
@@ -1947,6 +2031,7 @@ export default function TradingTerminal() {
           <aside className="consumer-personal">
             <MarketWatchlist
               accountSaved={cloudFavorites.authenticated===true}
+              loadState={cloudFavorites.authenticated===null ? cloudFavorites.error ? "error" : "loading" : "ready"}
               items={favoriteItems}
               selectedId={selected}
               colorFor={colorFor}
@@ -2173,7 +2258,12 @@ export default function TradingTerminal() {
           ) : null}
           <div id="decision-review">
             {workspaceView === "RECORDS" ? (
-              <InvestmentHistory key={me?.coders_id || "visitor"} authenticated={Boolean(me)} />
+              <TerminalHistory profile={accountState === "error" && accountUpdatedAt === null && !accountRefreshing
+                ? { kind: "error", me: null, message: "먼저 계좌 연결을 다시 확인해 주세요." }
+                : profile} onRetry={() => {
+                  if (accountUpdatedAt === null) void refreshPortfolio();
+                  else profile.retry();
+                }} />
             ) : null}
             {detailTab === "REVIEW" ? (
               <DecisionNotebook
@@ -2363,7 +2453,7 @@ export default function TradingTerminal() {
                   <input
                     required
                     type="number"
-                    min="0.01"
+                    min={quote?.currency === "KRW" ? "1" : "0.01"}
                     step={quote?.currency === "KRW" ? "1" : "0.01"}
                     value={triggerPrice}
                     onChange={(event) => setTriggerPrice(event.target.value)}
@@ -2384,7 +2474,7 @@ export default function TradingTerminal() {
                   <input
                     required
                     type="number"
-                    min="0.01"
+                    min={quote?.currency === "KRW" ? "1" : "0.01"}
                     step={quote?.currency === "KRW" ? "1" : "0.01"}
                     value={limitPrice}
                     onChange={(event) => setLimitPrice(event.target.value)}
@@ -2519,7 +2609,7 @@ export default function TradingTerminal() {
                       익절 가격
                       <input
                         type="number"
-                        min="0.01"
+                        min={quote?.currency === "KRW" ? "1" : "0.01"}
                         step={quote?.currency === "KRW" ? "1" : "0.01"}
                         placeholder={
                           quote
@@ -2542,7 +2632,7 @@ export default function TradingTerminal() {
                       손절 가격
                       <input
                         type="number"
-                        min="0.01"
+                        min={quote?.currency === "KRW" ? "1" : "0.01"}
                         step={quote?.currency === "KRW" ? "1" : "0.01"}
                         placeholder={
                           quote

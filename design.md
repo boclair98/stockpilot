@@ -1,5 +1,57 @@
 # OpenUI Design Plan
 
+## 2026-11-07 · 웹 출시 전 고도화와 배포 점검
+
+- 목적/사용자: 국내·미국 모의투자 웹의 재방문 사용자. 기존 디자인·계좌·주문 규칙·앱인토스·별도 사용자 변경을 유지하고 Nov6 개선을 출시에 맞게 점검한다.
+- Resolved inputs: Topic=개인 비교 기록 안전성과 출시 안정성; Offer=계정별 메모 분리·명확한 저장 상태·검증된 웹 릴리즈; Audience=모바일/PC 투자 연습 사용자; Primary user action=종목 비교와 메모 저장; Deliverable=기존 Next.js/FastAPI 웹; Style direction=현재 StockPilot; Tonal key=기존 dark/light; Icon policy=기존 Lucide; Proof assets=실제 소스와 격리 회귀; Motion intensity=minimal.
+- Composition contract: 새 hero·시각 구조 개편 없음. 비교 검색→종목→차트→기록 구조를 유지한다. 계정 변경 뒤 이전 사용자의 메모나 저장 완료 안내가 남지 않게 하고 공개 종목/기간은 유지한다. 공유 링크에 개인 기록을 넣지 않는다.
+- 시각 규칙: 기존 Pretendard, --ws-surface/ink/muted/line/brand 토큰, 입력16px·본문14–16px·보조13px, 간격8/12/16/24, 44px 조작과 reduced-motion 유지. 상태 안내는 실제 결과에만 연결하고 키보드 포커스를 보존한다.
+- 범위: StockComparison·계정 저장 helper 및 관련 회귀를 우선 점검한다. 발견된 결함만 범위 내 보완하고 새로운 금융 상품·실거래·DB 초기화·유료 자원은 추가하지 않는다. API 계약·저장 데이터의 기존 호환 유지.
+- 출시 전 재현 결함: 원화 가격 입력의 min=0.01/step=1 불일치를 min=1로 바로잡아 정수 금액 제출을 허용한다. 달러는0.01 기준을 유지한다. 비교 메모는 계정별로 분리하고 저장 API의 선택적 X-StockPilot-Owner 검증으로 오래된 탭의 메모가 새 로그인 계정에 저장되는 일을 차단한다. 기존 클라이언트의 헤더 없는 요청은 호환하며 주문 계산·금융 규칙은 바꾸지 않는다.
+- 투자 도구의 별도 리포트도 시세가 없을 때 원가 참고값을 실제 수익률처럼 표시하지 않도록 보완한다. 기존 숫자 계산은 유지한 채 평가 완전성/원가 대체/종목 정보 누락 메타데이터를 추가하고, 불완전하면 현재 수익률·차트 확정 표시를 보류한다. 체결 기반 매매 통계는 유지하고 미제공 값은 만들지 않는다.
+- 브라우저 재현: 빠른 검색의 입력 자동 포커스가 복귀할 버튼보다 먼저 적용되어 Escape 뒤 초점이 body로 갔다. 공통 포커스 훅에서 열기/닫기를 맡기고 원래 검색 버튼으로 되돌린다. 모양과 검색 계약은 그대로 둔다.
+- 검증/배포: 사용자 `배포 및 고도화` 요청으로 이번 웹의 커밋·푸시·포크 동기화·기존 코더스 재배포는 승인됨. 재시도에서 브라우저 사용 가능을 확인했다. 전체 안전성·제품·백엔드·타입·린트·빌드 및 360/390/768/1440 light/dark 시각 검증 후 upstream→actual fork 동일 SHA→코더스 ready→운영 확인 순서를 따른다. 확인 전 배포 완료를 보고하지 않는다.
+- Filled prompt/output: Harden the existing StockPilot comparison and review workflows for release while preserving its current responsive composition, typography, dark/light tokens, real data, account ownership and simulated-order calculations. Isolate private drafts and save acknowledgements by account; retain only public instrument/period navigation across sessions. Validate actual code in isolated regressions, then browser viewports and the authorized canonical-repository deployment pipeline. Do not invent data, hide unverified checks or modify the private Apps in Toss bundle. Output integrated existing components, targeted tests and accurate release documentation.
+
+## 2026-11-06 · 2차 고도화: 비교 분석과 투자 기록 이어보기
+
+### Resolved inputs
+- Topic: StockPilot의 비교 분석·관심종목·투자 기록 연속성.
+- Offer: 비교 링크의 종목/기간 보존, 날짜별 실제 종가 확인, 저장 중 메모 보호와 캘린더 복귀.
+- Audience: 국내·미국 여러 종목을 살펴보고 자신의 투자 판단을 기록하는 초보/재방문 사용자.
+- Primary user action: 비교할 종목을 고른 뒤 날짜별 가격 변화 확인; 기록을 수정·저장하고 이전 탐색으로 돌아오기.
+- Deliverable: 기존 웹 컴포넌트와 작은 공통 helper 통합. 앱인토스·계좌·주문 규칙·사용자 LeagueRooms 변경은 제외.
+- Style direction / Tonal key: 현 StockPilot 소비자 증권 스타일과 다크/라이트 동등 지원.
+- Icon policy / Proof assets / Motion intensity: 기존 Lucide만, 실제 조회된 공통 날짜·종가·계정 기록만, minimal/reduced-motion. 새 라이브러리 없음.
+
+### Composition contract and concrete visual system
+- 새 hero나 화면 구조 개편은 하지 않는다. 현재 비교 검색→종목→차트→저장 순서를 유지한다. 비교 차트 아래 날짜 선택과 해당 날짜의 종가/기준일 대비 변화를 읽기 쉬운 행으로 배치한다. 선택 날짜는 차트 표시와 일치시키고 공통 데이터가 없는 날짜를 생성하지 않는다.
+- 기존 Pretendard, --ws-canvas/surface/ink/muted/line/brand/up/down 토큰과 비교선 색상 유지. 제목20–24px, 본문14–16px, 입력16px, 보조13px, 간격8/12/16/24px, 44px 조작, 12–20px 기존 반경. 모바일 날짜 조작은 줄바꿈, 숫자 tabular-nums·통화 명시·회사명 keep-all·min-width:0.
+- CTA: 날짜 이전/다음/선택→이미 조회한 비교 데이터만 확인; 비교 링크 복사→공개 종목 식별자와 선택 기간만; 조회 실패→실패 종목 재조회; 메모 저장→기존 개인 NOTE API/브라우저 저장, 저장 중 새 입력은 유지; 캘린더로 돌아가기→이전 월/날짜로 복귀.
+- 비교 데이터 갱신이 입력·선택을 덮어쓰지 않아야 한다. URL 복구 실패를 종목 제외로 처리하지 않는다. 메모·계좌정보를 공유 링크에 넣지 않는다. 가격·수익·미제공 데이터는 만들지 않는다. 관심종목은 기존 저장·검색·상세 흐름과 권한을 유지한다.
+- 공통 계정 저장 응답의 null/잘못된 항목·버전·중복 키를 화면에 넣지 않고 기존 유효 목록을 유지하며 재조회를 안내한다. 관심종목 첫 조회 중/실패는 빈 목록이나 브라우저 저장으로 오인시키지 않는다.
+
+### Evidence, paths and validation
+- 코드 근거: StockComparison이 공유 URL의 일부 종목 조회 실패 시 실패 종목을 버리고 URL을 축소한다. 선택 기간은 로컬 상태라 공유/저장 후 기본1개월로 돌아간다. SVG 비교 차트는 날짜별 값을 직접 읽을 방법이 없다. DecisionNotebook 저장 완료가 저장 중 입력한 다음 메모를 숨길 수 있다. TradeCalendar는 기록 목록으로 전환 후 이전 월 선택을 잃는다.
+- 대상: StockComparison 및 comparison helpers, 새 ComparisonInspector, DecisionNotebook/InvestmentHistory/TradeCalendar, 필요한 관심목록 복구, scoped CSS·회귀 테스트·README. API/금융 계산 유지, 필요시 공개 비교 저장의 기간 필드만 기존 schema와 호환되게 추가한다.
+- 추가 확인: InvestorTools는 최근5개 알림만 보여 주며 더 보기가 없고, 알림 화면을 한 번 연 뒤 미확인 수가 바뀔 때마다 전체 읽음 처리를 반복할 수 있다. 전체/진행중/도달/취소 상태 필터와 불러온 알림 전체 관리, 종목·시장 식별자, 명시적인 읽음 조작을 제공한다. 서버 목록은 진행중 알림이 과거 도달 알림에 가려지지 않게 범위를 명확히 하고 상한/페이지를 지킨다. 알림 읽음 외 새 계좌 쓰기·푸시 신청은 하지 않는다.
+- 검사: 공유 URL 일부/전체 실패·기간/Back 복원·응답 경합·정확한 종목 연결, 차트 날짜 버튼/키보드/범위 변경/결측, 메모 저장 중 입력·로그인 변경, 캘린더 월 복귀, 관심종목 빈/실패 상태. 타입·린트·회귀·빌드 및 가능하면360/390/768/1440 light/dark 실제 브라우저. 현재 Work에서 브라우저가 비활성화되어 실화면은 미검증이며 우회하지 않는다. 이번 요청은 로컬 개선/검증이며 새 배포 권한을 추정하지 않는다.
+
+### Filled generation prompt and output target
+Enhance StockPilot's existing comparison and decision-review workflows without rebranding or adding unrelated product surfaces. Use actual instrument identities and daily closes to provide a keyboard- and touch-accessible date inspector within the established chart composition. Preserve symbols and period through share/save/restore, expose recoverable quote failures without silently deleting selections, retain note edits made during a save, and return calendar users to their chosen month. Keep existing Next.js/FastAPI, account ownership, order math, semantic dark/light colors, Pretendard, current financial sign conventions and minimal motion. No mock prices in production, new dependencies, copied assets or private data in public links. Output integrated files under frontend/components and frontend/lib, compatible tests/documentation and scoped styles. Keep earlier pending changes intact. Build and execute isolated tests; label unavailable real-browser validation and do not publish without explicit authorization.
+
+## 2026-11-06 · 탐색 연속성과 조회 복구 고도화
+
+- 목적/사용자: 국내·미국 종목을 찾고 비교하는 모바일 초보자와 재방문 사용자. 현재 웹 디자인·계좌·주문 계산·앱인토스는 유지한다.
+- 코드 근거: 전체 종목에는 비교 선택이 없고, 검색 조건을 명시적으로 저장할 수 없다. CommandSearch의 무제한 조회와 IME/조회 중 Enter 선택, TradingTerminal의 일회성 프로필 조회, PersonalWorkspace의 부분 공시 실패 안내에 실제 재조회 조작이 없는 것을 확인했다. 기존 사용자 LeagueRooms 변경은 제외한다.
+- OpenUI resolved inputs: Topic=StockPilot 종목 탐색과 개인 기록 복구; Offer=전체 종목 비교·명시적 검색 조건 저장·안전한 검색/재조회; Audience=한국어 모바일/PC 투자 연습 사용자; Primary user action=검색→비교/상세→동일 조건 복귀; Deliverable=현재 Next.js 웹에 통합된 한 방향; Style direction=기존 소비자 증권 UI; Tonal key=기존 dark/light; Icon policy=Lucide 재사용; Proof assets=실제 읽기 API 계약과 격리된 검증 fixture; Motion intensity=minimal.
+- Composition contract: 신규 hero 없음. 기존 시장 요약과 목록을 유지하고 검색 아래에 필요할 때만 저장 조건을 배치한다. 목록의 독립 비교 버튼과 기존 비교 선택 상태를 연결한다. 성공/실패는 실제 응답으로만 표시하며 새로운 순위·가격을 만들지 않는다. 공개 검색 조건만 사용자 클릭으로 이 브라우저에 최대6개 저장하고 계좌·인증 정보는 저장하지 않는다. 다른 기기 동기화로 표현하지 않는다.
+- 시각 규칙: 현재 Pretendard, --ws-surface/ink/muted/line/brand 토큰과 다크·라이트 값 재사용. 제목20–24px, 입력16px, 본문14–16px, 보조13px, 간격8/12/16/24px, 44px 조작, 기존12–20px 반경. 목록은 동일한 공유 표면을 유지하고 모바일에서는 가격/이름을 축소하지 않고 보조 조작을 재배치한다. keep-all/min-width:0/명시적 focus/reduced-motion 유지.
+- 실제 동작: ‘조건 저장’→검증된 시장/거래소/검색어/표시 수를 localStorage에 명시적으로 저장; 저장 조건→첫 페이지를 기존 URL로 열기; ‘비교 추가’→기존 최대3종목 비교 상태와 /compare; ‘다시 시도’→실패한 읽기 요청만 실행. 삭제/용량 오류/저장소 접근 불가/빈 검색/부분 자료/인증 만료를 구별한다. 주문 자동 재시도·계좌 초기화·운영 데이터 쓰기는 없음.
+- 구현 경로: StockDirectory/RankedMarketBrowser와 scoped CSS·검색 조건 helper, CommandSearch, TradingTerminal 프로필·시장 복귀 연결, PersonalWorkspace 공시 복구, 관련 회귀 검사·README. 금융 시세 부재 시 원가가 시세로 보이는 문제는 별도 정확성 점검 후 데이터 계약을 보존하는 범위만 반영한다.
+- 검증: 한글 입력 확정/시간초과/검색 재개방/상세 왕복, 저장 조건 유효성·중복·6개 제한·저장소 실패, 비교 여러 페이지/시장, 프로필 실패 후 재조회·로그아웃, 공시 부분/전체 실패 후 복구. 타입·린트·전체 안전성·제품 테스트·빌드, 360×800/390×844/768×1024/1440×900 light/dark 및 키보드. 운영 계좌 쓰기·운영 부하 시험 없음. 이번 변경의 새 배포 승인이 확인되기 전에는 커밋·푸시·배포하지 않는다.
+- Filled master prompt/output: Improve StockPilot's existing financial workspace with complete instrument discovery, explicitly saved local search presets, shared multi-instrument comparison and honest recoverable read states. Preserve the current Next.js framework, responsive composition, Pretendard and semantic light/dark tokens. Reuse the existing API contracts, account identity and URL navigation. Keep actions explicit, touch targets readable and keyboard focus visible. Never invent prices, silently save private data, change trading rules or touch the private Apps in Toss source. Produce integrated components, deterministic isolated tests and actual mobile/desktop screenshots. Review composition, typography and responsive/interaction states; fix observed defects. Output the existing frontend paths, not a new app or marketing page.
+
 ## 2026-10-28 · 시장 상단 전체 종목·검색 통합
 
 ### Resolved inputs

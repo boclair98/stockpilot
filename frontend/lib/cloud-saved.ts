@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError, requestJson } from "./reliable-request";
+import { validCloudItem, validCloudList } from "./cloud-saved-response";
+const OWNER_CHANGED_MESSAGE = "로그인 계정이 바뀌어 변경을 적용하지 않았어요. 새 계정의 기록을 확인한 뒤 다시 시도해 주세요.";
 export type CloudItem<T> = {
   key: string;
   data: T;
@@ -15,9 +17,28 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
+  const mounted = useRef(false);
+  const scope = useRef({ kind, owner, authenticated });
+  const previousKind = useRef(kind);
+  const ownerChanged = useRef(false);
   const readGeneration = useRef(0);
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((v) => v + 1), []);
+  useEffect(() => {
+    mounted.current = true;
+    // This is a request generation counter, not a ref to a rendered element.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { mounted.current = false; readGeneration.current++; };
+  }, []);
+  useEffect(() => { scope.current = { kind, owner, authenticated }; }, [kind, owner, authenticated]);
+  useEffect(() => {
+    if (previousKind.current === kind) return;
+    previousKind.current = kind;
+    scope.current = { kind, owner: null, authenticated: null };
+    setItems([]);
+    setOwner(null);
+    setAuthenticated(null);
+  }, [kind]);
   useEffect(() => {
     const controller = new AbortController();
     const generation = ++readGeneration.current;
@@ -26,26 +47,24 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
       { signal: controller.signal, cache: "no-store" },
     )
       .then((data) => {
-        if (controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
-        if(!Array.isArray(data.items)||typeof data.owner!=="string") throw new Error("저장 기록의 응답을 확인하지 못했어요.");
+        if (!mounted.current || controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
+        if(!validCloudList<T>(data, kind)) throw new Error("저장 기록의 응답을 확인하지 못했어요. 다시 조회해 주세요.");
         setItems(data.items);
         setOwner(data.owner);
         setAuthenticated(true);
-        setError("");
+        setError(ownerChanged.current ? OWNER_CHANGED_MESSAGE : "");
       })
       .catch((cause) => {
-        if (controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
+        if (!mounted.current || controller.signal.aborted || generation !== readGeneration.current || locked.current) return;
         if (cause instanceof ApiRequestError && cause.status === 401) {
           setItems([]);
           setOwner(null);
           setAuthenticated(false);
-          setError("");
-        } else
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "저장 기록을 불러오지 못했어요.",
-          );
+          setError(ownerChanged.current ? OWNER_CHANGED_MESSAGE : "");
+        } else {
+          const message = cause instanceof Error ? cause.message : "저장 기록을 불러오지 못했어요.";
+          setError(ownerChanged.current ? `${OWNER_CHANGED_MESSAGE} ${message}` : message);
+        }
       });
     return () => controller.abort();
   }, [kind, revision]);
@@ -58,26 +77,33 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
   }, [refresh]);
   const mutate = useCallback(
     async (key: string, data: T | null) => {
-      if (locked.current || authenticated !== true) return false;
+      if (!mounted.current || locked.current || authenticated !== true || !owner?.trim()
+        || scope.current.kind !== kind || scope.current.owner !== owner || scope.current.authenticated !== true) return false;
       locked.current = true;
+      const requestOwner = owner;
+      const stillCurrent = () => mounted.current && scope.current.kind === kind
+        && scope.current.owner === requestOwner && scope.current.authenticated === true;
       // A pre-write read must never restore a deleted item or erase a new save.
       readGeneration.current++;
       setBusy(true);
       setError("");
+      ownerChanged.current = false;
       const version = items.find((row) => row.key === key)?.version || 0;
       let confirmed = false;
+      let reloadAfterWrite = false;
       try {
         const row = await requestJson<CloudItem<T>>(
           `/api/personal/saved/${kind}/${encodeURIComponent(key)}${data === null ? `?version=${version}` : ""}`,
           data === null
-            ? { method: "DELETE" }
+            ? { method: "DELETE", headers: { "X-StockPilot-Owner": requestOwner } }
             : {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-StockPilot-Owner": requestOwner },
                 body: JSON.stringify({ data, version }),
               },
         );
-        if (!row || row.key !== key || !Number.isInteger(row.version) || row.version <= version || typeof row.deleted !== "boolean" || (data !== null && row.deleted)) throw new Error("저장 결과를 확인하지 못했어요. 다시 저장하기 전에 목록을 새로 조회해 주세요.");
+        if (!stillCurrent()) { reloadAfterWrite = true; return false; }
+        if (!validCloudItem<T>(row, kind) || row.key !== key || row.version <= version || row.deleted !== (data === null)) throw new Error("저장 결과를 확인하지 못했어요. 다시 저장하기 전에 목록을 새로 조회해 주세요.");
         setItems((current) => [
           row,
           ...current.filter((item) => item.key !== key),
@@ -85,6 +111,19 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
         confirmed = true;
         return true;
       } catch (cause) {
+        if (!stillCurrent()) { reloadAfterWrite = true; return false; }
+        if (cause instanceof ApiRequestError && cause.status === 409
+          && (cause.payload as { detail?: { code?: unknown } } | null)?.detail?.code === "OWNER_CHANGED") {
+          // Never merge another account's conflict data or repeat the write.
+          ownerChanged.current = true;
+          scope.current = { kind, owner: null, authenticated: null };
+          setItems([]);
+          setOwner(null);
+          setAuthenticated(null);
+          setError(OWNER_CHANGED_MESSAGE);
+          reloadAfterWrite = true;
+          return false;
+        }
         if (cause instanceof ApiRequestError && cause.status === 401) {
           setItems([]);
           setOwner(null);
@@ -92,7 +131,7 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
         }
         if(cause instanceof ApiRequestError && cause.status===409){
           const server=(cause.payload as {detail?:{current?:CloudItem<T>}}|null)?.detail?.current;
-          if(server?.key===key && Number.isInteger(server.version) && server.version>=0){
+          if(validCloudItem<T>(server, kind) && server.key===key){
             // Keep the user's draft, but retain the server revision even when
             // an old tombstone is outside the bounded list. No automatic retry.
             setItems(current=>[server,...current.filter(item=>item.key!==key)]);
@@ -109,11 +148,13 @@ export function useCloudSaved<T>(kind: "FAVORITE" | "NOTE" | "COMPARE") {
       } finally {
         readGeneration.current++;
         locked.current = false;
-        setBusy(false);
-        if (confirmed) refresh();
+        if (mounted.current) {
+          setBusy(false);
+          if (confirmed || reloadAfterWrite) refresh();
+        }
       }
     },
-    [authenticated, items, kind, refresh],
+    [authenticated, items, kind, owner, refresh],
   );
   return { items, authenticated, owner, error, busy, refresh, save: mutate };
 }
