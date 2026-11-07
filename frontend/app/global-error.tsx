@@ -11,6 +11,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
             <h1 style={{ margin: "0 0 10px", fontSize: 24, wordBreak: "keep-all" }}>앱을 다시 불러올게요</h1>
             <p style={{ margin: "0 0 22px", color: "#697583", fontSize: 14, lineHeight: 1.7, wordBreak: "keep-all" }}>화면을 불러오지 못했어요. 다시 시도해 주세요. 주문을 보냈다면 매매 기록에서 처리 상태를 확인해 주세요.</p>
             <button type="button" onClick={() => isChunkLoadError(error) ? window.location.reload() : reset()} style={{ width: "100%", minHeight: 48, border: 0, borderRadius: 14, color: "#fff", background: "#191f28", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>다시 시도</button>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- A root layout failure needs a full document navigation, not the failed router. */}
             <a href="/#decision-review" style={{display:"inline-block",marginTop:16,minHeight:44,color:"#3e56a8"}}>매매 기록 확인</a>
           </section>
         </main>

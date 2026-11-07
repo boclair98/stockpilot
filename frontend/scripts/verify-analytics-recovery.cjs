@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS verification runner. */
 // Real validators/components/request wrapper; fake hooks, clock and network only.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

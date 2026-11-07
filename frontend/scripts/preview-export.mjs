@@ -1,5 +1,5 @@
 import http from 'node:http';
-import {readFile,stat} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 const root=path.resolve('out');
 const port=Number(process.env.STOCKPILOT_PREVIEW_PORT||5191);
