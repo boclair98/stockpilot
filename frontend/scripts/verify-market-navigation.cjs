@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Executes the production handlers and component with deterministic reads only.
 // No production API, account, market data, or order mutation is used.
 const assert = require('node:assert/strict');

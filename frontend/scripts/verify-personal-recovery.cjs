@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Real components/helpers with isolated React hooks and fetch; never writes a real account.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -45,8 +46,8 @@ function harness(target = 'Recurring', initialProps = {}) {
       return {};
     }, output); return output;
   }
-  const module = load('components/PersonalWorkspace.tsx');
-  function render(nextProps = props) { props = nextProps; cursor = 0; dirty = false; effects.length = 0; tree = target === 'useLoad' ? module.useLoad(props.url) : module[target](props); effects.splice(0).forEach(fn => fn()); return tree; }
+  const fixtureModule = load('components/PersonalWorkspace.tsx');
+  function render(nextProps = props) { props = nextProps; cursor = 0; dirty = false; effects.length = 0; tree = target === 'useLoad' ? fixtureModule.useLoad(props.url) : fixtureModule[target](props); effects.splice(0).forEach(fn => fn()); return tree; }
   async function flush() { for (let n = 0; n < 6; n++) { await new Promise(resolve => setImmediate(resolve)); if (dirty) render(); } return tree; }
   return { render, flush, requests, load, get tree() { return tree; }, nodes: () => nodes(tree), text: () => text(tree),
     respond(index, payload, status = 200) { requests[index].finish({ ok: status >= 200 && status < 300, status, json: async () => payload }); },

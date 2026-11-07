@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Isolated request-lifecycle regression: never contacts an API or writes accounts.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

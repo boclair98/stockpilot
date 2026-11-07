@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Actual TypeScript component and validators; only React scheduling/network are isolated.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

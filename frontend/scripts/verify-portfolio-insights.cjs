@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Financial display regression checks; no accounts, backend, or market requests.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');

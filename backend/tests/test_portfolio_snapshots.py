@@ -17,15 +17,28 @@ def test_combined_return_keeps_original_two_currency_weighting():
 @pytest.mark.no_db
 @pytest.mark.asyncio
 async def test_snapshot_write_is_atomic_upsert_for_repeated_portfolio_reads():
+    owner = uuid4()
+
     class CapturingSession:
-        statement = None
+        def __init__(self):
+            self.statements = []
 
         async def execute(self, statement):
-            self.statement = statement
+            self.statements.append(statement)
+            if statement.is_select:
+                return [(owner, Decimal("10000000"), Decimal("-5000"))]
+            return None
 
     session = CapturingSession()
-    await record_daily_snapshot(session, uuid4(), Decimal("100000000"), Decimal("100000"))
+    await record_daily_snapshot(session, owner, Decimal("110000000"), Decimal("95000"))
 
-    query = str(session.statement.compile(dialect=postgresql.dialect()))
+    flow_read, upsert = session.statements
+    assert flow_read.is_select
+    compiled = upsert.compile(dialect=postgresql.dialect())
+    query = str(compiled)
     assert "ON CONFLICT ON CONSTRAINT uq_portfolio_snapshot_owner_date DO UPDATE" in query
     assert "return_rate = excluded.return_rate" in query
+    assert compiled.params["owner_id"] == owner
+    assert compiled.params["equity_krw"] == Decimal("110000000")
+    assert compiled.params["equity_usd"] == Decimal("95000")
+    assert compiled.params["return_rate"] == Decimal("0")

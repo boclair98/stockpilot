@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS verification harness. */
 // Isolated component tests: no network, production accounts, or orders.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
