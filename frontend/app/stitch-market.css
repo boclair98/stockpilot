@@ -1,0 +1,162 @@
+/* Obsidian market workspace. Existing grid/container rules own column
+   placement, currency precision, and which live fields are present. */
+.stitch-workspace.product-edition :is(.broker-rankings, .search-card, .watchlist-board) {
+  min-inline-size: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  box-shadow: none;
+}
+
+.stitch-workspace .market-discovery-heading,
+.stitch-workspace .watchlist-board .favorite-board-head {
+  padding: 16px clamp(12px, 2vw, 20px);
+  border-block-end: 1px solid var(--ws-line);
+}
+.stitch-workspace :is(.market-discovery-heading, .favorite-board-head) > div > span {
+  color: var(--ws-brand);
+  font-size: .75rem;
+  font-weight: 650;
+  letter-spacing: .08em;
+}
+.stitch-workspace :is(.market-discovery-heading, .favorite-board-head, .search-card .section-head) h2 {
+  margin-block: 3px 0;
+  color: var(--ws-ink);
+  font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem);
+  line-height: 1.35;
+  letter-spacing: -.035em;
+  word-break: keep-all;
+}
+.stitch-workspace .watchlist-board .favorite-board-head > small {
+  border-radius: 6px;
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keep country, ranking metric and exchange visually distinct controls. */
+.stitch-workspace.product-edition .broker-rankings > header { padding-block: 10px; }
+.stitch-workspace.product-edition .ranked-market-switch {
+  border-radius: 8px;
+  background: var(--ws-soft);
+  padding: 2px;
+}
+.stitch-workspace.product-edition .ranked-market-switch button {
+  border-radius: 6px;
+  min-block-size: 44px;
+}
+.stitch-workspace .ranked-market-switch button[aria-pressed="true"] {
+  background: var(--ws-surface);
+  color: var(--ws-brand);
+  box-shadow: inset 0 0 0 1px var(--ws-line);
+}
+.stitch-workspace.product-edition .ranked-metric-tabs button {
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.stitch-workspace.product-edition .ranked-metric-tabs button[aria-pressed="true"] {
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+  box-shadow: inset 0 -2px 0 var(--ws-brand);
+}
+.stitch-workspace :is(.ranking-exchange-filter select, .watchlist-fields input, .watchlist-fields select,
+                      .directory-search, .search-input, .ranked-refresh, .directory-size select) {
+  border-radius: 8px;
+  border-color: var(--ws-line);
+  color: var(--ws-ink);
+  background-color: var(--ws-soft);
+}
+.stitch-workspace :is(.directory-search, .search-input):focus-within {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 2px;
+}
+.stitch-workspace.product-edition .instrument-browser > .search-card {
+  padding: 8px 12px;
+  align-items: center;
+}
+.stitch-workspace .search-card .recent-stocks[open] {
+  padding-block-start: 4px;
+  border-block-start: 1px solid var(--ws-line);
+}
+.stitch-workspace .search-card .recent-stocks button {
+  border-radius: 6px;
+  color: var(--ws-ink);
+}
+.stitch-workspace .watchlist-toolbar { padding-block-start: 12px; }
+.stitch-workspace :is(.watchlist-fields, .watchlist-scope) { color: var(--ws-muted); }
+.stitch-workspace .watchlist-board .favorite-empty {
+  padding: 18px 16px;
+  background: transparent;
+  border-radius: 0;
+}
+.stitch-workspace .watchlist-board .friendly-empty-icon {
+  border-radius: 8px;
+  color: var(--ws-brand);
+  background: var(--ws-tint);
+}
+
+/* A continuous quote tape, with persistent selection distinguishable from
+   hover. Do not recolor the signed daily change or substitute missing quotes. */
+.stitch-workspace .broker-rankings .stock-list-heading,
+.stitch-workspace .market-directory .directory-columns {
+  padding-block: 9px;
+  background: var(--ws-soft);
+  border-block: 1px solid var(--ws-line);
+  color: var(--ws-muted);
+  font-size: .8125rem;
+  font-weight: 600;
+}
+.stitch-workspace :is(.broker-rankings, .watchlist-board) .consumer-stock-row {
+  border-radius: 0;
+  border-block-end: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+}
+.stitch-workspace :is(.broker-rankings, .watchlist-board) .consumer-stock-row.selected {
+  background: var(--ws-tint);
+  box-shadow: inset 3px 0 var(--ws-brand);
+}
+.stitch-workspace.product-edition .broker-rankings .stock-row-open {
+  min-block-size: 64px;
+  padding-block: 10px;
+}
+.stitch-workspace :is(.rank-number, .rank-price, .stock-row-metric, .directory-exchange,
+                      .directory-identity > span, .rank-identity > small, .directory-list-status) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.stitch-workspace .rank-number,
+.stitch-workspace .rank-identity > small { color: var(--ws-muted); }
+.stitch-workspace .rank-number { white-space: nowrap; }
+.stitch-workspace .rank-price > b {
+  color: var(--ws-ink);
+  font-weight: 700;
+  letter-spacing: -.015em;
+  white-space: nowrap;
+}
+.stitch-workspace .rank-identity b,
+.stitch-workspace .directory-identity > strong {
+  color: var(--ws-ink);
+  font-weight: 650;
+}
+.stitch-workspace .directory-list > li { border-color: var(--ws-line); }
+.stitch-workspace .broker-rankings .ranked-more {
+  min-block-size: 46px;
+  border-radius: 8px;
+  color: var(--ws-brand);
+}
+.stitch-workspace :is(.broker-rankings, .watchlist-board, .search-card) :is(button, a, select, summary):focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: -2px;
+}
+@media (hover: hover) {
+  .stitch-workspace :is(.consumer-stock-row:not(.selected):hover, .directory-list > li:hover),
+  .stitch-workspace .search-card .search-results > button:hover { background: var(--ws-soft); }
+}
+@media (max-width: 767px) {
+  .stitch-workspace.product-edition :is(.broker-rankings, .search-card, .watchlist-board) { border-radius: 10px; }
+  .stitch-workspace :is(.market-discovery-heading, .watchlist-board .favorite-board-head) { padding: 12px; }
+  .stitch-workspace .broker-rankings .ranked-metric-tabs { min-inline-size: 0; }
+  .stitch-workspace .broker-rankings .ranked-metric-tabs button { white-space: nowrap; }
+  .stitch-workspace :is(.directory-search input, .watchlist-fields input, .watchlist-fields select, .search-input input, .ranking-exchange-filter select) {
+    font-size: max(16px, 1rem);
+  }
+}

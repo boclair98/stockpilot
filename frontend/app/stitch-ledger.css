@@ -1,0 +1,223 @@
+/* Obsidian ledger surfaces: presentation only. Order and quote states stay in the existing components. */
+.stitch-workspace.view-detail .analysis-column,
+.stitch-workspace.view-detail .order-card,
+.stitch-workspace.view-assets .portfolio-panel,
+.stitch-workspace.view-records #decision-review {
+  padding: clamp(14px, 1.8vw, 24px);
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  box-shadow: none;
+}
+
+.stitch-workspace.view-detail .instrument-heading {
+  padding-bottom: 16px;
+  gap: 12px 20px;
+}
+
+.stitch-workspace.view-detail .instrument-identity > div,
+.stitch-workspace.view-detail .instrument-quote {
+  min-width: 0;
+}
+
+.stitch-workspace.view-detail .instrument-identity h2 {
+  font-size: clamp(22px, 1.8vw, 27px);
+  line-height: 1.25;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.stitch-workspace.view-detail .instrument-quote strong {
+  font-size: clamp(26px, 2.6vw, 38px);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.stitch-workspace.view-detail .instrument-meta,
+.stitch-workspace.view-detail .instrument-identity .workspace-eyebrow {
+  color: var(--ws-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.stitch-workspace.view-detail .instrument-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stitch-workspace.view-detail :is(.instrument-actions, .workspace-detail-tabs) button {
+  min-height: 44px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.stitch-workspace.view-detail .instrument-actions button[aria-pressed="true"] {
+  background: var(--ws-tint);
+  border-color: var(--ws-brand);
+  color: var(--ws-brand);
+}
+
+.stitch-workspace.view-detail .stock-trend-panel.broker-chart {
+  padding-block: 18px 12px;
+}
+
+.stitch-workspace.view-detail .broker-chart .trend-periods {
+  flex-wrap: wrap;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+}
+
+.stitch-workspace.view-detail .broker-chart .trend-periods button {
+  min-height: 44px;
+  padding-inline: clamp(7px, 1vw, 12px);
+}
+
+.stitch-workspace.view-detail .broker-chart-canvas {
+  padding: 8px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-canvas);
+}
+
+.stitch-workspace.view-detail .broker-chart-scale {
+  font-size: 12px;
+}
+
+.stitch-workspace.view-detail .broker-chart-inspection {
+  margin-top: 12px;
+}
+
+.stitch-workspace.view-detail .ticket-title {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.stitch-workspace.view-detail :is(.ticket-title button, .favorite-selected) {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+}
+
+.stitch-workspace.view-detail .order-stock {
+  grid-template-columns: 34px minmax(0, 1fr) 44px;
+}
+
+.stitch-workspace.view-detail .order-card :is(.side-tabs, select, .input-money, .stepper, .submit),
+.stitch-workspace :is(.history-filters, .history-view-switch button, .history-details dl, .holdings-filters input, .holdings-filters select) {
+  border-radius: 8px;
+}
+
+.stitch-workspace.view-detail .order-card :is(.side-tabs button, .quick-quantity button) {
+  min-height: 44px;
+  border-radius: 7px;
+}
+
+.stitch-workspace.view-detail .order-card .estimate {
+  font-variant-numeric: tabular-nums;
+}
+
+.stitch-workspace .order-confirm {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.stitch-workspace .order-confirm :is(dl, .confirm-check, .confirm-simulation-note) {
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.stitch-workspace .order-confirm :is(.confirm-close, .confirm-check) {
+  min-height: 44px;
+}
+
+.stitch-workspace .order-confirm .confirm-close {
+  min-width: 44px;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-card {
+  padding: clamp(16px, 2.5vw, 28px);
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: none;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-card :is(.card-title, .card-title small, .balance-detail) {
+  color: var(--ws-muted);
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-card > strong {
+  color: var(--ws-ink);
+  font-size: clamp(28px, 3.2vw, 42px);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-detail {
+  border-color: var(--ws-line);
+  font-size: 13px;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-detail > span {
+  color: var(--ws-muted);
+  flex-wrap: wrap;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-detail b {
+  color: var(--ws-ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The former gradient balance card forced white on both signed values. */
+.stitch-workspace.view-assets .workspace-summary .balance-detail b.up {
+  color: var(--ws-up) !important;
+}
+
+.stitch-workspace.view-assets .workspace-summary .balance-detail b.down {
+  color: var(--ws-down) !important;
+}
+
+.stitch-workspace.view-assets .holdings-scope {
+  flex-wrap: wrap;
+}
+
+.stitch-workspace .history-filters {
+  border: 1px solid var(--ws-line);
+}
+
+.stitch-workspace :is(.holdings-list, .history-list) {
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.stitch-workspace .history-list > li:last-child { border-bottom: 0; }
+
+.stitch-workspace .history-side { border-radius: 8px; }
+
+.stitch-workspace :is(.history-identity, .history-result, .holding-value, .holding-identity) {
+  font-variant-numeric: tabular-nums;
+}
+
+.stitch-workspace :is(.instrument-actions, .workspace-detail-tabs, .order-card, .order-confirm) :is(button,input,select):focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1023px) {
+  .stitch-workspace.view-detail.mobile-order-open .order-card {
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    overscroll-behavior-y: contain;
+  }
+}
+
+@media (max-width: 767px) {
+  .stitch-workspace.view-detail .instrument-quote {
+    flex-wrap: wrap;
+    column-gap: 10px;
+    row-gap: 4px;
+  }
+}

@@ -1436,7 +1436,7 @@ export default function TradingTerminal() {
 
   return (
     <main
-      className={`app workspace-app consumer-app product-edition view-${workspaceView.toLowerCase()}${mobileOrderOpen ? " mobile-order-open" : ""}`}
+      className={`app workspace-app consumer-app product-edition stitch-workspace view-${workspaceView.toLowerCase()}${mobileOrderOpen ? " mobile-order-open" : ""}`}
     >
       <a className="skip-link" href="#market-content">
         본문으로 건너뛰기
@@ -1453,27 +1453,27 @@ export default function TradingTerminal() {
             href="#market-rankings"
             aria-current={workspaceView === "MARKET" ? "page" : undefined}
           >
-            시장
+            <BarChart3 size={18} aria-hidden="true" />시장
           </a>
           <a
             href="#favorite-board-title"
             aria-current={workspaceView === "WATCH" ? "page" : undefined}
           >
-            관심종목
+            <Star size={18} aria-hidden="true" />관심종목
           </a>
           <a
             href="#holdings"
             aria-current={workspaceView === "ASSETS" ? "page" : undefined}
           >
-            내 자산
+            <Wallet size={18} aria-hidden="true" />내 자산
           </a>
           <a
             href="#decision-review"
             aria-current={workspaceView === "RECORDS" ? "page" : undefined}
           >
-            매매 기록
+            <History size={18} aria-hidden="true" />매매 기록
           </a>
-          <a href={ALL_INSTRUMENTS_HREF} onClick={followMarketBrowseLink}>전체 종목</a>
+          <a href={ALL_INSTRUMENTS_HREF} onClick={followMarketBrowseLink}><Search size={18} aria-hidden="true" />전체 종목</a>
         </nav>
         <div className="top-actions">
           <CommandSearch onChoose={chooseSearchResult} />

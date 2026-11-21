@@ -1,0 +1,132 @@
+/* Stitch Obsidian — presentation only. The existing workspace owns data and actions. */
+.consumer-app.product-edition.stitch-workspace {
+  --stitch-radius: 12px;
+  --ws-canvas: #f3f6fb;
+  --ws-surface: #fff;
+  --ws-soft: #eaf0f8;
+  --ws-ink: #121c2d;
+  --ws-muted: #4b5c74;
+  --ws-line: #d8e1ee;
+  --ws-brand: #3d47bd;
+  --ws-brand-solid: #454fcb;
+  --ws-tint: #e9edff;
+  --ws-floating: #fff;
+  --sp-radius-card: var(--stitch-radius);
+  --sp-radius-control: 8px;
+  color: var(--ws-ink);
+  background-color: var(--ws-canvas);
+}
+
+html[data-theme="dark"] .consumer-app.product-edition.stitch-workspace {
+  --ws-canvas: #0b1019;
+  --ws-surface: #121824;
+  --ws-soft: #1a2433;
+  --ws-ink: #edf2fa;
+  --ws-muted: #a5b2c6;
+  --ws-line: #273344;
+  --ws-brand: #a5adff;
+  --ws-brand-solid: #555ede;
+  --ws-tint: #222a49;
+  --ws-floating: #182131;
+}
+
+.stitch-workspace .topbar {
+  background: var(--ws-canvas);
+  border-color: var(--ws-line);
+}
+.stitch-workspace .brand > span { border-radius: 9px; }
+.stitch-workspace .workspace-primary a > svg { display: none; }
+.stitch-workspace .workspace-intro { gap: 8px 16px; padding-block: 20px 14px; }
+.stitch-workspace .workspace-intro h1 { font-size: clamp(23px, 2.8vw, 30px); line-height: 1.25; }
+.stitch-workspace .workspace-intro .workspace-eyebrow { letter-spacing: .06em; }
+.stitch-workspace .workspace-context { flex-wrap: wrap; }
+
+.consumer-app.stitch-workspace.view-market .workspace-summary { gap: 12px; margin-bottom: 16px; }
+.consumer-app.stitch-workspace.view-market .workspace-summary :is(.balance-card,.market-index-card) {
+  min-width: 0;
+  border-radius: var(--stitch-radius);
+}
+.consumer-app.stitch-workspace.view-market .workspace-summary .balance-card {
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: inset 3px 0 var(--ws-brand-solid);
+}
+.consumer-app.stitch-workspace.view-market .workspace-summary .balance-card .card-title {
+  padding-inline-end: 54px;
+}
+.stitch-workspace.view-market .balance-card .card-title small,
+.stitch-workspace.view-market .balance-card .balance-detail { color: var(--ws-muted); }
+.consumer-app.stitch-workspace.view-market .workspace-summary .balance-detail { border-color: var(--ws-line); }
+.consumer-app.stitch-workspace.view-market .workspace-summary .balance-detail b:is(.up,.down) { color: var(--ws-ink) !important; }
+.stitch-workspace.view-market .balance-account-link { color: var(--ws-brand); background: var(--ws-tint); }
+.stitch-workspace.view-market .balance-account-link:hover { color: var(--ws-ink); background: var(--ws-soft); }
+.stitch-workspace.view-market :is(.balance-mobile-disclosure,.balance-mobile-disclosure b,.balance-mobile-disclosure summary) { color: var(--ws-ink); border-color: var(--ws-line); }
+.stitch-workspace.view-market .balance-mobile-disclosure > div > span { color: var(--ws-muted); }
+.consumer-app.stitch-workspace.view-market .workspace-index .market-index-card { border-color: var(--ws-line); }
+.stitch-workspace :is(.balance-card > strong,.index-title strong,.quote-price) { font-variant-numeric: tabular-nums; }
+
+/* Desktop-only rail; current routes, click handling and source order stay intact. */
+@media (min-width: 1280px) {
+  .consumer-app.product-edition.stitch-workspace {
+    --stitch-rail: 168px;
+    width: min(100%, 1600px);
+    max-width: 1600px;
+    padding-inline-start: calc(var(--page-gutter) + var(--stitch-rail) + 22px);
+  }
+  .consumer-app.stitch-workspace .workspace-primary {
+    position: absolute;
+    inset-inline-start: calc(var(--page-gutter) - var(--stitch-rail) - 20px);
+    inset-block-start: calc(100% + 18px);
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    width: var(--stitch-rail);
+    padding: 8px;
+    margin: 0;
+    border: 1px solid var(--ws-line);
+    border-radius: var(--stitch-radius);
+    background: var(--ws-surface);
+    box-shadow: none;
+  }
+  .consumer-app.stitch-workspace .workspace-primary a {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .stitch-workspace .workspace-primary a > svg { display: block; flex: none; }
+  .stitch-workspace .workspace-primary a[aria-current="page"] {
+    background: var(--ws-tint);
+    color: var(--ws-brand);
+    border-bottom: 0;
+    box-shadow: inset 3px 0 var(--ws-brand);
+  }
+  .stitch-workspace .workspace-primary a[aria-current="page"]::after { display: none; }
+  .stitch-workspace .workspace-primary a:hover { background: var(--ws-soft); }
+}
+
+@media (max-width: 767px) {
+  .stitch-workspace .workspace-intro { padding-block: 12px; }
+  .stitch-workspace .workspace-index .index-refresh-button { width: 44px; min-height: 44px; }
+}
+
+/* Shared mobile navigation belongs to the web root, outside the market wrapper. */
+@media (max-width: 1023px) {
+  .mobile-menu-sheet .mobile-menu-group .mobile-menu-grid > a {
+    border-radius: 10px;
+    border-color: var(--ws-line);
+  }
+  .mobile-menu-sheet .mobile-menu-group .mobile-menu-grid > a > span {
+    border-radius: 8px;
+  }
+  .mobile-menu-sheet .mobile-menu-group h3 { letter-spacing: -.015em; }
+  .mobile-menu-sheet .mobile-menu-group .mobile-menu-grid > a:focus-visible {
+    outline: 2px solid var(--ws-brand);
+    outline-offset: 2px;
+  }
+}

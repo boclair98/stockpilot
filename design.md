@@ -1,5 +1,37 @@
 # OpenUI Design Plan
 
+## 2026-11-21 · Stitch Obsidian 디자인을 기존 웹에 연결
+
+### Resolved inputs
+
+- Topic: StockPilot의 국내·미국 모의투자 웹 전체 핵심 여정.
+- Offer: 실제 시세로 종목을 고르고, 가상 자금으로 모의주문한 뒤 보유 종목과 체결 기록을 확인하는 화면.
+- Audience: 모바일에서 처음 투자 연습을 하거나 데스크톱에서 여러 시세를 비교하는 한국어 사용자.
+- Primary user action: 시장의 검색·전체 종목 → 기존 종목 상세 → 모의주문.
+- Deliverable: Google Stitch의 Obsidian Trading Terminal 보드를 기준으로 현재 Next.js UI를 재구현하는 단일 제품 디자인. ZIP·원본 코드 불포함.
+- Style direction: 차트와 숫자가 중심인 증권 작업 화면, 얇은 구분선, 인디고 선택 상태, 폭에 맞는 밀도.
+- Tonal key: 어두운 무채색과 인디고 기본, 기존 라이트 전환 유지.
+- Icon policy: 기존 Lucide, 기업 마크와 폴백 유지.
+- Proof assets: Stitch에서 확인한 일곱 화면의 시각 방향과 기존 서버 응답. 시안 속 샘플 가격·비율·수수료는 운영에 반영하지 않는다.
+- Motion intensity: 기존의 짧은 조작 피드백만 유지하고 reduced-motion을 존중한다.
+
+### Composition contract
+
+- Hero archetype: 시장 목록을 중심으로 한 비대칭 작업 화면. 대형 홍보 영역은 두지 않는다.
+- First viewport: 브랜드·계정·검색, 왼쪽의 주요 탐색 또는 모바일 하단 탭, 간결한 코스피·모의자산 요약, 종목 탐색과 첫 행. 관심종목은 넓은 화면의 보조 영역.
+- Primary artifact: 시장의 실종목 행, 상세의 실제 시세·차트, 자산·기록의 통화별 수치. 그리거나 채워 넣은 수치는 표시하지 않는다.
+- Interaction: 종목 탐색·전체목록·상세·모의주문은 기존 URL과 핸들러, 관심종목 저장·로그인은 기존 인증, 접수·체결·불확실·거절은 기존 주문 확인/복구를 사용한다.
+- Reuse boundary: 공통 탐색과 색상·구분선만 공유한다. 주문, 관심, 보유, 기록의 상태와 데이터 모델은 바꾸지 않는다.
+
+### Filled generation prompt
+
+Build one production StockPilot web workspace from the visible Stitch Obsidian design, with market rows as the hero, charts as real evidence, and a consistent compact navigation hierarchy. Use dark surface #121824, canvas #0b1019, primary text #edf2fa, secondary #a5b2c6, line #273344 and accessible indigo #a5adff; use a complementary light surface #ffffff and canvas #f3f6fb. Keep the existing Korean system/sans fallback and use tabular financial digits, 22–30px page titles, 14–16px controls and 12–13px metadata. Use 8/12/16/24px spacing, restrained 8–14px radii, 44px mobile controls, logical keyboard order and non-color direction labels. On wide desktop use the secondary navigation rail to reduce top-header crowding; at smaller widths keep readable horizontal navigation or the existing mobile shell. On mobile keep details, sticky ticket, and menu safe areas, avoid clipped/remapped currency and respect reduced motion. Keep the explicit virtual-money environment. On detail, holdings and trade history use a coordinated table-and-panel visual rhythm; do not replace existing APIs, routes, financial math, permissions, quote freshness or order-state ownership. Use only real operational responses; no new integration or external scripts.
+
+### Output target and verification
+
+- Path: frontend/app/stitch-workspace.css and approved React layout/class integrations in TradingTerminal, MobileServiceNav and existing screen components when needed. No backend schema changes, existing account/Apps in Toss untouched.
+- QA: compare 360/390/768/1440px, light/dark, colors and overflow; check search and direct detail, order confirmation and currency in an isolated fixture, assets/history and navigation. Run type/build/regressions, then canonical main → actual fork → existing Coders project → read-only production proof.
+
 ## 2026-11-21 · 핵심 투자 흐름과 선택 기능 구분
 
 - Topic / Offer: 시장을 확인하고 종목을 찾아 모의주문한 뒤 내 자산·매매 기록을 확인하는 웹. 처음부터 모든 부가 도구를 펼쳐 보이지 않는다.
