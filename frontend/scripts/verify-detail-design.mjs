@@ -92,6 +92,11 @@ async function verify({ width, height, theme, failure }) {
     const ticket = details.locator("#order-ticket");
     const trigger = details.locator(".mobile-ticket-trigger");
     const notice = page.getByRole("region", { name: "잔고 조회 상태" });
+    if (failure === "account") {
+      const accountRetry = page.getByRole("button", { name: "계정 다시 확인", exact: true });
+      await accountRetry.waitFor();
+      assert(await accountRetry.locator("svg").isVisible(), "The mobile retry control must have a visible icon");
+    }
     await shot();
     if (width < 1024) {
       assert(await ticket.isHidden(), "Mobile ticket must not show before opening");
@@ -111,10 +116,12 @@ async function verify({ width, height, theme, failure }) {
       const retry = ticket.getByRole("button", { name: "잔고 다시 확인", exact: true });
       await retry.waitFor();
       assert.equal(await notice.count(), 1);
+      assert(await ticket.locator(".quick-quantity").isHidden(), "Unverified cash must not show a buy capacity");
       await shot("-account-sheet");
       failAccount = false;
       await retry.press("Enter");
       await notice.waitFor({ state: "hidden" });
+      await ticket.getByText(/^주문 가능 금액 기준 · 최대 /).waitFor();
     }
     await ticket.getByRole("button", { name: "모의 매수 주문 확인", exact: true }).waitFor();
     if (width < 1024) {

@@ -184,6 +184,11 @@
   border-radius: 7px;
 }
 
+.stitch-workspace .topbar .top-actions > .account-retry-chip > svg {
+  display: block;
+  flex: none;
+}
+
 .stitch-workspace.view-detail .order-card .estimate {
   font-variant-numeric: tabular-nums;
 }

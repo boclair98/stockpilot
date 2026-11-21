@@ -951,6 +951,9 @@ export default function TradingTerminal() {
     ["LIMIT", "STOP_LIMIT"].includes(kind) && Number(limitPrice) > 0
       ? Number(limitPrice)
       : quote?.price || 0;
+  const buyCapacityKnown =
+    portfolio.authenticated && accountState === "ready" && accountUpdatedAt !== null &&
+    Boolean(quote) && estimatedPrice > 0;
   const maxBuyQuantity =
     estimatedPrice > 0
       ? Math.max(
@@ -1836,7 +1839,7 @@ export default function TradingTerminal() {
             )}
           </button>
           {accountUpdatedAt === null ? (
-            <button type="button" className="user-chip" disabled={accountRefreshing || accountState === "loading"} onClick={() => void refreshPortfolio()}>
+            <button type="button" className="user-chip account-retry-chip" aria-label={accountRefreshing || accountState === "loading" ? "계정 확인 중" : "계정 다시 확인"} disabled={accountRefreshing || accountState === "loading"} onClick={() => void refreshPortfolio()}>
               <RefreshCw size={16} aria-hidden="true"/>
               <span>{accountRefreshing || accountState === "loading" ? "계정 확인 중" : "계정 다시 확인"}</span>
             </button>
@@ -2623,7 +2626,7 @@ export default function TradingTerminal() {
                 </button>
               </div>
             </label>
-            {(side === "BUY" || sellCapacity && maxSellQuantity > 0) && (
+            {(side === "BUY" ? buyCapacityKnown : sellCapacity && maxSellQuantity > 0) && (
               <div className={`quick-quantity ${side === "SELL" ? "sell-percentages" : ""}`}>
                 <span>
                   {side === "BUY"
