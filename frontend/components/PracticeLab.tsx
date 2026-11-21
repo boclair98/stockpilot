@@ -3,11 +3,10 @@
 import {
   ArrowLeft,
   ArrowRight,
-  BrainCircuit,
+  ChartNoAxesColumnIncreasing,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -177,33 +176,43 @@ export default function PracticeLab() {
   return (
     <main className="practice-app">
       <header className="practice-topbar">
-        <Link className="practice-brand" href="/"><span><Sparkles size={18} /></span>StockPilot</Link>
-        <nav><Link href="/"><ArrowLeft size={14} /> 가상투자</Link><b><BrainCircuit size={14} /> 시세 연습</b></nav>
+        <Link className="practice-brand" href="/"><span><ChartNoAxesColumnIncreasing size={18} aria-hidden="true" /></span>StockPilot</Link>
+        <Link className="practice-market-link" href="/"><ArrowLeft size={16} aria-hidden="true" /> 시장으로</Link>
       </header>
 
       <section className="practice-hero">
-        <div><p>MARKET REPLAY</p><h1>미래를 가리고<br />투자를 연습해요</h1><span>과거 KIS 일별 시세를 하루씩 열어 보며 판단하는 학습 모드입니다.</span></div>
-        <BrainCircuit size={68} />
+        <div>
+          <p>과거 시세 연습</p>
+          <h1>하루씩 열어보고<br />내 판단을 확인해요</h1>
+          <span>그날의 종가를 보고 매수하거나 기다려 보세요. 다음 거래일 가격은 선택한 뒤 확인할 수 있어요.</span>
+          <span className="practice-session-note">로그인 없이 이용해요. 이 화면을 나가면 연습 기록이 저장되지 않아요.</span>
+        </div>
       </section>
 
-      <section className="practice-presets">
-        {presets.map((item) => <button className={preset.symbol === item.symbol ? "active" : ""} key={item.symbol} onClick={() => setPreset(item)}><b>{item.name}</b><small>{item.symbol} · {item.market}</small></button>)}
+      <section className="practice-presets" aria-label="연습 종목 선택">
+        {presets.map((item) => <button type="button" className={preset.symbol === item.symbol ? "active" : ""} aria-pressed={preset.symbol === item.symbol} key={item.symbol} onClick={() => setPreset(item)}><b>{item.name}</b><small>{item.symbol} · {item.market}</small></button>)}
       </section>
 
       {pending ? (
-        <div className="practice-loading"><RefreshCw className="spin" size={20} /> 과거 시세를 준비하고 있어요</div>
+        <div className="practice-loading" role="status"><RefreshCw className="spin" size={20} aria-hidden="true" /> 과거 시세를 준비하고 있어요</div>
       ) : !current ? (
-        <div className="practice-loading" role={loadError ? "alert" : "status"}><p>{loadError || "이 종목의 과거 시세가 아직 없어요."}</p><button type="button" className="reset-replay" onClick={() => setAttempt(value => value + 1)}>다시 불러오기</button></div>
+        <div className="practice-loading">
+          <p role={loadError ? "alert" : "status"}>{loadError || "이 종목의 과거 시세가 아직 없어요."}</p>
+          <div className="practice-recovery-actions">
+            <button type="button" className="reset-replay" onClick={() => setAttempt(value => value + 1)}>다시 불러오기</button>
+            <Link href="/">시장으로 돌아가기</Link>
+          </div>
+        </div>
       ) : (
         <section className="practice-grid">
           <div className="replay-market">
             <div className="replay-head">
-              <span><small>현재 공개된 날짜</small><b>{current.date.replaceAll("-", ".")}</b></span>
+              <span><small>현재 공개된 날짜</small><b><time dateTime={current.date} aria-live="polite">{current.date.replaceAll("-", ".")}</time></b></span>
               <span><small>종가</small><strong>{money(current.close, preset.currency)}</strong></span>
             </div>
             <div className="replay-chart">
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={chartPoints} /></svg>
-              <span>이후 가격은 아직 공개되지 않았어요</span>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points={chartPoints} /></svg>
+              <span>{finished ? "마지막 거래일까지 확인했어요" : "이후 가격은 아직 공개되지 않았어요"}</span>
             </div>
             <div className="ohlc">
               <span>시가 <b>{current.open === null ? "—" : money(current.open, preset.currency)}</b></span>
@@ -211,24 +220,27 @@ export default function PracticeLab() {
               <span>저가 <b>{current.low === null ? "—" : money(current.low, preset.currency)}</b></span>
               <span>거래량 <b>{current.volume === null ? "—" : new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(current.volume)}</b></span>
             </div>
-            <button className="next-day" disabled={finished} onClick={nextDay}>{finished ? "연습 종료" : "다음 거래일 공개"} <ArrowRight size={15} /></button>
           </div>
 
           <aside className="replay-account">
             <div className="replay-result">
-              <small>연습 계좌 수익률</small>
+              <small>이번 연습의 수익률</small>
               <strong className={returnRate >= 0 ? "positive" : "negative"}>{returnRate >= 0 ? "+" : ""}{returnRate.toFixed(2)}%</strong>
               <span>총자산 {money(equity, preset.currency)}</span>
             </div>
             <div className="replay-balance">
-              <span><small>예수금</small><b>{money(cash, preset.currency)}</b></span>
+              <span><small>남은 연습 자금</small><b>{money(cash, preset.currency)}</b></span>
               <span><small>보유 수량</small><b>{position}주</b></span>
               <span><small>평균 단가</small><b>{position ? money(averagePrice, preset.currency) : "—"}</b></span>
             </div>
             <label>연습 주문 수량<input type="number" min="1" max="10000" step="1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
-            <div className="replay-actions"><button onClick={() => trade("BUY")}>가상매수</button><button onClick={() => trade("SELL")}>가상매도</button></div>
+            <div className="replay-actions"><button type="button" onClick={() => trade("BUY")}>연습 매수</button><button type="button" onClick={() => trade("SELL")}>연습 매도</button></div>
             {notice && <p className="replay-notice" role="status">{notice}</p>}
-            <button className="reset-replay" onClick={reset}><RotateCcw size={13} /> 처음부터 다시</button>
+            <div className="practice-advance">
+              {finished ? <p role="status">여기까지가 불러온 과거 시세예요.</p> : <p>거래하지 않고 다음 날을 볼 수도 있어요.</p>}
+              <button type="button" className="next-day" disabled={finished} onClick={nextDay}>{finished ? "마지막 거래일" : "다음 거래일 공개"} <ArrowRight size={15} aria-hidden="true" /></button>
+            </div>
+            <button type="button" className="reset-replay" onClick={reset}><RotateCcw size={13} aria-hidden="true" /> 처음부터 다시</button>
             <div className="replay-trades">
               <b>연습 거래 기록</b>
               {trades.slice(0, 6).map((item, tradeIndex) => <span key={`${item.date}:${tradeIndex}`}><em>{item.side === "BUY" ? "매수" : "매도"}</em>{item.quantity}주<small>{money(item.price, preset.currency)}</small></span>)}

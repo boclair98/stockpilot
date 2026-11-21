@@ -59,3 +59,101 @@
 .practice-footer { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 35px 18px 0; padding-top: 20px; border-top: 1px solid #e3e7ea; color: #8a949f; font-size: 9px; }
 @media (max-width: 780px) { .practice-grid { grid-template-columns: 1fr; } .practice-hero > svg { display: none; } }
 @media (max-width: 520px) { .practice-topbar { height: 62px; padding: 0 12px; } .practice-topbar nav a svg { display: none; } .practice-hero { min-height: auto; margin: 5px 10px 12px; padding: 30px 24px; border-radius: 22px; } .practice-hero h1 { font-size: 30px; } .practice-presets { grid-template-columns: 1fr 1fr; margin: 0 10px 12px; } .practice-grid, .practice-loading { margin-right: 10px; margin-left: 10px; } .replay-market, .replay-account { padding: 15px; } .replay-chart { height: 220px; } .ohlc { grid-template-columns: 1fr 1fr; } }
+
+/* Keep the source date and the next decision readable before adding detail. */
+.practice-app .practice-brand { color: var(--ws-ink, #172333); }
+.practice-app .practice-market-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-inline: 10px;
+  color: var(--ws-ink, #172333);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.practice-app .practice-hero {
+  min-height: 0;
+  padding: clamp(20px, 4vw, 40px);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.practice-app .practice-hero > div { min-width: 0; }
+.practice-app .practice-hero h1 {
+  margin: 8px 0 12px;
+  font-size: clamp(27px, 4vw, 40px);
+  letter-spacing: -.035em;
+  line-height: 1.25;
+}
+.practice-app .practice-hero > div > span { display: block; max-width: 50ch; line-height: 1.6; }
+.practice-app .practice-hero .practice-session-note {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ws-ink, #172333);
+}
+html[data-theme] .practice-app .practice-presets button[aria-pressed="true"] {
+  border-color: var(--ws-brand, #485bc6);
+  background: var(--ws-tint, #eef1ff);
+}
+.practice-app .practice-grid > * { min-width: 0; align-self: start; }
+.practice-app .replay-head { gap: 12px; }
+.practice-app .replay-head small { font-size: 13px; }
+.practice-app .replay-head b { font-size: 16px; }
+.practice-app .replay-head strong { font-variant-numeric: tabular-nums; }
+.practice-app .ohlc > span > b,
+.practice-app .replay-balance b {
+  color: var(--ws-ink, #172333);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.practice-app .replay-account > .reset-replay { min-height: 44px; font-size: 13px; }
+.practice-app .replay-account input {
+  width: 100%;
+  min-height: 44px;
+  background: var(--ws-soft, #f7f9fb);
+  color: var(--ws-ink, #172333);
+  border-color: var(--ws-line, #dfe4e9);
+  font-size: 16px;
+}
+.practice-app .replay-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.practice-app .replay-actions button { min-height: 44px; font-size: 14px; }
+.practice-app .replay-actions button:first-child { background: #ae2946; }
+.practice-app .replay-actions button:last-child { background: #2458ac; }
+.practice-app .practice-advance { margin-top: 16px; }
+.practice-app .practice-advance p { margin: 0; color: var(--ws-muted, #52627a); font-size: 13px; line-height: 1.5; }
+.practice-app .next-day { margin-top: 8px; font-size: 14px; }
+.practice-app .next-day:disabled { opacity: .65; cursor: default; }
+.practice-app .practice-loading:has(.practice-recovery-actions) {
+  min-height: 180px;
+  padding: 20px;
+  align-content: center;
+}
+.practice-app .practice-recovery-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.practice-app .practice-recovery-actions > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-line, #dfe4e9);
+  border-radius: 10px;
+  color: var(--ws-ink, #172333);
+  background: var(--ws-soft, #f7f9fb);
+  font-size: 14px;
+}
+.practice-app :is(button, a, input):focus-visible {
+  outline: 2px solid var(--ws-brand, #485bc6);
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .practice-app .replay-chart { height: 156px; }
+  .practice-app .ohlc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .practice-app .practice-loading .spin { animation: none; }
+}

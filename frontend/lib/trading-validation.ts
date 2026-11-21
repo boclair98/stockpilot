@@ -28,11 +28,24 @@ export function isValidPortfolio(value: unknown): boolean {
     && (item.protections as unknown[]).every(row => !!row && typeof row === "object" && typeof (row as Record<string, unknown>).id === "string");
 }
 
-export type OrderReceipt = { id: string; status: "FILLED" | "OPEN" | "REJECTED" | "CANCELLED" | "CANCELED"; currency: "KRW" | "USD"; fillPrice: number | null; detail?: string };
+const receiptStatuses = ["FILLED", "OPEN", "TRIGGERED", "REJECTED", "CANCELLED", "CANCELED"] as const;
+type ReceiptStatus = (typeof receiptStatuses)[number];
+export type OrderReceipt = {
+  id: string;
+  currency: "KRW" | "USD";
+  detail?: string;
+} & (
+  | { status: "FILLED"; fillPrice: number }
+  | { status: Exclude<ReceiptStatus, "FILLED">; fillPrice: number | null }
+);
+
 export function isOrderReceipt(value: unknown): value is OrderReceipt {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && item.id.length > 0 && ["FILLED","OPEN","REJECTED","CANCELLED","CANCELED"].includes(String(item.status))
-    && ["KRW","USD"].includes(String(item.currency))
-    && (item.status !== "FILLED" || typeof item.fillPrice === "number" && Number.isFinite(item.fillPrice) && item.fillPrice > 0);
+  const validPrice = typeof item.fillPrice === "number" && Number.isFinite(item.fillPrice) && item.fillPrice > 0;
+  return typeof item.id === "string" && item.id.trim().length > 0
+    && receiptStatuses.some(status => status === item.status)
+    && (item.currency === "KRW" || item.currency === "USD")
+    && (item.detail === undefined || typeof item.detail === "string")
+    && (item.status === "FILLED" ? validPrice : item.fillPrice === null || validPrice);
 }

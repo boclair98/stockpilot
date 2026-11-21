@@ -1,16 +1,23 @@
 "use client";
 
-import { CheckCircle2, RefreshCw, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Clock3, RefreshCw, TriangleAlert } from "lucide-react";
+import type { OrderResultState } from "@/lib/order-receipt";
 
-export type OrderResultState = { kind: "success" | "error" | "uncertain"; message: string; id?: string };
+const statusDisplay = {
+  uncertain: { title: "주문 결과를 확인해 주세요", icon: TriangleAlert },
+  pending: { title: "모의주문 체결 대기", icon: Clock3 },
+  success: { title: "주문 처리 결과", icon: CheckCircle2 },
+  error: { title: "주문을 확인해 주세요", icon: TriangleAlert },
+} as const;
 
 export default function OrderResult({ result, checking, onCheck, onRetry, retryAvailable, onDismiss }: {
   result: OrderResultState; checking: boolean; onCheck: () => void; onRetry: () => void; retryAvailable: boolean; onDismiss: () => void;
 }) {
+  const { title, icon: StatusIcon } = statusDisplay[result.kind];
   return <section className={`release-order-result is-${result.kind}`} aria-label="최근 주문 처리 결과">
     <div role="status" aria-live="polite">
-      {result.kind === "success" ? <CheckCircle2 size={20} aria-hidden="true"/> : <TriangleAlert size={20} aria-hidden="true"/>}
-      <div><b>{result.kind === "uncertain" ? "주문 결과를 확인해 주세요" : result.kind === "success" ? "주문 처리 결과" : "주문을 확인해 주세요"}</b><p>{result.message}</p>{result.id ? <small>주문 번호 끝 8자리 · {result.id.slice(-8)}</small> : null}</div>
+      <StatusIcon size={20} aria-hidden="true"/>
+      <div><b>{title}</b><p>{result.message}</p>{result.id ? <small>주문 번호 끝 8자리 · {result.id.slice(-8)}</small> : null}</div>
     </div>
     <div className="release-actions">
       {result.kind === "uncertain" ? <button type="button" disabled={checking} onClick={onCheck}><RefreshCw size={16} className={checking ? "spin" : ""}/>{checking ? "확인 중" : "처리 결과 조회"}</button> : null}

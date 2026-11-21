@@ -14,6 +14,7 @@ function compile(file, dependencies={}) {
 }
 const identity=compile('lib/instrument-identity.ts');
 const validation=compile('lib/trading-validation.ts',{'./instrument-identity':identity});
+const {describeOrderReceipt}=compile('lib/order-receipt.ts');
 const request=compile('lib/reliable-request.ts');
 (async()=>{
   const quote={id:'KR:KRX:005930',name:'삼성전자',symbol:'005930',market:'KR',currency:'KRW',exchange:'KRX',price:72000,change:100,changePercent:1,asOf:'2026-10-14T00:00:00Z'};
@@ -25,6 +26,19 @@ const request=compile('lib/reliable-request.ts');
   assert.equal(validation.isOrderReceipt({id:'order',status:'FILLED',fillPrice:123.45,currency:'USD'}),true);
   assert.equal(validation.isOrderReceipt({id:'order',status:'FILLED',fillPrice:null,currency:'USD'}),false);
   assert.equal(validation.isOrderReceipt({id:'order',status:'MAYBE',currency:'USD'}),false);
+  const triggered={id:'triggered-order',status:'TRIGGERED',fillPrice:null,currency:'KRW'};
+  assert.equal(validation.isOrderReceipt(triggered),true,'valid stop-limit acknowledgement must not become uncertain');
+  const neverFormat=()=>assert.fail('pending receipt does not have a fill price');
+  const pending=describeOrderReceipt(triggered,'삼성전자',neverFormat);
+  assert.equal(pending.kind,'pending');
+  assert.equal(pending.id,triggered.id);
+  assert.match(pending.message,/조건 충족 · 체결 대기/);
+  assert.equal(describeOrderReceipt({...triggered,status:'OPEN'},'삼성전자',neverFormat).kind,'pending');
+  assert.equal(describeOrderReceipt({...triggered,status:'REJECTED'},'삼성전자',neverFormat).kind,'error');
+  assert.equal(describeOrderReceipt({...triggered,status:'FILLED',fillPrice:123},'삼성전자',p=>`${p}원`).message,'삼성전자 모의주문이 123원에 체결됐어요.');
+  for(const invalid of [{...triggered,status:['TRIGGERED']},{...triggered,detail:{bad:true}},{...triggered,fillPrice:'0'},{...triggered,id:'   '}]) {
+    assert.equal(validation.isOrderReceipt(invalid),false);
+  }
   fetchImpl=async()=>({ok:true,status:200,json:async()=>({ok:true})});
   await request.requestJson('/test');
   fetchImpl=async()=>({ok:false,status:401,json:async()=>({detail:'로그인 필요'})});

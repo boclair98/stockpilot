@@ -58,7 +58,8 @@ import { useCloudSaved } from "@/lib/cloud-saved";
 import { importWatchlist, watchlistImportMessage } from "@/lib/watchlist-import";
 import { useWorkspaceStart } from "@/lib/workspace-scroll";
 import AdSlot from "./AdSlot";
-import OrderResult, { type OrderResultState } from "./OrderResult";
+import OrderResult from "./OrderResult";
+import { describeOrderReceipt, type OrderResultState } from "@/lib/order-receipt";
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { isOrderReceipt, isValidPortfolio, isValidQuote, type OrderReceipt } from "@/lib/trading-validation";
 import { mergeQuoteSnapshots } from "@/lib/quote-snapshots";
@@ -1399,14 +1400,10 @@ export default function TradingTerminal() {
   }
 
   function showReceipt(data: OrderReceipt, name: string) {
-    const message = data.status === "FILLED"
-      ? `${name} 모의주문이 ${money(data.fillPrice!,data.currency)}에 체결됐어요.`
-      : data.status === "OPEN" ? `${name} 모의주문을 접수했어요. 아직 체결되지 않은 대기 주문이에요.`
-      : data.status === "REJECTED" ? data.detail || "주문이 거절됐어요. 매매 기록에서 사유를 확인해 주세요."
-      : "주문이 취소됐어요.";
+    const result = describeOrderReceipt(data, name, money);
     clearPendingOrder();
-    setOrderResult({kind:data.status === "REJECTED" ? "error" : "success",message,id:data.id});
-    notify(message);
+    setOrderResult(result);
+    notify(result.message);
     void refreshPortfolio();
   }
 

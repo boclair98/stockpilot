@@ -149,14 +149,14 @@ test("practice quantity rejects empty/negative/fractional/exponential/out-of-ran
   assert.equal(lib.practiceQuantity("1"), 1); assert.equal(lib.practiceQuantity("10000"), 10000);
 });
 
-const history = (instrument = KR) => ({ ...instrument, items: [{ date: "20261022", open: 100, high: 110, low: 90, close: 105, volume: 10 }, { date: "20261023", open: 105, high: 115, low: 100, close: 110, volume: 12 }] });
+const history = ({symbol, market, exchange, currency} = KR) => ({ symbol, market, exchange, currency, items: [{ date: "20261022", open: 100, high: 110, low: 90, close: 105, volume: 10 }, { date: "20261023", open: 105, high: 115, low: 100, close: 110, volume: 12 }] });
 test("practice handles offline reads, exposes retry, and does not trade prior-symbol data", async t => {
   const h = harness("components/PracticeLab.tsx"); t.after(h.unmount); h.render(); h.tick(); await h.flush();
   h.requests[0].reject(new Error("offline")); await h.flush(); assert(h.text().includes("서버에 연결하지 못했어요")); assert(!h.text().includes("준비하고 있어요"));
   h.click("다시 불러오기"); await h.flush(); h.tick(); await h.flush(); h.respond(1, history()); await h.flush(); assert(h.text().includes("2026.10.23"));
-  h.nodes().find(node => node.type === "input").props.onChange({ target: { value: "-1" } }); await h.flush(); h.click("가상매수"); await h.flush(); assert(h.text().includes("정수로 입력"));
+  h.nodes().find(node => node.type === "input").props.onChange({ target: { value: "-1" } }); await h.flush(); h.click("연습 매수"); await h.flush(); assert(h.text().includes("정수로 입력"));
   h.nodes().find(node => node.type === "button" && text(node).includes("Apple")).props.onClick(); await h.flush();
-  assert(!h.button("가상매수"), "old KR history must disappear before the US request starts");
+  assert(!h.button("연습 매수"), "old KR history must disappear before the US request starts");
   h.tick(); await h.flush(); h.respond(2, history(KR)); await h.flush(); assert(h.text().includes("선택한 종목"));
 });
 

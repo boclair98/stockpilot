@@ -1,5 +1,191 @@
 # OpenUI Design Plan
 
+## StockPilot · 판단에서 결과까지 (2026-11-21)
+
+### Resolved inputs
+
+- Topic: 로그인 없는 첫 투자 연습과 모의주문 결과의 정확성.
+- Offer: 과거 시세로 판단을 연습하고, 실제 모의계좌 주문에서는 접수·체결·불확실을 분명히 구별한다.
+- Audience: 처음 증권 UI를 접하는 모바일 사용자. 빠른 시장 탐색을 원하는 재방문자도 그대로 지원한다.
+- Primary user action: 기존 시작 가이드에서 ‘로그인 없이 과거 시세로 연습’ → `/practice` → 현재 공개 날짜와 종가 확인 → 매수하거나 대기 → 다음 거래일 확인.
+- Deliverable: 기존 Next.js 가이드·연습 화면과 주문 결과 컴포넌트, FastAPI 상태 계약 회귀 검증.
+- Style direction: 시장의 기존 Stitch Obsidian 유지. 가이드는 읽는 화면, 리플레이는 판단하는 작업 화면. 불필요한 장식보다 현재 날짜·가격과 다음 행동에 집중.
+- Tonal key: 기존 다크·라이트 표면을 사용. 본문 `--ws-ink`, 보조 `--ws-muted`, 경계 `--ws-line`, 행동은 기존 인디고; 접수 대기는 중립 토큰, 거절은 기존 오류 토큰. Pretendard와 기존 폰트 대체, 탭 숫자, 본문 14–16px·보조 13px, 8/12/16px 간격, 44px 이상 핵심 터치 영역.
+- Icon policy: 기존 Lucide; 아이콘 단독으로 상태를 전달하지 않는다.
+- Proof assets: 기존 과거 시세 차트, 날짜·가격 원자료, 구분된 테스트 응답. 추천 종목·가상 사용자 지표 없음.
+- Motion intensity: 최소. 다음 날짜는 즉시 전환하고 장식용 모션은 추가하지 않는다; reduced motion 유지.
+
+### Composition contract
+
+- Hero archetype: 가이드의 비대칭 본문+세 단계 예고 유지. 시장 홈에는 새 히어나 요청을 추가하지 않는다.
+- First viewport: 가이드는 연습과 시장 탐색의 두 선택. 리플레이는 이 화면에서만 진행된다는 안내 → 종목 선택 → 현재 공개 날짜와 종가. 좁은 화면은 시세→선택→다음 날 순서로 한 열, PC는 시장 자료와 판단 영역을 나란히 둔다.
+- Primary visual/proof artifact: 현재 공개 구간까지의 실제 과거 종가 차트. 자료 오류나 공백은 실패/빈 상태로 제공하며 가짜 시세로 메우지 않는다.
+- Interaction behavior: 가이드 주 CTA `/practice`, 보조 CTA `/#search-card`. 과거 연습의 매수·매도/다음 날은 기존 로컬 상태, 다음 날은 주문 없이도 진행. 실계좌가 아니라 모의계좌 주문은 기존 핸들러·키·서버를 사용하고 `TRIGGERED`는 ‘조건 충족 · 체결 대기’로 처리한다. 이 상태는 체결·자산 반영이 아니라 매매 기록으로 안내한다.
+- Reuse boundary: 기존 가이드, 리플레이, 주문 UI와 모든 경로 사용. 시장 기본 화면·원장·계좌·로그인·수수료·API·앱인토스는 유지.
+- Evidence and gate: [방향과 반대 의견](docs/product-direction-review.md). 가이드 링크/실패·빈·다음 날 흐름과 주문 응답·복구에서 `TRIGGERED`·`OPEN`·`FILLED`·미확인 응답을 분리한다. 360/390/768/1440에 반응형·키보드 확인을 시도하고 검증 못 한 환경을 별도로 남긴다. 운영 주문·운영 부하·무단 배포를 하지 않는다.
+
+### Filled generation prompt
+
+<details>
+<summary>가이드·과거 시세 연습 구현 브리프</summary>
+
+Create one high-concept page for StockPilot의 로그인 없는 첫 과거 시세 연습.
+
+## Inputs
+- Topic: StockPilot 시장과 이어지는 첫 투자 연습.
+- Offer: 로그인 없이 과거 시세를 하루씩 확인하고, 이 화면에서만 가상 결정을 연습
+- Audience: 증권 용어와 주문 절차가 낯선 StockPilot 방문자
+- Primary user action: 가이드에서 과거 시세 연습을 열고, 관심 종목의 공개 날짜를 확인한 후 매수하거나 기다리고 다음 거래일을 열기
+- Deliverable: 기존 Next.js 가이드와 연습 컴포넌트
+- Style direction: 차트와 판단에 집중하는 현대적인 금융 워크스페이스
+- Tonal key: 기존 Obsidian 다크 및 대응 라이트 테마
+- Icon policy: 기존 Lucide로 탐색과 판단 상태만 보조
+- Proof assets: 기존 과거 일별 시세와 재현 가능한 격리 QA; 장식용 숫자나 사진 없음
+- Motion intensity: 최소; 테마의 기존 반응과 상태 변화만
+
+## Objective
+Design one premium, memorable page with a dominant hero and one coherent visual world derived from the topic itself.
+The result should feel specific, intentional, and action-oriented when the concept calls for action, not like a generic startup or SaaS template.
+
+Choose the strongest clear solution.
+Do not collapse the concept into a simpler generic pattern just to make execution easier.
+
+- Treat single-file execution as a packaging constraint, not a creative constraint.
+Do not reduce conceptual ambition, visual specificity, interaction richness, or production quality merely because the deliverable is concise.
+
+## Internal concept choice
+Before composing, decide internally:
+- one dominant hero archetype: centered / asymmetrical / immersive
+- one dominant proof mode: none / embedded gesture / single artifact
+- one palette driver derived from the topic
+- one tonal key: light / mid / dark / topic-derived
+- one motion role: none / minimal / ambient / interactive
+- one icon approach: none / minimal / expressive / topic-native
+- optionally one secondary accent only if it strengthens the main direction without creating a second visual world
+Do not output this planning.
+
+## Non-negotiables
+- Use a strong hero-first composition.
+- Headline: 3-12 words, max 3 lines.
+- Supporting copy: 1-2 short sentences, concise and specific.
+- CTAs are optional. If used, include at most 1 primary and 1 secondary CTA.
+- If a clear next step is central to the offer or concept, include a CTA; otherwise CTA omission is allowed.
+- CTA labels must be specific to the offer and action, not generic.
+- Supporting highlights are optional. If used, show them only once in a single lower support cluster beneath the hero.
+- Keep the hero dominant, focused, readable, and uncluttered.
+- Proof is optional. Use it only if it clearly strengthens the concept.
+- If no real proof assets are provided, do not invent metrics, testimonials, customer logos, screenshots, or fake UI proof.
+- Prefer depth inside the hero, proof gesture, CTA behavior, support copy, or background logic rather than adding extra sections by default.
+
+## Composition
+- Choose the clearest structure for the topic; do not default to generic two-column marketing layouts.
+- A top navigation bar is optional. When used, make it native to the chosen style direction and subordinate to the hero rather than a generic boxed header.
+- The hero may be fully integrated rather than framed.
+- The hero does not need to become a panel, dashboard, device mockup, rounded card, or floating showcase unless the topic genuinely demands that artifact.
+- Build hierarchy through scale, contrast, spacing, alignment, depth, rhythm, and composition before using frames, dividers, or containers.
+- Keep supporting content clearly subordinate to the hero.
+- Do not interpret structural restraint as permission to flatten the concept into a generic minimal layout.
+- Do not use text-on-text layering, typographic collisions, or overlapping live text as a compositional device.
+
+## Visual system
+- Build one coherent visual world derived from the topic itself.
+- Let the topic drive palette, contrast, typography, spacing, geometry, motifs, materials, and motion.
+- Even restrained palettes must feel intentional and specific, not generic premium-neutral.
+- The background must actively contribute mood, depth, and topic logic.
+- If the topic suggests a real system language, physical behavior, or interface grammar, show that directly instead of generic abstract-tech decoration.
+- Treat headline typography as part of the concept, not neutral text.
+- The headline may use topic-derived color, selective emphasis, multi-tone treatment, or gradient accents when they strengthen the concept and remain readable.
+- Do not default the headline to neutral black, white, or near-white unless that is clearly the strongest topic-native choice.
+
+## Background and tonal diversity
+- Premium and atmospheric design may be light, mid-tone, or dark; do not default to dark.
+- Choose the tonal key from the topic, offer, audience, and style direction rather than from generic cinematic or tech aesthetics.
+- Contrast may come from hue, saturation, temperature, texture, density, or scale, not only darkness.
+
+## Proof and concept expression
+- Prefer the minimum visual evidence needed to make the idea feel specific, credible, and native to the topic.
+- If the concept is strongest with typography, atmosphere, and one precise gesture, do that.
+- If a stronger proof artifact is justified, use one legible, unified artifact rather than multiple fragmented panels.
+- Proof may take the form of a signal, trace, contour, command line, path, specimen, structural mark, scene fragment, or other topic-native evidence.
+- Typography itself may carry part of the concept or proof.
+- When appropriate, use one precise typographic gesture—such as selective word emphasis, chromatic offset, gradient emphasis, distortion, signal breakup, or structural interruption—to make the concept feel more specific and alive.
+- Prefer one strong typographic intervention over many scattered decorative effects.
+- Avoid decorative pseudo-proof.
+- Avoid turning simple ideas into framed showcases, dashboard fragments, floating panels, softened slabs, or generic marketing geometry.
+
+## Icons and symbolic language
+- Icons are optional.
+- Use icons only when they improve scanability, recognition, navigation, proof clarity, or support-cluster legibility.
+- Prefer topic-native icon logic over generic startup glyphs.
+- Keep icon style consistent in stroke weight, geometry, corner logic, and detail level.
+- Use icons primarily in clearly secondary roles unless a single topic-native symbol is central to the concept.
+- Do not let icons compete with the hero headline, proof artifact, or CTA hierarchy.
+
+## Support cluster
+- If used, show supporting highlights only once, in a single lower cluster beneath the hero.
+- Each highlight should be short, fast to scan, and clearly secondary.
+- Supporting highlights may use concise icons or symbolic marks when helpful.
+- Support-cluster elements may use subtle motion when it improves scanability, continuity, or atmosphere and remains clearly secondary.
+- Card-like grouping is allowed only inside this lower support cluster.
+- These modules may use at most one light surface treatment, such as a subtle stroke, tonal fill, or very soft shadow.
+- Keep support modules uniform, non-nested, and visually subordinate.
+- Do not use card-like structures in the hero, proof, CTA area, or elsewhere on the page.
+
+## Motion
+- Motion is optional.
+- Use motion only when it supports hierarchy, continuity, feedback, atmosphere, or topic logic.
+- Default to none, minimal, or ambient motion depending on what the concept actually needs.
+- Motion may live in typography, background behavior, proof logic, support-cluster behavior, or interaction feedback.
+- A single key word or short phrase may use subtle text-based motion such as glitch, flicker, jitter, scanline shift, chromatic split, text scramble, pulse, or reveal if it strengthens the concept.
+- Keep motion controlled, readable, non-blocking, and subordinate to clarity.
+- Avoid scrolljacking, attention-hijacking loops, and ornamental animation.
+- Respect reduced-motion preferences.
+
+## Accessibility and readability
+- Preserve strong readability and clear hierarchy at all viewport sizes.
+- Maintain sufficient contrast between text and background.
+- Do not place essential text over busy imagery unless readability remains strong.
+- Avoid cramped spacing, visual collisions, and weak focal hierarchy.
+- Do not place badges, pills, annotations, stickers, or floating interface fragments over essential text.
+- If the deliverable is code, use semantic HTML structure, visible focus states, keyboard-friendly interactions, and reduced-motion handling.
+- When in doubt, preserve legibility over expressive overlap.
+
+## Anti-drift rules
+- Do not drift into bland corporate SaaS styling.
+- Do not default to dashboard aesthetics, feature-grid thinking, boxed-section composition, or template-like modularity.
+- Do not use disconnected motifs, random color choices, or interchangeable abstract-tech shapes.
+- Do not use card-within-card composition, nested surfaces, floating panels, fake proof, or stock-looking UI.
+- Keep one visual world, one dominant hero, and one clear structural logic.
+- Do not allow text, labels, or interface elements to overlap, collide, or sit on top of one another.
+
+## Output
+Return only the final 기존 Next.js 가이드와 연습 컴포넌트.
+
+If the deliverable is code:
+- Output a complete production-ready file or component.
+- Keep dependencies minimal unless explicitly requested.
+- Make it responsive.
+- Keep support highlights in one lower support cluster only when used.
+
+## Final self-check
+Before returning, verify that the result keeps:
+- one dominant hero
+- one coherent visual world
+- no invented proof
+- no cardification outside the lower support cluster
+- no generic SaaS drift
+- no unnecessary structural fragmentation
+- no nested containment
+- no floating sub-surfaces
+- all text clearly legible and comfortably spaced
+
+</details>
+
+### Output target
+
+- `frontend/app/guide/page.tsx`, `frontend/components/PracticeLab.tsx`, 기존 연습 CSS.
+- 주문 결과: `frontend/lib/trading-validation.ts`, `frontend/components/TradingTerminal.tsx`, `frontend/components/OrderResult.tsx`, 기존 주문 상태 CSS 및 회귀 검사.
+
 ## StockPilot · 시세가 도착하는 첫 화면 (2026-11-21)
 
 ### Resolved inputs

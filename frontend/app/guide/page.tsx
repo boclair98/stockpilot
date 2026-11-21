@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, BarChart3, Bell, BookOpen, ChevronRight, Compass, History, Layers2, Search, ShieldCheck, Trophy, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BarChart3, Bell, ChevronRight, Compass, History, Layers2, Search, ShieldCheck, Trophy, WalletCards } from "lucide-react";
 import Link from "next/link";
 import ShareSiteButton from "@/components/ShareSiteButton";
 import WorkspaceControls from "@/components/WorkspaceControls";
@@ -33,8 +33,8 @@ export default function GuidePage() {
         <h1>투자, 내 돈 없이<br/><em>먼저 연습해요.</em></h1>
         <p className="guide-lead">실제 시세로 한국·미국 주식을 살펴보고,<br className="guide-desktop-break"/> 연습 자금으로 나만의 판단을 확인해 보세요.</p>
         <div className="guide-hero-actions">
-          <Link className="guide-button is-primary" href="/#search-card">종목 찾아보기<ArrowUpRight size={19} aria-hidden="true"/></Link>
-          <Link className="guide-button is-secondary" href="/learn"><BookOpen size={18} aria-hidden="true"/>주식 기초 배우기</Link>
+          <Link className="guide-button is-primary" href="/practice">로그인 없이 과거 시세로 연습<ArrowUpRight size={19} aria-hidden="true"/></Link>
+          <Link className="guide-button is-secondary" href="/#search-card"><Search size={18} aria-hidden="true"/>종목 찾아보기</Link>
         </div>
         <p className="guide-reassurance"><ShieldCheck size={16} aria-hidden="true"/>실제 돈이 아닌 연습용 자금으로 이용해요.</p>
       </div>
@@ -55,7 +55,7 @@ export default function GuidePage() {
     <section className="guide-questions" aria-labelledby="guide-questions-title">
       <div className="guide-section-heading"><div><p className="guide-eyebrow">시작 전에 궁금한 점</p><h2 id="guide-questions-title">가볍게 시작해도 괜찮아요.</h2></div><Link href="/support">도움이 더 필요하다면<ArrowUpRight size={16} aria-hidden="true"/></Link></div>
       <div className="guide-faq">
-        <details><summary>로그인 전에 먼저 둘러볼 수 있나요?<ChevronRight size={18} aria-hidden="true"/></summary><p>네. 종목 검색, 시세, 차트와 공시는 로그인 없이 살펴볼 수 있어요. 모의주문과 개인 기록처럼 계정에 저장하는 기능은 Google 로그인 후 이용해 주세요.</p></details>
+        <details><summary>로그인 전에 먼저 둘러볼 수 있나요?<ChevronRight size={18} aria-hidden="true"/></summary><p>네. 종목 검색, 과거 시세 연습과 <Link href="/learn">주식 기초 배우기</Link>는 로그인 없이 이용할 수 있어요. 모의계좌 주문과 개인 기록처럼 계정에 저장하는 기능은 Google 로그인 후 이용해 주세요.</p></details>
         <details><summary>실제 돈이나 증권계좌가 필요한가요?<ChevronRight size={18} aria-hidden="true"/></summary><p>필요하지 않아요. 잔액은 투자 연습을 위한 가상자금이며 실제 예금이나 증권계좌와 연결되지 않아요. 원화 자산과 달러 자산은 각각 표시해요. 주문도 실제 거래소로 보내지 않으며 수수료·세금·체결 방식은 실제 거래와 다를 수 있어요.</p></details>
         <details><summary>다른 증권 앱과 가격이 조금 다른 이유는 뭔가요?<ChevronRight size={18} aria-hidden="true"/></summary><p>거래소와 장 운영 시간, 자료 제공 범위와 갱신 시점에 따라 차이가 날 수 있어요. 종목의 거래소·통화와 화면에 표시된 기준 시각을 함께 확인해 주세요.</p></details>
         <details><summary>리그에서 제가 산 주식이 공개되나요?<ChevronRight size={18} aria-hidden="true"/></summary><p>리그에서는 보유 종목을 공개하지 않고 수익률을 비교해요. 투자 내역을 공유하지 않아도 함께 연습할 수 있어요.</p></details>

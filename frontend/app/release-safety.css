@@ -12,6 +12,7 @@
 .release-order-result.is-uncertain,.release-account-status.is-error{border-left:4px solid #c88a34}
 .release-order-result.is-error{border-left:4px solid #d23e57}
 .release-order-result.is-success{border-left:4px solid #18a46b}
+.release-order-result.is-pending{border-left:4px solid var(--ws-brand,#596ce7)}
 .consumer-app .order-confirm .confirm-check-copy b{color:var(--ws-ink,#172333)}
 .consumer-app .order-confirm .confirm-check-copy small{color:var(--ws-muted,#647184)}
 .release-actions :focus-visible,.release-account-status button:focus-visible,.release-order-result summary:focus-visible{outline:3px solid var(--ws-brand,#596ce7);outline-offset:3px}

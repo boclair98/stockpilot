@@ -13,7 +13,11 @@ export function normalizeChartDate(value: unknown): string | null {
 export function parseStockHistory(value: unknown, identity: ChartIdentity): StockHistory {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("가격 기록 응답을 확인하지 못했어요.");
   const body = value as Record<string, unknown>;
-  if (!Object.entries(identity).every(([key, expected]) => body[key] === expected) || !Array.isArray(body.items) || body.items.length > 80) throw new Error("선택한 종목의 가격 기록을 확인하지 못했어요.");
+  // Callers may also hold display metadata such as a company name. Only
+  // the keys promised by the history endpoint are part of its identity.
+  const matchesIdentity = body.symbol === identity.symbol && body.market === identity.market
+    && body.exchange === identity.exchange && body.currency === identity.currency;
+  if (!matchesIdentity || !Array.isArray(body.items) || body.items.length > 80) throw new Error("선택한 종목의 가격 기록을 확인하지 못했어요.");
   const dates = new Set<string>();
   const points = body.items.map((raw: unknown): StockHistoryPoint => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("가격 기록의 형식이 올바르지 않아요.");
