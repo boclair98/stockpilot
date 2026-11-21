@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --frozen
-      - run: uv run ruff check app tests
+      - run: uv run ruff check app tests unit_tests
       - run: uv run pytest -q
 
   frontend:
@@ -56,4 +56,6 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm run verify:safety
+      - run: pnpm run verify:product
       - run: pnpm build

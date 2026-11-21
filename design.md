@@ -1,5 +1,31 @@
 # OpenUI Design Plan
 
+## StockPilot · 시세가 도착하는 첫 화면 (2026-11-21)
+
+### Resolved inputs
+
+- Topic: StockPilot 시장 홈의 시세 확인 → 종목 검색 → 모의투자 흐름.
+- Offer: 국내·미국 시세 기록을 명시하고, 로그인 여부나 계좌 조회 상태를 오해하지 않게 한다.
+- Audience: 출근길에 모바일로 종목을 빠르게 찾는 초보자와 PC에서 시세·자산을 함께 보는 사용자.
+- Primary action: 종목명/티커를 찾아 상세를 열기. 시세 탭과 화면 아래 도구는 그대로 둔다.
+- Deliverable: 기존 Next.js 작업 화면 1개와 호환 가능한 FastAPI bootstrap 보강.
+- Style / tone: 현 StockPilot 인디고와 Obsidian 라이트·다크. 토스증권의 탐색·시세 위계, 당근 SEED의 상태 표시, 우아한형제들 토큰과 도메인 패턴의 분리를 참고하되 화면·로고·자산은 복제하지 않는다.
+- Icons / proof / motion: 기존 Lucide만 사용. 실제 서버 기록과 계좌 응답이 근거. 움직임은 기존 포커스/버튼 피드백, reduced motion 존중.
+
+### Composition contract
+
+- Hero archetype: 마케팅 영역 없이 왼쪽 탐색/오른쪽 시장 대시보드의 비대칭 배치, 모바일에서는 단일 흐름.
+- First viewport: 오늘의 시장 제목, 데이터 연결 상태와 국내·미국 시세 기록, 컴팩트 KOSPI/계좌 요약, 종목 검색·랭킹 첫 행. CSS와 DOM에서 검색이 종목 리스트보다 앞서 키보드 순서도 일치.
+- Primary artifact: 기존 시세·KOSPI·종목 행. 연결 여부나 서버 응답 시각을 실시간 거래소 데이터로 표시하지 않는다.
+- Interaction: 현재 계좌 요청 완료 전에는 실제 잔고처럼 숫자를 표시하지 않는다. 마지막 성공 데이터가 있으면 시각과 재시도 안내를 유지한다. 모의주문·보유·거래내역과 모든 URL은 그대로.
+- Reuse boundary: 웹 거래 터미널의 market overview만 바꾼다. 앱인토스, 별도 프로젝트, 금융 계산·인증·데이터 영속화는 제외.
+
+### Filled generation prompt and output
+
+Refine the working StockPilot market page around a single clear first action: find a stock before placing a simulated order. Show a compact, text-labeled market feed state and individually verified Korean and US quote timestamp or unavailable state. Show an account loading placeholder instead of fabricated verified cash; keep a true prior response labeled on failure, with the existing retry. Group the existing KOSPI and account panels in one responsive rhythm. Put the actual search control before the rankings in DOM and visual flow, keep visible labels, use 44px targets and preserve the local Korean font and semantic Obsidian tokens including #121824/#edf2fa dark and #ffffff/#121c2d light, 24–30px title, 14–16px body and 12–13px metadata. Use no placeholder numerical claims, duplicate requests, new storage, logos or SDK. The additive bootstrap quoteSummary describes only the returned sample of instruments, not all market listings or exchange-tick latency. Output in frontend/components/TradingTerminal.tsx, frontend/app/stitch-workspace.css, existing market CSS where necessary, and backend/app/routes/trading.py with tests. Test 360/390/768/1440, dark/light, account/market states, browsing and the protected simulated trade flow before canonical → fork → Coders.
+
+- 전체 종목 검색: 백엔드 마스터 다운로드의 거래소별 실패를 격리해 다른 거래소의 성공한 자료를 계속 제공한다. 결과 수 주변에 기존 자료 범위 상태를 표시하고, 일부 자료 미확인을 '등록 종목 없음'으로 단정하지 않는다. 자료 수신 시각은 실시간 시세가 아니다.
+
 ## 2026-11-21 · Stitch Obsidian 디자인을 기존 웹에 연결
 
 ### Resolved inputs

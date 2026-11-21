@@ -41,6 +41,96 @@ html[data-theme="dark"] .consumer-app.product-edition.stitch-workspace {
 .stitch-workspace .workspace-intro .workspace-eyebrow { letter-spacing: .06em; }
 .stitch-workspace .workspace-context { flex-wrap: wrap; }
 
+.stitch-workspace .market-overview-context {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ws-muted);
+  font-size: 12px;
+}
+.stitch-workspace .market-overview-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.stitch-workspace .market-paper-label {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--ws-brand);
+  background: var(--ws-tint);
+  font-weight: 700;
+}
+.stitch-workspace .market-feed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stitch-workspace .market-feed-label::before {
+  content: "";
+  flex: 0 0 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.stitch-workspace .market-feed-label[data-connected="true"] { color: var(--ws-brand); }
+.stitch-workspace .market-quote-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.stitch-workspace .market-quote-times > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-surface);
+}
+.stitch-workspace .market-quote-times dt { font-weight: 700; color: var(--ws-ink); }
+.stitch-workspace .market-quote-times dd { margin: 0; }
+.stitch-workspace .market-quote-time-caption {
+  color: var(--ws-muted);
+  white-space: nowrap;
+}
+.stitch-workspace .workspace-balance-status {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 44px;
+  margin-top: 8px;
+  padding-block-start: 6px;
+  border-top: 1px solid var(--ws-line);
+  color: var(--ws-muted);
+  font-size: 13px;
+}
+.stitch-workspace .workspace-balance-status b { color: var(--ws-ink); }
+.stitch-workspace .workspace-balance-status small {
+  display: block;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.stitch-workspace .workspace-balance-status button {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+  font: inherit;
+  font-weight: 700;
+}
+
 .consumer-app.stitch-workspace.view-market .workspace-summary { gap: 12px; margin-bottom: 16px; }
 .consumer-app.stitch-workspace.view-market .workspace-summary :is(.balance-card,.market-index-card) {
   min-width: 0;
@@ -54,6 +144,12 @@ html[data-theme="dark"] .consumer-app.product-edition.stitch-workspace {
 }
 .consumer-app.stitch-workspace.view-market .workspace-summary .balance-card .card-title {
   padding-inline-end: 54px;
+}
+/* The older gradient card uses white copy; these Stitch cards use theme surfaces. */
+.consumer-app.stitch-workspace:is(.view-market,.view-assets) .workspace-summary .balance-card > strong,
+.consumer-app.stitch-workspace:is(.view-market,.view-assets) .workspace-summary .balance-card .card-title > span,
+.consumer-app.stitch-workspace:is(.view-market,.view-assets) .workspace-summary .balance-card .balance-detail b {
+  color: var(--ws-ink);
 }
 .stitch-workspace.view-market .balance-card .card-title small,
 .stitch-workspace.view-market .balance-card .balance-detail { color: var(--ws-muted); }
@@ -113,6 +209,19 @@ html[data-theme="dark"] .consumer-app.product-edition.stitch-workspace {
 @media (max-width: 767px) {
   .stitch-workspace .workspace-intro { padding-block: 12px; }
   .stitch-workspace .workspace-index .index-refresh-button { width: 44px; min-height: 44px; }
+  .stitch-workspace.view-market .workspace-intro {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .stitch-workspace .market-overview-context {
+    flex: 1 1 100%;
+    justify-items: start;
+    gap: 4px 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .stitch-workspace .market-overview-labels { grid-column: 1; }
+  .stitch-workspace .market-quote-time-caption { grid-column: 2; align-self: center; }
+  .stitch-workspace .market-quote-times { grid-column: 1 / -1; }
 }
 
 /* Shared mobile navigation belongs to the web root, outside the market wrapper. */

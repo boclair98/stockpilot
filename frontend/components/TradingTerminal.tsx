@@ -204,6 +204,34 @@ type MarketStatus = {
   domesticMarketCode: string;
   quoteCount: number;
 };
+type MarketQuoteTimes = Record<Market, string | null>;
+const EMPTY_MARKET_QUOTE_TIMES: MarketQuoteTimes = { KR: null, US: null };
+const MARKET_LABELS = { KR: "국내", US: "미국" } as const;
+const marketTimeFormat = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul", month: "numeric", day: "numeric",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+function observedQuoteTime(value: unknown, now: number): string | null {
+  if (typeof value !== "string" || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp <= now ? value : null;
+}
+
+function readMarketQuoteTimes(value: unknown): MarketQuoteTimes {
+  const result = { ...EMPTY_MARKET_QUOTE_TIMES };
+  if (!value || typeof value !== "object") return result;
+  const observedAt = Date.now();
+  for (const market of ["KR", "US"] as const) {
+    const item = (value as Record<Market, unknown>)[market];
+    if (!item || typeof item !== "object") continue;
+    const { count, latestAt } = item as { count?: unknown; latestAt?: unknown };
+    if (typeof count === "number" && Number.isSafeInteger(count) && count > 0) {
+      result[market] = observedQuoteTime(latestAt, observedAt);
+    }
+  }
+  return result;
+}
 type SearchItem = {
   id: string;
   symbol: string;
@@ -354,6 +382,7 @@ export default function TradingTerminal() {
   });
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
+  const [bootstrapQuoteTimes, setBootstrapQuoteTimes] = useState<MarketQuoteTimes>(EMPTY_MARKET_QUOTE_TIMES);
   const [selected, setSelected] = useState("KR:KRX:005930");
   const selectedIdentity = useRef("KR:KRX:005930");
   const selectionRequest = useRef(0);
@@ -570,7 +599,7 @@ export default function TradingTerminal() {
     } catch {
       try { localStorage.removeItem("stockpilot_quote_snapshot"); } catch { /* Storage is optional. */ }
     }
-    void requestJson<{quotes:Quote[];status:MarketStatus;kospi?:IndexData}>("/api/trading/bootstrap", {
+    void requestJson<{quotes:Quote[];status:MarketStatus;kospi?:IndexData;quoteSummary?:unknown}>("/api/trading/bootstrap", {
       cache: "default",
       signal: bootstrapController.signal,
     })
@@ -583,6 +612,7 @@ export default function TradingTerminal() {
         }
         if (data.status) setStatus(data.status);
         if (data.kospi?.points?.length) setBootstrapKospi(data.kospi);
+        setBootstrapQuoteTimes(readMarketQuoteTimes(data.quoteSummary));
       })
       .catch(() => undefined);
     let reconnectDelay = 1000;
@@ -807,6 +837,20 @@ export default function TradingTerminal() {
     [favoriteStocks, quoteById],
   );
   const clockMs = clock?.getTime();
+  const marketQuoteTimes = useMemo(() => {
+    const latest = { ...bootstrapQuoteTimes };
+    if (clockMs === undefined) return latest;
+    for (const quote of quotes) {
+      // Browser fallback rows must not be mistaken for a confirmed market record.
+      if (quote.marketState === "CACHED") continue;
+      const time = observedQuoteTime(quote.asOf, clockMs);
+      const previous = latest[quote.market];
+      if (time && (!previous || Date.parse(time) > Date.parse(previous))) {
+        latest[quote.market] = time;
+      }
+    }
+    return latest;
+  }, [bootstrapQuoteTimes, clockMs, quotes]);
   const quoteObservedAt = quote?.asOf;
   const quoteFreshness = (() => {
     if (!clockMs || !quoteObservedAt)
@@ -1434,6 +1478,10 @@ export default function TradingTerminal() {
     }
   }
 
+  const hasConfirmedAccount = accountUpdatedAt !== null;
+  const hasVisibleBalance = workspaceView === "MARKET" || workspaceView === "ASSETS";
+  const feedConnected = socketConnected && Boolean(status?.connected);
+
   return (
     <main
       className={`app workspace-app consumer-app product-edition stitch-workspace view-${workspaceView.toLowerCase()}${mobileOrderOpen ? " mobile-order-open" : ""}`}
@@ -1558,16 +1606,39 @@ export default function TradingTerminal() {
             }
           </h1>
         </div>
-        <div className="workspace-context">
-          <span>실제 시세 · 모의투자</span>
-          <small>
-            {socketConnected && status?.connected
-              ? "시세 수신 연결됨"
-              : "시세 수신 확인 중"}
-          </small>
-        </div>
+        {workspaceView === "MARKET" ? (
+          <aside className="market-overview-context" aria-label="시장 데이터">
+            <div className="market-overview-labels">
+              <span className="market-paper-label">모의투자</span>
+              <span className="market-feed-label" data-connected={feedConnected}>
+                시세 피드 {feedConnected ? "연결됨" : "미연결"}
+              </span>
+            </div>
+            <span className="market-quote-time-caption">시세 표본 · 한국시간</span>
+            <dl className="market-quote-times" aria-label="시세 표본 시각 · 한국시간">
+              {(["KR", "US"] as const).map((market) => {
+                const last = marketQuoteTimes[market];
+                return (
+                  <div key={market}>
+                    <dt>{MARKET_LABELS[market]}</dt>
+                    <dd>
+                      {last
+                        ? <time dateTime={last}>{marketTimeFormat.format(new Date(last))}</time>
+                        : "기록 미확인"}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </aside>
+        ) : (
+          <div className="workspace-context">
+            <span>실제 시세 · 모의투자</span>
+            <small>{feedConnected ? "시세 수신 연결됨" : "시세 수신 확인 중"}</small>
+          </div>
+        )}
       </section>
-      {accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
+      {!hasVisibleBalance && accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
         <div><b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b><p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>{accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}</div>
         <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} className={accountRefreshing ? "spin" : ""}/>{accountRefreshing ? "확인 중" : "잔고 다시 확인"}</button>
       </section> : null}
@@ -1587,11 +1658,12 @@ export default function TradingTerminal() {
         <article className="balance-card">
           <div className="card-title">
             <span>
-              {portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
+              {!hasConfirmedAccount ? "모의투자 자산" : portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
             </span>
-            <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small>
+            {hasConfirmedAccount ? <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small> : null}
             {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
           </div>
+          {hasConfirmedAccount ? <>
           <strong className="private-value">
             {money(portfolio.cash.KRW + positionValues.KRW, "KRW")}
           </strong>
@@ -1626,6 +1698,20 @@ export default function TradingTerminal() {
               </b>
             </span>
           </div>
+          </> : null}
+          {accountState !== "ready" ? (
+            <div className="workspace-balance-status">
+              <div role="status">
+                <b>{accountState === "loading" ? "잔고 확인 중" : hasConfirmedAccount ? "마지막으로 확인한 잔고" : "잔고를 확인하지 못했어요"}</b>
+                {accountUpdatedAt !== null ? <small>{marketTimeFormat.format(new Date(accountUpdatedAt))} · 한국시간</small> : null}
+              </div>
+              {accountState === "error" ? (
+                <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
+                  {accountRefreshing ? "확인 중" : "다시 확인"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </article>
         <div id="market-indices" className="workspace-index">
           <MarketIndexChart initialData={bootstrapKospi} />
@@ -1772,88 +1858,6 @@ export default function TradingTerminal() {
 
       <section className="content" id="market-rankings">
         <div className="market-column instrument-browser">
-          <div className="section-head representative-heading">
-            <div>
-              <h2>주요 종목</h2>
-              <p>대표 종목 · 거래소 전체 종목도 확인할 수 있어요</p>
-            </div>
-            <span className={`source market-freshness ${quoteFreshness.state}`}>
-              <i aria-hidden="true" />
-              <span>
-                {quote?.source || "KIS 연결 중"}
-                <small>{quoteFreshness.label}</small>
-              </span>
-            </span>
-          </div>
-          {(
-            [
-              ["한국", krTop],
-              ["미국", usTop],
-            ] as const
-          ).map(([label, items]) => (
-            <div
-              className="market-block representative-list"
-              id={label === "한국" ? "kr-top" : "us-top"}
-              key={label}
-            >
-              <div className="market-label">
-                <b>{label} 주식</b>
-                <span>대표 {items.length}종목</span>
-              </div>
-              <div className="watchlist">
-                {items.length === 0 ? (
-                  <div className="quote-empty" role="status" aria-live="polite">
-                    <RefreshCw
-                      className="quote-empty-icon spin"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      <b>{label} 시세를 불러오는 중이에요</b>
-                      <small>거래소 연결이 완료되면 TOP 10이 표시됩니다.</small>
-                    </span>
-                  </div>
-                ) : (
-                  items.map((item) => (
-                    <button
-                      className={`quote ${selected === item.id ? "active" : ""}`}
-                      key={item.id}
-                      onClick={() => selectTopQuote(item)}
-                    >
-                      <StockLogo
-                        symbol={item.symbol}
-                        name={item.name}
-                        color={colorFor(item.symbol)}
-                        logoUrl={item.logoUrl}
-                      />
-                      <span className="company">
-                        <b>{item.name}</b>
-                        <small>
-                          {item.symbol} · {item.exchange}
-                        </small>
-                      </span>
-                      <span className="quote-price">
-                        <b>{money(item.price, item.currency)}</b>
-                        <small
-                          className={item.changePercent >= 0 ? "up" : "down"}
-                        >
-                          {item.changePercent >= 0 ? "+" : ""}
-                          {item.changePercent.toFixed(2)}%
-                        </small>
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
-
-          <RankedMarketBrowser
-            selectedId={selected}
-            onSelect={chooseSearchResult}
-            savedIds={favoriteIds}
-            onSave={toggleFavorite}
-          />
           <div
             className="search-card"
             id="search-card"
@@ -2029,6 +2033,88 @@ export default function TradingTerminal() {
               </details>
             )}
           </div>
+          <div className="section-head representative-heading">
+            <div>
+              <h2>주요 종목</h2>
+              <p>대표 종목 · 거래소 전체 종목도 확인할 수 있어요</p>
+            </div>
+            <span className={`source market-freshness ${quoteFreshness.state}`}>
+              <i aria-hidden="true" />
+              <span>
+                {quote?.source || "KIS 연결 중"}
+                <small>{quoteFreshness.label}</small>
+              </span>
+            </span>
+          </div>
+          {(
+            [
+              ["한국", krTop],
+              ["미국", usTop],
+            ] as const
+          ).map(([label, items]) => (
+            <div
+              className="market-block representative-list"
+              id={label === "한국" ? "kr-top" : "us-top"}
+              key={label}
+            >
+              <div className="market-label">
+                <b>{label} 주식</b>
+                <span>대표 {items.length}종목</span>
+              </div>
+              <div className="watchlist">
+                {items.length === 0 ? (
+                  <div className="quote-empty" role="status" aria-live="polite">
+                    <RefreshCw
+                      className="quote-empty-icon spin"
+                      size={18}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      <b>{label} 시세를 불러오는 중이에요</b>
+                      <small>거래소 연결이 완료되면 TOP 10이 표시됩니다.</small>
+                    </span>
+                  </div>
+                ) : (
+                  items.map((item) => (
+                    <button
+                      className={`quote ${selected === item.id ? "active" : ""}`}
+                      key={item.id}
+                      onClick={() => selectTopQuote(item)}
+                    >
+                      <StockLogo
+                        symbol={item.symbol}
+                        name={item.name}
+                        color={colorFor(item.symbol)}
+                        logoUrl={item.logoUrl}
+                      />
+                      <span className="company">
+                        <b>{item.name}</b>
+                        <small>
+                          {item.symbol} · {item.exchange}
+                        </small>
+                      </span>
+                      <span className="quote-price">
+                        <b>{money(item.price, item.currency)}</b>
+                        <small
+                          className={item.changePercent >= 0 ? "up" : "down"}
+                        >
+                          {item.changePercent >= 0 ? "+" : ""}
+                          {item.changePercent.toFixed(2)}%
+                        </small>
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+
+          <RankedMarketBrowser
+            selectedId={selected}
+            onSelect={chooseSearchResult}
+            savedIds={favoriteIds}
+            onSave={toggleFavorite}
+          />
         </div>
         {workspaceView === "MARKET" || workspaceView === "WATCH" ? (
           <aside className="consumer-personal">

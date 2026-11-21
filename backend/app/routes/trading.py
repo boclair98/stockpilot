@@ -463,11 +463,51 @@ async def quotes(response: Response) -> list[dict]:
 @router.get("/bootstrap")
 async def bootstrap(response: Response) -> dict:
     response.headers["Cache-Control"] = "public, max-age=2, s-maxage=5, stale-while-revalidate=60"
+    snapshot = await kis_market.shared_snapshot(top_only=True)
+    kospi = await traffic_store.get_json("market:index:kospi")
+    created_at = datetime.now(UTC)
     return {
-        "quotes": await kis_market.shared_snapshot(top_only=True),
+        "quotes": snapshot,
         "status": kis_market.status(),
-        "kospi": await traffic_store.get_json("market:index:kospi"),
-        "asOf": datetime.now(UTC).isoformat(),
+        "kospi": kospi,
+        "asOf": created_at.isoformat(),
+        "quoteSummary": summarize_bootstrap_quotes(snapshot, created_at),
+    }
+
+
+def summarize_bootstrap_quotes(snapshot: list[dict], created_at: datetime) -> dict:
+    """Describe the returned sample, not market coverage or exchange tick latency."""
+    counts = {"KR": 0, "US": 0}
+    latest: dict[str, datetime | None] = {"KR": None, "US": None}
+    for row in snapshot:
+        market = row.get("market")
+        price = row.get("price")
+        if market not in ("KR", "US") or type(price) not in (int, float):
+            continue
+        if not 0 < price < float("inf"):
+            continue
+        counts[market] += 1
+        raw_at = row.get("asOf")
+        if not isinstance(raw_at, str):
+            continue
+        try:
+            at = datetime.fromisoformat(raw_at)
+            if at.utcoffset() is None:
+                continue
+            at = at.astimezone(UTC)
+        except (ValueError, OverflowError):
+            continue
+        if at > created_at:
+            continue
+        previous = latest[market]
+        if previous is None or at > previous:
+            latest[market] = at
+    return {
+        market: {
+            "count": counts[market],
+            "latestAt": at.isoformat() if at is not None else None,
+        }
+        for market, at in latest.items()
     }
 
 

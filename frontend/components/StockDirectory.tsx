@@ -22,6 +22,9 @@ const subscribe = (callback: () => void) => {
 const readSearch = () => location.search;
 const serverSearch = () => "";
 const number = (value: number) => value.toLocaleString("ko-KR");
+const receivedTime = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" });
+const exchangeName = (market: DirectoryCriteria["market"], exchange: string) =>
+  DIRECTORY_EXCHANGES[market].find(([key]) => key === exchange)?.[1] ?? exchange;
 
 export default function StockDirectory({ embedded = false, comparison = [], onCompare }: { embedded?: boolean; comparison?: InstrumentIdentity[]; onCompare?: (item: InstrumentIdentity) => void } = {}) {
   const search = useSyncExternalStore(subscribe, embedded ? readMarketBrowse : readSearch, serverSearch);
@@ -91,6 +94,15 @@ export default function StockDirectory({ embedded = false, comparison = [], onCo
   }
   const pages = page ? Math.max(1, Math.ceil(page.total / criteria.limit)) : 1;
   const refreshing = pendingKey === key;
+  const marketName = criteria.market === "KR" ? "한국 주식" : "미국 주식";
+  const scopeName = `${marketName} · ${exchangeName(criteria.market, criteria.exchange)}`;
+  const missingExchanges = page?.coverage.filter(({available}) => !available) ?? [];
+  const incompleteEmpty = page?.partial && page.total === 0;
+  const resultTitle = !page
+    ? failure ? "목록을 확인해 주세요" : "종목 목록을 준비하고 있어요"
+    : incompleteEmpty ? "수신 범위에 결과 없음"
+    : criteria.q ? `검색 결과 ${number(page.total)}개`
+    : `${page.partial ? "수신 범위" : "전체"} ${number(page.total)}개`;
 
   const Root = embedded ? "div" : "main";
   return <Root className={`stock-directory${embedded ? " market-directory" : ""}`}>
@@ -118,14 +130,24 @@ export default function StockDirectory({ embedded = false, comparison = [], onCo
       </div>
       <DirectoryPresets criteria={criteria} onApply={navigate}/>
       <div className="directory-list-status">
-        <div role="status" aria-live="polite" ref={statusRef} tabIndex={-1}>{page ? <><strong>{criteria.q ? `검색 결과 ${number(page.total)}개` : `${page.partial ? "조회된" : "전체"} ${number(page.total)}개`}</strong><span>{page.items.length > 0 ? `${number(page.offset + 1)}–${number(page.offset + page.items.length)}번째` : page.total > 0 ? "페이지 범위를 확인해 주세요" : "조건에 맞는 종목 없음"} · {criteria.q ? "일치도순" : "종목코드순"}</span></> : <strong>{failure ? "목록을 확인해 주세요" : "종목 목록을 준비하고 있어요"}</strong>}</div>
-        <button className="directory-refresh" type="button" aria-label="전체 종목 새로 조회" disabled={loading || refreshing} onClick={retry}><RefreshCw size={17} /></button>
+        <div className="directory-result-summary" role="status" aria-atomic="true" ref={statusRef} tabIndex={-1}>
+          <div className="directory-result-title"><strong>{resultTitle}</strong>{page?.partial ? <span className="directory-partial-tag">일부 자료 미수신</span> : null}</div>
+          <p>{scopeName}{page && page.items.length > 0 ? ` · ${number(page.offset + 1)}–${number(page.offset + page.items.length)}번째 · ${criteria.q ? "일치도순" : "종목코드순"}` : null}</p>
+          {page?.partial ? <p className="directory-partial-note">{missingExchanges.length > 0 ? `${missingExchanges.map(item => exchangeName(criteria.market, item.exchange)).join(", ")} 자료를 받지 못했어요.` : "선택한 범위의 자료를 모두 받지 못했어요."} 현재 받은 종목만 검색할 수 있어요.</p> : null}
+        </div>
+        <button className="directory-refresh" type="button" aria-label="전체 종목 새로 조회" disabled={loading || refreshing} onClick={retry}><RefreshCw size={17} aria-hidden="true" /></button>
       </div>
       {criteria.q ? <div className="directory-query-chip"><span>‘{criteria.q}’ 검색 중</span><button aria-label="종목 검색 해제" type="button" onClick={() => navigate({q: "", page: 1})}><X size={16}/></button></div> : null}
       {failure ? <div className="directory-state" role="alert"><h2>목록을 불러오지 못했어요</h2><p>{failure.message}</p><button type="button" onClick={retry}>{failure.expired ? "첫 페이지 다시 조회" : "다시 조회"}</button></div> : null}
       {loading ? <div className="directory-skeleton" aria-label="종목 목록 불러오는 중" aria-busy="true">{Array.from({length: 8}, (_, i) => <div key={i}><span/><i/><b/></div>)}</div> : null}
       {page ? <>
-        {page.partial ? <p className="directory-warning" role="status">일부 거래소 자료를 받지 못했어요. 현재 {number(page.universeTotal)}개는 전체 목록이 아닐 수 있어요. 새로 조회해 주세요.</p> : null}
+        <details className="directory-coverage" key={scopeName}>
+          <summary>자료 범위 <span>{`${page.coverage.filter(source => source.available).length}/${page.coverage.length}개 거래소 수신`}</span></summary>
+          <p>선택한 범위에서 받았던 종목은 {number(page.universeTotal)}개예요. 목록 수신 시각은 시세 기준 시간이 아니며, 가격은 종목 상세에서 조회할 수 있어요.</p>
+          <ul>{page.coverage.map(source => <li key={source.exchange}><b>{exchangeName(criteria.market, source.exchange)}</b><span>{source.available ? "수신 완료" : "미수신"}</span>{source.available && source.loadedAt ? <time dateTime={source.loadedAt}>{receivedTime.format(new Date(source.loadedAt))} (한국 시간)</time> : null}</li>)}</ul>
+          <p>코스피·코스닥·나스닥·뉴욕·아멕스의 제공 목록을 사용해요. 선물·옵션·장외주식 등 모든 금융상품을 포함하지 않으며, 시세가 없거나 거래가 제한된 종목은 모의주문이 어려울 수 있어요.</p>
+        </details>
+        {page.items.length > 0 ? <>
         <div className={`directory-columns${onCompare ? " has-comparison" : ""}`} aria-hidden="true"><span>종목 / 티커</span><span>거래소</span><span>시세 · 차트</span>{onCompare ? <span>비교</span> : null}</div>
         <ul className={`directory-list${onCompare ? " has-comparison" : ""}`}>{page.items.map(item => <li key={item.id}><Link className="directory-instrument" href={instrumentDetailHref(item, embedded ? criteria : undefined)} prefetch={false} onClick={embedded ? followInstrumentDetailLink : undefined}>
           <StockLogo name={item.name} symbol={item.symbol} logoUrl={item.logoUrl} color="#5262db" />
@@ -133,12 +155,17 @@ export default function StockDirectory({ embedded = false, comparison = [], onCo
           <span className="directory-exchange">{item.listingMarket || item.exchange}<small>{item.currency}</small></span>
           <span className="directory-open">시세 보기<ArrowUpRight size={17} aria-hidden="true" /></span>
         </Link>{onCompare ? <button className="directory-compare" type="button" aria-label={`${item.name} 비교 ${comparison.some(entry => entry.id === item.id) ? "선택 해제" : "추가"}`} aria-pressed={comparison.some(entry => entry.id === item.id)} onClick={() => onCompare(item)}>{comparison.some(entry => entry.id === item.id) ? <Check size={17} aria-hidden="true"/> : <GitCompareArrows size={17} aria-hidden="true"/>}<span>비교</span></button> : null}</li>)}</ul>
-        {!page.items.length ? <div className="directory-state"><Search size={26}/><h2>{page.total > 0 ? "이 페이지에는 종목이 없어요" : "찾는 종목이 없어요"}</h2><p>{page.total > 0 ? "목록 범위 안의 페이지로 돌아가 주세요." : "검색어를 줄이거나 다른 거래소를 선택해 보세요."}</p><button type="button" onClick={() => navigate({page: 1, ...(page.total === 0 ? {q: "", exchange: "ALL"} : {})})}>목록 다시 보기</button></div> : null}
+        </> : <div className="directory-state"><Search size={26} aria-hidden="true" />
+          <h2>{page.total > 0 ? "이 페이지에는 종목이 없어요" : incompleteEmpty ? "종목 전체를 확인하지 못했어요" : "찾는 종목이 없어요"}</h2>
+          <p>{page.total > 0 ? "목록 범위 안의 페이지로 돌아가 주세요." : incompleteEmpty ? "받지 못한 거래소 자료에 찾는 종목이 있을 수 있어요." : "검색어를 줄이거나 다른 거래소를 선택해 보세요."}</p>
+          {incompleteEmpty ? <button type="button" onClick={retry}>같은 조건 다시 조회</button>
+            : page.total > 0 || criteria.q || criteria.exchange !== "ALL" ? <button type="button" onClick={() => navigate({page: 1, ...(page.total === 0 ? {q: "", exchange: "ALL"} : {})})}>목록 다시 보기</button> : null}
+        </div>}
+        {page.total > 0 ? (
         <nav className="directory-pagination" aria-label="종목 목록 페이지">
           <div className="directory-page-actions"><button type="button" disabled={criteria.page <= 1} onClick={() => navigate({page: 1})}>처음</button><button type="button" aria-label="이전 종목 페이지" disabled={criteria.page <= 1} onClick={() => navigate({page: criteria.page - 1})}><ChevronLeft size={18}/></button><span><b>{number(criteria.page)}</b> / {number(pages)}</span><button type="button" aria-label="다음 종목 페이지" disabled={criteria.page >= pages} onClick={() => navigate({page: criteria.page + 1})}><ChevronRight size={18}/></button><button type="button" aria-label="마지막 종목 페이지" disabled={criteria.page >= pages} onClick={() => navigate({page: pages})}><ChevronsRight size={18}/></button></div>
           <form key={`${criteria.page}:${pages}`} onSubmit={event => {event.preventDefault(); const value = Number(new FormData(event.currentTarget).get("page")); if (Number.isInteger(value) && value >= 1 && value <= pages) navigate({page: value});}}><label htmlFor="directory-page">페이지 이동</label><input id="directory-page" name="page" type="number" inputMode="numeric" min={1} max={pages} defaultValue={Math.min(criteria.page,pages)} required/><button type="submit">이동</button></form>
-        </nav>
-        <details className="directory-coverage"><summary>목록 범위와 자료 기준{page.partial ? " · 일부 조회 실패" : ""}</summary><p>한국: 코스피·코스닥 / 미국: 나스닥·뉴욕·아멕스의 제공 종목 목록입니다. 선물·옵션·장외주식 등 모든 금융상품을 포함하는 목록은 아닙니다. 가격은 종목 상세에서 조회하며, 시세가 없거나 거래가 제한된 종목은 모의주문이 불가능할 수 있습니다.</p><p>{criteria.q ? `선택 범위 ${number(page.universeTotal)}개 중 검색 결과 ${number(page.total)}개` : `선택 범위 ${number(page.universeTotal)}개`} · 목록 수신 시간은 시세 기준 시간이 아닙니다. 목록은 서버 시작 후 공식 마스터 수신 기준입니다.</p><ul>{page.coverage.map(source => <li key={source.exchange}><b>{source.exchange}</b><span>{source.available ? "수신 완료" : "미수신"}</span><time dateTime={source.loadedAt || undefined}>{source.loadedAt ? new Date(source.loadedAt).toLocaleString("ko-KR", {timeZone: "Asia/Seoul"}) : "수신 시간 없음"}</time></li>)}</ul></details>
+        </nav>) : null}
       </> : null}
     </section>
     {!embedded ? <p className="directory-disclaimer">실제 시세로 살펴보고, 연습용 자금으로 투자해요. 실제 돈으로 거래하지 않습니다.</p> : null}

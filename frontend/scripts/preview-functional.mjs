@@ -48,7 +48,7 @@ function reportFixture(incomplete) {
 // Explicit opt-in fault fixtures. These are local, in-memory receipts only;
 // this server never connects to the production backend or writes a database.
 const fixtureReceipts = new Map();
-const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','statement-large','calendar-error','calendar-malformed','calendar-expired','personal-malformed','catalog-retry','valuation-cost','profile-retry','disclosure-retry','disclosure-all-failed','normal']);
+const fixtureCases = new Set(['portfolio-error','lost-order','rejected-order','bad-receipt','analytics-error','analytics-malformed','analytics-guest','analytics-empty','statement-error','statement-guest','statement-large','calendar-error','calendar-malformed','calendar-expired','personal-malformed','catalog-partial','catalog-retry','valuation-cost','profile-retry','disclosure-retry','disclosure-all-failed','normal']);
 let receiptWrites = 0;
 const mime = {'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2','.png':'image/png','.webmanifest':'application/manifest+json'};
 http.createServer(async(req,res) => {
@@ -136,14 +136,20 @@ http.createServer(async(req,res) => {
       if(q==='error')return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 목록 연결 실패. 다시 조회해 주세요."}');
       if(q==='slow')await new Promise(resolve=>setTimeout(resolve,900));
       const source=market==='KR'?['KOSPI','KOSDAQ']:['NAS','NYS','AMS'];
+      const missing=scenario==='catalog-partial'?source.at(-1):null;
       const rows=Array.from({length:237},(_,i)=>{
         const listing=source[i%source.length],ex=market==='KR'?'KRX':listing,symbol=market==='KR'?(i===1?'0001A0':String(900000+i)):`TEST${i}`;
         return {id:`${market}:${ex}:${symbol}`,symbol,name:i===1&&market==='KR'?'덕양에너젠':`격리 검증 기업 ${i+1}`,englishName:`Isolated Company ${i+1}`,market,currency:market==='KR'?'KRW':'USD',exchange:ex,listingMarket:market==='KR'?listing:''};
-      }).filter(item=>exchange==='ALL'||(market==='KR'?item.listingMarket:item.exchange)===exchange);
+      }).filter(item=>{
+        const listing=market==='KR'?item.listingMarket:item.exchange;
+        return listing!==missing&&(exchange==='ALL'||listing===exchange);
+      });
       const items=rows.filter(item=>!q||`${item.name} ${item.englishName} ${item.symbol}`.toLowerCase().includes(q.toLowerCase()));
       const snapshot='isolated-directory-v1';
       if(url.searchParams.has('snapshot')&&url.searchParams.get('snapshot')!==snapshot)return res.writeHead(409,{'Content-Type':'application/json'}).end('{"detail":"격리 검증: 목록이 갱신됐어요."}');
-      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items:items.slice(offset,offset+limit),total:items.length,universeTotal:rows.length,offset,limit,market,exchange,query:q,partial:false,snapshot,coverage:source.filter(ex=>exchange==='ALL'||exchange===ex).map(ex=>({exchange:ex,available:true,loadedAt:'2026-10-27T00:00:00Z'}))}));
+      const partial=missing!==null&&(exchange==='ALL'||exchange===missing);
+      if(partial&&!items.length)return res.writeHead(503,{'Content-Type':'application/json'}).end('{"detail":"일부 거래소 목록을 받지 못했어요. 잠시 후 다시 시도해 주세요."}');
+      return res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({items:items.slice(offset,offset+limit),total:items.length,universeTotal:rows.length,offset,limit,market,exchange,query:q,partial,snapshot,coverage:source.filter(ex=>exchange==='ALL'||exchange===ex).map(ex=>({exchange:ex,available:ex!==missing,loadedAt:ex===missing?null:'2026-10-27T00:00:00Z'}))}));
     }
     if(upgradeFixture&&p==='/api/toss-market/instruments') {
       const offset=Number(url.searchParams.get('offset')||0),market=url.searchParams.get('market')||'KR',quote=quotes.find(item=>item.market===market);
@@ -170,7 +176,15 @@ http.createServer(async(req,res) => {
       if (process.env.VISITOR_FIXTURE === '1') return res.writeHead(401,{'Content-Type':'application/json'}).end('{"detail":"격리된 방문자 화면 검증"}');
       data = {id:'local-verification',coders_id:'00000000-0000-0000-0000-000000000123',display_name:'로컬 검증',email:null,picture:null};
     }
-    else if (p === '/api/trading/bootstrap') data = {quotes,status:{configured:true,connected:false,quoteCount:quotes.length}};
+    else if (p === '/api/trading/bootstrap') data = {
+      quotes,
+      status:{configured:true,connected:false,quoteCount:quotes.length},
+      asOf:new Date().toISOString(),
+      quoteSummary:Object.fromEntries(['KR','US'].map(market=>{
+        const sample=quotes.filter(quote=>quote.market===market);
+        return [market,{count:sample.length,latestAt:sample[0]?.asOf??null}];
+      })),
+    };
     else if (p === '/api/trading/kospi') data = {
       name:'KOSPI',value:5555.55,change:-12.5,changePercent:-0.22,
       asOf:'2026-10-22T01:00:00Z',source:'격리된 로컬 검증 자료',

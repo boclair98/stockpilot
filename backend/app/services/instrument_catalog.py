@@ -10,6 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
+from time import monotonic
 from urllib.parse import quote
 
 import httpx
@@ -25,6 +26,8 @@ MASTER_URLS = {
     "NYS": "https://new.real.download.dws.co.kr/common/master/nysmst.cod.zip",
     "AMS": "https://new.real.download.dws.co.kr/common/master/amsmst.cod.zip",
 }
+MASTER_DOWNLOAD_SECONDS = 8
+MASTER_RETRY_SECONDS = 15
 
 
 @dataclass(frozen=True)
@@ -141,6 +144,7 @@ class InstrumentCatalog:
         self._page_rows: dict[tuple[str, str], list[Instrument]] = {}
         self._loaded_exchanges: set[str] = set()
         self._loaded_at: dict[str, str] = {}
+        self._master_retry_after: dict[str, float] = {}
         self._directory_versions: dict[tuple[str, str], str] = {}
         for item in TOP_INSTRUMENTS:
             self._add(item)
@@ -174,26 +178,41 @@ class InstrumentCatalog:
         if self._loaded_exchanges == set(MASTER_URLS):
             return
         async with self._lock:
+            now = monotonic()
             missing = [
                 exchange
                 for exchange in MASTER_URLS
                 if exchange not in self._loaded_exchanges
+                and now >= self._master_retry_after.get(exchange, now)
             ]
             if not missing:
                 return
             try:
-                timeout = httpx.Timeout(25, connect=10)
+                # Keep a slow source below the web and app directory routes'
+                # outer time limits, including any slow HTTP response body.
+                timeout = httpx.Timeout(MASTER_DOWNLOAD_SECONDS, connect=5)
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     responses = await asyncio.gather(
-                        *(client.get(MASTER_URLS[exchange]) for exchange in missing),
+                        *(
+                            asyncio.wait_for(
+                                client.get(MASTER_URLS[exchange]),
+                                timeout=MASTER_DOWNLOAD_SECONDS,
+                            )
+                            for exchange in missing
+                        ),
                         return_exceptions=True,
                     )
-                for exchange, response in zip(missing, responses, strict=True):
-                    if isinstance(response, Exception):
-                        logger.warning(
-                            "KIS master download failed (%s): %s", exchange, response
-                        )
-                        continue
+            except Exception as exc:
+                retry_at = monotonic() + MASTER_RETRY_SECONDS
+                self._master_retry_after.update(dict.fromkeys(missing, retry_at))
+                self.last_error = "일부 KIS 종목 마스터를 불러오지 못했습니다."
+                logger.warning("KIS master client failed: %s", type(exc).__name__)
+                return
+
+            for exchange, response in zip(missing, responses, strict=True):
+                try:
+                    if isinstance(response, BaseException):
+                        raise response
                     response.raise_for_status()
                     raw = self._unzip_first(response.content)
                     parsed = (
@@ -202,22 +221,26 @@ class InstrumentCatalog:
                         else self._parse_us(raw, exchange)
                     )
                     if not parsed:
-                        logger.warning(
-                            "KIS master contained no instruments (%s)", exchange
-                        )
-                        continue
-                    for item in parsed:
-                        self._add(item)
-                    self._loaded_exchanges.add(exchange)
-                    self._loaded_at[exchange] = datetime.now(UTC).isoformat()
-                self._loaded = self._loaded_exchanges == set(MASTER_URLS)
-                if not self._loaded:
-                    self.last_error = "일부 KIS 종목 마스터를 불러오지 못했습니다."
-                else:
-                    self.last_error = None
-            except Exception as exc:
-                self.last_error = str(exc)[:240]
-                logger.warning("KIS master load failed: %s", self.last_error)
+                        raise ValueError("KIS master contained no instruments")
+                except Exception as exc:
+                    # A failed ZIP or response is not evidence that its market
+                    # is empty. Keep every other successfully loaded exchange.
+                    self._master_retry_after[exchange] = (
+                        monotonic() + MASTER_RETRY_SECONDS
+                    )
+                    logger.warning(
+                        "KIS master failed (%s): %s", exchange, type(exc).__name__
+                    )
+                    continue
+                for item in parsed:
+                    self._add(item)
+                self._loaded_exchanges.add(exchange)
+                self._loaded_at[exchange] = datetime.now(UTC).isoformat()
+                self._master_retry_after.pop(exchange, None)
+            self._loaded = self._loaded_exchanges == set(MASTER_URLS)
+            self.last_error = (
+                None if self._loaded else "일부 KIS 종목 마스터를 불러오지 못했습니다."
+            )
 
     @staticmethod
     def _unzip_first(content: bytes) -> bytes:

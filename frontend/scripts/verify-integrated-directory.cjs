@@ -104,3 +104,34 @@ test('legacy directory bookmarks redirect with country, exchange, query and page
  const url=new URL(h.destinations[0],'https://example.test');assert.equal(url.pathname,'/');assert.equal(url.searchParams.get('browse'),'all');
  assert.equal(url.searchParams.get('browseMarket'),'US');assert.equal(url.searchParams.get('catalogQ'),'BRK/B');assert.equal(url.searchParams.get('catalogPage'),'9');h.unmount();
 });
+
+test('selected exchange coverage is presented before the catalog rows and refresh drops the old snapshot',async t=>{
+ const h=harness('/?browse=all&browseMarket=KR');t.after(h.unmount);h.render();await h.flush();
+ const partial=pageFor(h.requests[0],{total:1,partial:true});partial.coverage.push({exchange:'KOSDAQ',available:false,loadedAt:null});
+ h.respond(0,partial);await h.flush();
+ assert(h.text().includes('수신 범위 1개'));assert(h.text().includes('일부 자료 미수신'));
+ assert(h.text().includes('한국 주식 · 전체'));assert(h.text().includes('코스닥 자료를 받지 못했어요'));
+ const observed=h.nodes(),coverageIndex=observed.findIndex(n=>n.type==='details'&&n.props.className==='directory-coverage');
+ assert(coverageIndex>=0&&coverageIndex<observed.findIndex(n=>n.type==='ul'&&n.props.className==='directory-list'));
+ assert.equal(observed.filter(n=>n.type==='time').length,1);
+ assert(h.text().includes('1/2개 거래소 수신'));assert(h.text().includes('목록 수신 시각은 시세 기준 시간이 아니며'));
+ h.click('전체 종목 새로 조회');await h.flush();
+ assert(!new URL(h.requests[1].url,'https://example.test').searchParams.has('snapshot'));
+ const complete=pageFor(h.requests[1],{total:3});complete.coverage.push({exchange:'KOSDAQ',available:true,loadedAt:'2026-10-28T00:10:00Z'});
+ h.respond(1,complete);await h.flush();
+ assert(h.text().includes('전체 3개'));assert(h.text().includes('2/2개 거래소 수신'));
+ assert(!h.text().includes('일부 자료 미수신'));assert.equal(h.nodes().filter(n=>n.type==='time').length,2);
+});
+
+test('missing results are not definitive when selected exchange data is unavailable',async t=>{
+ const h=harness('/?browse=all&browseMarket=US&catalogQ=ZZZZ');t.after(h.unmount);h.render();await h.flush();
+ h.respond(0,{detail:'거래소 종목 목록을 받지 못했어요. 잠시 후 다시 조회해 주세요.'},503);await h.flush();
+ assert(h.text().includes('목록을 불러오지 못했어요'));assert(!h.text().includes('찾는 종목이 없어요'));
+ h.click('다시 조회');await h.flush();
+ const partial=pageFor(h.requests[1],{total:0,partial:true});partial.coverage.push({exchange:'NYS',available:false,loadedAt:null});
+ h.respond(1,partial);await h.flush();
+ assert(h.text().includes('수신 범위에 결과 없음'));assert(h.text().includes('받지 못한 거래소 자료에 찾는 종목이 있을 수 있어요'));
+ assert(!h.text().includes('찾는 종목이 없어요'));assert(!h.nodes().some(n=>n.props.className==='directory-pagination'));
+ h.click('같은 조건 다시 조회');await h.flush();h.respond(2,pageFor(h.requests[2],{total:0}));await h.flush();
+ assert(h.text().includes('찾는 종목이 없어요'));assert(!h.text().includes('일부 자료 미수신'));
+});
