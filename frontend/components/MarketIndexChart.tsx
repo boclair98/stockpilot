@@ -19,8 +19,12 @@ const shortDate = (value: string) =>
 
 export default function MarketIndexChart({
   initialData = null,
+  getLatestSnapshot,
+  onSnapshot,
 }: {
   initialData?: IndexData | null;
+  getLatestSnapshot?: () => IndexData | null;
+  onSnapshot?: (snapshot: IndexData) => void;
 }) {
   const [data, setData] = useState<IndexData | null>(() => indexSnapshot(initialData));
   const [loading, setLoading] = useState(!initialData);
@@ -32,7 +36,13 @@ export default function MarketIndexChart({
     let active = true;
     let controller: AbortController | null = null;
     let hydrateTimer: number | null = null;
-    const initial = indexSnapshot(initialData);
+    const bootstrap = indexSnapshot(initialData);
+    // The responsive workspace can move this chart between view branches.
+    // Keep a newer successful fetch when it remounts in the same workspace.
+    const retained = getLatestSnapshot?.();
+    const initial = retained?.points.length && (
+      !bootstrap?.points.length || Date.parse(retained.asOf) >= Date.parse(bootstrap.asOf)
+    ) ? retained : bootstrap;
     const saveSnapshot = (next: IndexData) => { try { localStorage.setItem("stockpilot_kospi_snapshot",JSON.stringify(next)); } catch { /* Restricted storage does not stop market data. */ } };
     if (initial?.points.length) {
       saveSnapshot(initial);
@@ -73,6 +83,7 @@ export default function MarketIndexChart({
         if (active && !current.signal.aborted) {
           setData(next);
           if (next.points?.length) {
+            onSnapshot?.(next);
             saveSnapshot(next);
           }
         }
@@ -99,7 +110,7 @@ export default function MarketIndexChart({
       if (hydrateTimer !== null) window.clearTimeout(hydrateTimer);
       window.clearInterval(interval);
     };
-  }, [initialData, attempt]);
+  }, [initialData, getLatestSnapshot, onSnapshot, attempt]);
 
   const chart = useMemo(() => {
     const points = data?.points || [];

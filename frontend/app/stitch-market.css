@@ -160,3 +160,134 @@
     font-size: max(16px, 1rem);
   }
 }
+
+/* Search and ranked rows form one workspace. The auxiliary column follows
+   the list in the source, so small screens and keyboard focus keep that order. */
+.stitch-workspace.product-edition.view-market .market-focus-layout {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(16px, 2vw, 24px);
+}
+
+.stitch-workspace.product-edition.view-market :is(.market-discovery-stage, .market-auxiliary) {
+  min-inline-size: 0;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage {
+  gap: 0;
+  isolation: isolate;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card {
+  padding: 12px clamp(12px, 2vw, 20px) 16px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--sp-radius-card) var(--sp-radius-card) 0 0;
+  border-block-end: 0;
+  background: var(--ws-surface);
+  gap: 8px 12px;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .section-head {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  min-block-size: 32px;
+  margin: 0;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .section-head > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .section-head :is(h2, p) {
+  margin: 0;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .search-controls {
+  grid-area: 2 / 1 / auto / -1;
+}
+
+.stitch-workspace.product-edition.view-market .search-card input::placeholder,
+.stitch-workspace.product-edition.view-market .search-card .section-head p {
+  color: var(--ws-muted);
+}
+
+.stitch-workspace.product-edition.view-market .search-card .recent-stocks > summary {
+  min-block-size: 44px;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage .market-rankings-panel {
+  min-inline-size: 0;
+  scroll-margin-block-start: 76px;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage .broker-rankings {
+  border-radius: 0 0 var(--sp-radius-card) var(--sp-radius-card);
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading {
+  padding-block: 12px 8px;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading > div > span {
+  display: none;
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary > .workspace-summary {
+  grid-template-columns: minmax(0, 1fr);
+  border: 0;
+  margin: 0;
+  gap: 12px;
+  overflow: visible;
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .watchlist-board {
+  border-radius: var(--sp-radius-card);
+}
+
+/* The old gradient card's translucent white labels disappear on a light surface. */
+.stitch-workspace.product-edition.view-market .market-auxiliary .balance-detail > span {
+  color: var(--ws-muted);
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .stitch-workspace.product-edition.view-market .market-auxiliary > .workspace-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .stitch-workspace.product-edition.view-market .market-focus-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+  }
+
+  .stitch-workspace.product-edition.view-market .market-auxiliary .market-index-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-auxiliary .market-index-visual {
+    min-height: 68px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-auxiliary .market-index-visual svg {
+    height: 62px;
+  }
+}
+
+@media (max-width: 767px) {
+  .stitch-workspace.product-edition.view-market .search-card .section-head p {
+    display: none;
+  }
+}

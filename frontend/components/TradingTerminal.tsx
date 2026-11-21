@@ -386,6 +386,14 @@ export default function TradingTerminal() {
   });
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [bootstrapKospi, setBootstrapKospi] = useState<IndexData | null>(null);
+  const latestKospiSnapshot = useRef<IndexData | null>(null);
+  const getLatestKospiSnapshot = useCallback(() => latestKospiSnapshot.current, []);
+  const rememberKospiSnapshot = useCallback((snapshot: IndexData) => {
+    const previous = latestKospiSnapshot.current;
+    if (!previous || Date.parse(snapshot.asOf) >= Date.parse(previous.asOf)) {
+      latestKospiSnapshot.current = snapshot;
+    }
+  }, []);
   const [bootstrapQuoteTimes, setBootstrapQuoteTimes] = useState<MarketQuoteTimes>(EMPTY_MARKET_QUOTE_TIMES);
   const [selected, setSelected] = useState("KR:KRX:005930");
   const selectedIdentity = useRef("KR:KRX:005930");
@@ -1516,6 +1524,220 @@ export default function TradingTerminal() {
   const hasConfirmedAccount = accountUpdatedAt !== null;
   const hasVisibleBalance = workspaceView === "MARKET" || workspaceView === "ASSETS";
   const feedConnected = socketConnected && Boolean(status?.connected);
+  const marketOverview = (
+      <section
+        className="summary workspace-summary"
+        id="market-overview"
+        aria-label="시장과 내 투자 요약"
+      >
+        <article className="balance-card">
+          <div className="card-title">
+            <span>
+              {!hasConfirmedAccount ? "모의투자 자산" : portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
+            </span>
+            {hasConfirmedAccount ? <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small> : null}
+            {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
+          </div>
+          {hasConfirmedAccount ? <>
+          <strong className="private-value">
+            {money(portfolio.cash.KRW + positionValues.KRW, "KRW")}
+          </strong>
+          {workspaceView === "MARKET" ? <details className="balance-mobile-disclosure"><summary>주문 가능 금액<ChevronDown size={14} aria-hidden="true"/></summary><div><span>원화<b className="private-value">{money(portfolio.cash.KRW,"KRW")}</b></span><span>달러<b className="private-value">{money(portfolio.cash.USD,"USD")}</b></span></div></details> : null}
+          <div className="balance-detail">
+            <span>
+              원화 주문 가능{" "}
+              <b className="private-value">
+                {money(portfolio.cash.KRW, "KRW")}
+              </b>
+            </span>
+            <span>
+              달러 주문 가능{" "}
+              <b className="private-value">
+                {money(portfolio.cash.USD, "USD")}
+              </b>
+            </span>
+            <span>
+              국내 평가손익{" "}
+              <b
+                className={`private-value ${valuation.KRW ? "" : performance.KRW >= 0 ? "up" : "down"}`}
+              >
+                {valuation.KRW ? "시세 확인 필요" : money(performance.KRW, "KRW")}
+              </b>
+            </span>
+            <span>
+              미국 평가손익{" "}
+              <b
+                className={`private-value ${valuation.USD ? "" : performance.USD >= 0 ? "up" : "down"}`}
+              >
+                {valuation.USD ? "시세 확인 필요" : money(performance.USD, "USD")}
+              </b>
+            </span>
+          </div>
+          </> : null}
+          {accountState !== "ready" ? (
+            <div className="workspace-balance-status">
+              <div role="status">
+                <b>{accountState === "loading" ? "잔고 확인 중" : hasConfirmedAccount ? "마지막으로 확인한 잔고" : "잔고를 확인하지 못했어요"}</b>
+                {accountUpdatedAt !== null ? <small>{marketTimeFormat.format(new Date(accountUpdatedAt))} · 한국시간</small> : null}
+              </div>
+              {accountState === "error" ? (
+                <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
+                  {accountRefreshing ? "확인 중" : "다시 확인"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </article>
+        <div id="market-indices" className="workspace-index">
+          <MarketIndexChart
+            initialData={bootstrapKospi}
+            getLatestSnapshot={getLatestKospiSnapshot}
+            onSnapshot={rememberKospiSnapshot}
+          />
+        </div>
+      </section>
+  );
+  const marketCheckup = (
+    <>
+        {valuation.count > 0 ? <section className="release-account-status" aria-label="자산 평가 기준">
+          <div role="status"><b>일부 자산은 매입금액 기준 참고액이에요</b><p>시세 미확인 {valuation.count}종목이 참고 평가액에 포함돼요. 해당 통화의 평가손익과 시세가 필요한 투자 체크업은 확인할 수 없어요.</p></div>
+          <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} aria-hidden="true"/>{accountRefreshing ? "확인 중" : "평가 기준 다시 확인"}</button>
+        </section> : null}
+
+        <details className="advanced-checkup">
+          <summary>
+            <span>
+              <Gauge size={17} />
+              <b>고급 투자 체크업</b>
+              <small>시장 강도·포트폴리오 집중도·급락 스트레스 테스트</small>
+            </span>
+            <ChevronRight size={18} />
+          </summary>
+          <section className="insight-grid" aria-label="시장과 내 투자 체크업">
+            <article className="pulse-card">
+              <div className="insight-title">
+                <span>
+                  <BarChart3 size={16} /> 오늘의 시장 요약
+                </span>
+                <small>
+                  {marketPulse.total
+                    ? `${marketPulse.total}개 주요 종목 기준`
+                    : "시세 수신 대기"}
+                </small>
+              </div>
+              <strong className={marketPulse.total ? (marketPulse.average >= 0 ? "up" : "down") : undefined}>
+                {marketPulse.total ? percentText(marketPulse.average) : "—"}
+              </strong>
+              <p>
+                {marketPulse.total ? `주요 종목 중 ${marketPulse.risingCount}개가 상승 중이에요. ` : null}
+                {marketPulse.riser && marketPulse.faller
+                  ? ` 강한 종목은 ${marketPulse.riser.name}, 약한 종목은 ${marketPulse.faller.name}입니다.`
+                  : " 시세가 들어오면 상승·하락 종목을 자동으로 요약해요."}
+              </p>
+              <div className="pulse-movers">
+                <span>
+                  <small>상승 선두</small>
+                  <b>{marketPulse.riser ? marketPulse.riser.name : "—"}</b>
+                  <em className="up">
+                    {marketPulse.riser
+                      ? percentText(marketPulse.riser.changePercent)
+                      : "—"}
+                  </em>
+                </span>
+                <span>
+                  <small>하락 선두</small>
+                  <b>{marketPulse.faller ? marketPulse.faller.name : "—"}</b>
+                  <em className="down">
+                    {marketPulse.faller
+                      ? percentText(marketPulse.faller.changePercent)
+                      : "—"}
+                  </em>
+                </span>
+              </div>
+            </article>
+
+            <article className="checkup-card">
+              <div className="insight-title">
+                <span>
+                  <Gauge size={16} /> 내 투자 체크업
+                </span>
+                <small>{portfolioCheck.positionCount}개 보유 종목</small>
+              </div>
+              <div className="checkup-metrics">
+                <span>
+                  <small>원화 현금</small>
+                  <b>{valuation.count || portfolioCheck.cashRatio.KRW===null?"—":portfolioCheck.cashRatio.KRW.toFixed(0)+"%"}</b>
+                </span>
+                <span>
+                  <small>달러 현금</small>
+                  <b>{valuation.count || portfolioCheck.cashRatio.USD===null?"—":portfolioCheck.cashRatio.USD.toFixed(0)+"%"}</b>
+                </span>
+                <span>
+                  <small>최대 비중</small>
+                  <b>{valuation.count ? "—" : portfolioCheck.concentration.toFixed(0)+"%"}</b>
+                </span>
+                <span>
+                  <small>손익 종목</small>
+                  <b>
+                    {valuation.count ? "—" : `${portfolioCheck.winners}/${portfolioCheck.losers}`}
+                  </b>
+                </span>
+                <span>
+                  <small>원화 보호 범위</small>
+                  <b>{valuation.count || portfolioCheck.protectionCoverage.KRW===null?"—":portfolioCheck.protectionCoverage.KRW.toFixed(0)+"%"}</b>
+                </span>
+                <span>
+                  <small>달러 보호 범위</small>
+                  <b>{valuation.count || portfolioCheck.protectionCoverage.USD===null?"—":portfolioCheck.protectionCoverage.USD.toFixed(0)+"%"}</b>
+                </span>
+              </div>
+              <p className="checkup-currency-note">최대 비중과 보호 범위는 같은 통화 안에서 계산해요.</p>
+              <div className="checkup-advice">
+                <PieChart size={16} />
+                <div>
+                  {portfolioCheck.notices.map((notice) => (
+                    <p key={notice}>{notice}</p>
+                  ))}
+                </div>
+              </div>
+              <div className="stress-test">
+                <div className="stress-head">
+                  <span>
+                    <BrainCircuit size={15} /> 급락 스트레스 테스트
+                  </span>
+                  <div>
+                    {[-1, -3, -5, -10].map((move) => (
+                      <button
+                        className={stressMove === move ? "active" : ""}
+                        key={move}
+                        onClick={() => setStressMove(move)}
+                        type="button"
+                      >
+                        {move}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="stress-result">
+                  <span>
+                    <small>국내 보유분 예상 변동</small>
+                    <b>{valuation.KRW ? "시세 확인 필요" : money(portfolioCheck.stressLoss.KRW, "KRW")}</b>
+                  </span>
+                  <span>
+                    <small>미국 보유분 예상 변동</small>
+                    <b>{valuation.USD ? "시세 확인 필요" : money(portfolioCheck.stressLoss.USD, "USD")}</b>
+                  </span>
+                </div>
+                <p>
+                  모든 보유 종목이 같은 폭으로 움직인 단순 가정이며, 실제 손실
+                  예측이나 투자 조언이 아닙니다.
+                </p>
+              </div>
+            </article>
+          </section>
+        </details>
+    </>
+  );
 
   return (
     <main
@@ -1685,214 +1907,10 @@ export default function TradingTerminal() {
           ← 시장으로 돌아가기
         </button>
       ) : null}
-      <section
-        className="summary workspace-summary"
-        id="market-overview"
-        aria-label="시장과 내 투자 요약"
-      >
-        <article className="balance-card">
-          <div className="card-title">
-            <span>
-              {!hasConfirmedAccount ? "모의투자 자산" : portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
-            </span>
-            {hasConfirmedAccount ? <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small> : null}
-            {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
-          </div>
-          {hasConfirmedAccount ? <>
-          <strong className="private-value">
-            {money(portfolio.cash.KRW + positionValues.KRW, "KRW")}
-          </strong>
-          {workspaceView === "MARKET" ? <details className="balance-mobile-disclosure"><summary>주문 가능 금액<ChevronDown size={14} aria-hidden="true"/></summary><div><span>원화<b className="private-value">{money(portfolio.cash.KRW,"KRW")}</b></span><span>달러<b className="private-value">{money(portfolio.cash.USD,"USD")}</b></span></div></details> : null}
-          <div className="balance-detail">
-            <span>
-              원화 주문 가능{" "}
-              <b className="private-value">
-                {money(portfolio.cash.KRW, "KRW")}
-              </b>
-            </span>
-            <span>
-              달러 주문 가능{" "}
-              <b className="private-value">
-                {money(portfolio.cash.USD, "USD")}
-              </b>
-            </span>
-            <span>
-              국내 평가손익{" "}
-              <b
-                className={`private-value ${valuation.KRW ? "" : performance.KRW >= 0 ? "up" : "down"}`}
-              >
-                {valuation.KRW ? "시세 확인 필요" : money(performance.KRW, "KRW")}
-              </b>
-            </span>
-            <span>
-              미국 평가손익{" "}
-              <b
-                className={`private-value ${valuation.USD ? "" : performance.USD >= 0 ? "up" : "down"}`}
-              >
-                {valuation.USD ? "시세 확인 필요" : money(performance.USD, "USD")}
-              </b>
-            </span>
-          </div>
-          </> : null}
-          {accountState !== "ready" ? (
-            <div className="workspace-balance-status">
-              <div role="status">
-                <b>{accountState === "loading" ? "잔고 확인 중" : hasConfirmedAccount ? "마지막으로 확인한 잔고" : "잔고를 확인하지 못했어요"}</b>
-                {accountUpdatedAt !== null ? <small>{marketTimeFormat.format(new Date(accountUpdatedAt))} · 한국시간</small> : null}
-              </div>
-              {accountState === "error" ? (
-                <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
-                  {accountRefreshing ? "확인 중" : "다시 확인"}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </article>
-        <div id="market-indices" className="workspace-index">
-          <MarketIndexChart initialData={bootstrapKospi} />
-        </div>
-      </section>
+      {workspaceView !== "MARKET" ? <>{marketOverview}{marketCheckup}</> : null}
 
-      {valuation.count > 0 ? <section className="release-account-status" aria-label="자산 평가 기준">
-        <div role="status"><b>일부 자산은 매입금액 기준 참고액이에요</b><p>시세 미확인 {valuation.count}종목이 참고 평가액에 포함돼요. 해당 통화의 평가손익과 시세가 필요한 투자 체크업은 확인할 수 없어요.</p></div>
-        <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} aria-hidden="true"/>{accountRefreshing ? "확인 중" : "평가 기준 다시 확인"}</button>
-      </section> : null}
-
-      <details className="advanced-checkup">
-        <summary>
-          <span>
-            <Gauge size={17} />
-            <b>고급 투자 체크업</b>
-            <small>시장 강도·포트폴리오 집중도·급락 스트레스 테스트</small>
-          </span>
-          <ChevronRight size={18} />
-        </summary>
-        <section className="insight-grid" aria-label="시장과 내 투자 체크업">
-          <article className="pulse-card">
-            <div className="insight-title">
-              <span>
-                <BarChart3 size={16} /> 오늘의 시장 요약
-              </span>
-              <small>
-                {marketPulse.total
-                  ? `${marketPulse.total}개 주요 종목 기준`
-                  : "시세 수신 대기"}
-              </small>
-            </div>
-            <strong className={marketPulse.total ? (marketPulse.average >= 0 ? "up" : "down") : undefined}>
-              {marketPulse.total ? percentText(marketPulse.average) : "—"}
-            </strong>
-            <p>
-              {marketPulse.total ? `주요 종목 중 ${marketPulse.risingCount}개가 상승 중이에요. ` : null}
-              {marketPulse.riser && marketPulse.faller
-                ? ` 강한 종목은 ${marketPulse.riser.name}, 약한 종목은 ${marketPulse.faller.name}입니다.`
-                : " 시세가 들어오면 상승·하락 종목을 자동으로 요약해요."}
-            </p>
-            <div className="pulse-movers">
-              <span>
-                <small>상승 선두</small>
-                <b>{marketPulse.riser ? marketPulse.riser.name : "—"}</b>
-                <em className="up">
-                  {marketPulse.riser
-                    ? percentText(marketPulse.riser.changePercent)
-                    : "—"}
-                </em>
-              </span>
-              <span>
-                <small>하락 선두</small>
-                <b>{marketPulse.faller ? marketPulse.faller.name : "—"}</b>
-                <em className="down">
-                  {marketPulse.faller
-                    ? percentText(marketPulse.faller.changePercent)
-                    : "—"}
-                </em>
-              </span>
-            </div>
-          </article>
-
-          <article className="checkup-card">
-            <div className="insight-title">
-              <span>
-                <Gauge size={16} /> 내 투자 체크업
-              </span>
-              <small>{portfolioCheck.positionCount}개 보유 종목</small>
-            </div>
-            <div className="checkup-metrics">
-              <span>
-                <small>원화 현금</small>
-                <b>{valuation.count || portfolioCheck.cashRatio.KRW===null?"—":portfolioCheck.cashRatio.KRW.toFixed(0)+"%"}</b>
-              </span>
-              <span>
-                <small>달러 현금</small>
-                <b>{valuation.count || portfolioCheck.cashRatio.USD===null?"—":portfolioCheck.cashRatio.USD.toFixed(0)+"%"}</b>
-              </span>
-              <span>
-                <small>최대 비중</small>
-                <b>{valuation.count ? "—" : portfolioCheck.concentration.toFixed(0)+"%"}</b>
-              </span>
-              <span>
-                <small>손익 종목</small>
-                <b>
-                  {valuation.count ? "—" : `${portfolioCheck.winners}/${portfolioCheck.losers}`}
-                </b>
-              </span>
-              <span>
-                <small>원화 보호 범위</small>
-                <b>{valuation.count || portfolioCheck.protectionCoverage.KRW===null?"—":portfolioCheck.protectionCoverage.KRW.toFixed(0)+"%"}</b>
-              </span>
-              <span>
-                <small>달러 보호 범위</small>
-                <b>{valuation.count || portfolioCheck.protectionCoverage.USD===null?"—":portfolioCheck.protectionCoverage.USD.toFixed(0)+"%"}</b>
-              </span>
-            </div>
-            <p className="checkup-currency-note">최대 비중과 보호 범위는 같은 통화 안에서 계산해요.</p>
-            <div className="checkup-advice">
-              <PieChart size={16} />
-              <div>
-                {portfolioCheck.notices.map((notice) => (
-                  <p key={notice}>{notice}</p>
-                ))}
-              </div>
-            </div>
-            <div className="stress-test">
-              <div className="stress-head">
-                <span>
-                  <BrainCircuit size={15} /> 급락 스트레스 테스트
-                </span>
-                <div>
-                  {[-1, -3, -5, -10].map((move) => (
-                    <button
-                      className={stressMove === move ? "active" : ""}
-                      key={move}
-                      onClick={() => setStressMove(move)}
-                      type="button"
-                    >
-                      {move}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="stress-result">
-                <span>
-                  <small>국내 보유분 예상 변동</small>
-                  <b>{valuation.KRW ? "시세 확인 필요" : money(portfolioCheck.stressLoss.KRW, "KRW")}</b>
-                </span>
-                <span>
-                  <small>미국 보유분 예상 변동</small>
-                  <b>{valuation.USD ? "시세 확인 필요" : money(portfolioCheck.stressLoss.USD, "USD")}</b>
-                </span>
-              </div>
-              <p>
-                모든 보유 종목이 같은 폭으로 움직인 단순 가정이며, 실제 손실
-                예측이나 투자 조언이 아닙니다.
-              </p>
-            </div>
-          </article>
-        </section>
-      </details>
-
-      <section className="content" id="market-rankings">
-        <div className="market-column instrument-browser">
+      <section className={workspaceView === "MARKET" ? "content market-focus-layout" : "content"} id="market-rankings">
+        <div className="market-column instrument-browser market-discovery-stage">
           <div
             className="search-card"
             id="search-card"
@@ -1900,9 +1918,9 @@ export default function TradingTerminal() {
           >
             <div className="section-head">
               <div>
-                <h2>주식 둘러보기</h2>
+                <h2>종목 검색</h2>
                 <p>
-                  회사명 · 코드 · 티커 <kbd>/</kbd>
+                  키보드 바로가기 <kbd>/</kbd>
                 </p>
               </div>
             </div>
@@ -2144,15 +2162,18 @@ export default function TradingTerminal() {
             </div>
           ))}
 
-          <RankedMarketBrowser
-            selectedId={selected}
-            onSelect={chooseSearchResult}
-            savedIds={favoriteIds}
-            onSave={toggleFavorite}
-          />
+          <div className="market-rankings-panel">
+            <RankedMarketBrowser
+              selectedId={selected}
+              onSelect={chooseSearchResult}
+              savedIds={favoriteIds}
+              onSave={toggleFavorite}
+            />
+          </div>
         </div>
         {workspaceView === "MARKET" || workspaceView === "WATCH" ? (
-          <aside className="consumer-personal">
+          <aside className={workspaceView === "MARKET" ? "consumer-personal market-auxiliary" : "consumer-personal"}>
+            {workspaceView === "MARKET" ? marketOverview : null}
             <MarketWatchlist
               accountSaved={cloudFavorites.authenticated===true}
               loadState={cloudFavorites.authenticated===null ? cloudFavorites.error ? "error" : "loading" : "ready"}
@@ -2833,6 +2854,7 @@ export default function TradingTerminal() {
           )}
         </aside>
       </section>
+      {workspaceView === "MARKET" ? marketCheckup : null}
       <div className="workspace-secondary">
         {workspaceView === "MARKET" ? <BrokerServiceAccess /> : null}
         {workspaceView === "MARKET" && accountState === "ready" && !portfolio.authenticated ? <aside className="welcome-entry broker-welcome" aria-label="처음 시작하는 투자 연습">
