@@ -36,7 +36,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --extra dev --frozen
-      - run: uv run ruff check app tests unit_tests
+      - run: sh -n entrypoint.sh
+      - run: uv run ruff check app tests unit_tests scripts/wait_for_database.py
       - run: uv run pytest -q
 
   frontend:
