@@ -63,6 +63,7 @@ import { describeOrderReceipt, type OrderResultState } from "@/lib/order-receipt
 import { ApiRequestError, requestJson } from "@/lib/reliable-request";
 import { isOrderReceipt, isValidPortfolio, isValidQuote, type OrderReceipt } from "@/lib/trading-validation";
 import { mergeQuoteSnapshots } from "@/lib/quote-snapshots";
+import { confirmedSellCapacity, formatShares, MAX_ORDER_SHARES, UNKNOWN_SELL_CAPACITY } from "@/lib/sell-capacity";
 
 const InvestmentHistory = dynamic(() => import("./InvestmentHistory"), {
   loading: () => <p role="status">투자 기록 화면을 준비하고 있어요…</p>,
@@ -160,6 +161,7 @@ type Position = {
   logoUrl?: string | null;
   valuationBasis?: "QUOTE" | "COST";
   quoteAsOf?: string | null;
+  sellCapacity?: unknown;
 };
 type Order = {
   id: string;
@@ -196,6 +198,7 @@ type Portfolio = {
   orders: Order[];
   protections: Protection[];
   estimatedPositions?: number;
+  positionCoverageComplete?: boolean;
 };
 type MarketStatus = {
   configured: boolean;
@@ -398,6 +401,7 @@ export default function TradingTerminal() {
   const [busy, setBusy] = useState(false);
   const [accountState, setAccountState] = useState<"loading" | "ready" | "error">("loading");
   const [accountUpdatedAt, setAccountUpdatedAt] = useState<number | null>(null);
+  const [expiredAccountAt, setExpiredAccountAt] = useState<number | null>(null);
   const [accountRefreshing, setAccountRefreshing] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResultState | null>(null);
   const [checkingOrder, setCheckingOrder] = useState(false);
@@ -544,16 +548,40 @@ export default function TradingTerminal() {
     setAccountRefreshing(true);
     const request = requestJson<Portfolio>("/api/trading/portfolio", {credentials:"include",cache:"no-store"})
       .then(data => {
+        if (accountRequest.current !== request) return;
         if (!isValidPortfolio(data)) throw new Error("계좌 응답 확인 실패");
         setPortfolio(data);
         accountLastSuccess.current = Date.now();
         setAccountUpdatedAt(accountLastSuccess.current);
         setAccountState("ready");
-      }).catch(() => { setAccountState("error"); })
-      .finally(() => { accountRequest.current = null; setAccountRefreshing(false); });
+      }).catch(() => {
+        if (accountRequest.current === request) setAccountState("error");
+      }).finally(() => {
+        if (accountRequest.current === request) {
+          accountRequest.current = null;
+          setAccountRefreshing(false);
+        }
+      });
     accountRequest.current = request;
     return request;
   }, []);
+
+  function refreshAfterReservationChange() {
+    // A pre-mutation response must not replace this post-mutation snapshot.
+    accountRequest.current = null;
+    accountLastSuccess.current = 0;
+    setAccountState("loading");
+    return refreshPortfolio();
+  }
+
+  useEffect(() => {
+    if (accountUpdatedAt === null) return;
+    const timeout = window.setTimeout(
+      () => setExpiredAccountAt(accountUpdatedAt),
+      Math.max(0, accountUpdatedAt + 30_000 - Date.now()),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [accountUpdatedAt]);
 
   // Keep only the request key across a reload. No balances, credentials or
   // order draft are persisted. Restored requests are queried, never resent.
@@ -870,44 +898,44 @@ export default function TradingTerminal() {
       state: "stale",
     };
   })();
-  const activePosition = portfolio.positions.find(
+  const matchingPositions = portfolio.positions.filter(
     (position) =>
       position.symbol === activeSymbol && position.exchange === quote?.exchange,
   );
-  const pendingSellQuantity = portfolio.orders
-    .filter(
-      (order) =>
-        order.side === "SELL" &&
-        ["OPEN", "TRIGGERED"].includes(order.status) &&
-        order.symbol === activeSymbol &&
-        order.exchange === quote?.exchange,
-    )
-    .reduce((sum, order) => sum + order.quantity, 0);
+  const activePosition = matchingPositions.length === 1 &&
+    matchingPositions[0].market === quote?.market && matchingPositions[0].currency === quote?.currency
+    ? matchingPositions[0] : undefined;
   const activeProtections = portfolio.protections.filter(
     (plan) =>
       plan.status === "ACTIVE" &&
       plan.symbol === activeSymbol &&
       plan.exchange === quote?.exchange,
   );
-  const protectedSellQuantity = activeProtections.reduce(
-    (sum, plan) => sum + plan.quantity,
-    0,
-  );
-  const availableSellQuantity = Math.max(
-    0,
-    (activePosition?.quantity ?? 0) -
-      pendingSellQuantity -
-      protectedSellQuantity,
-  );
+  const sellCapacity =
+    portfolio.authenticated && accountState === "ready" && accountUpdatedAt !== null &&
+    expiredAccountAt !== accountUpdatedAt && quote?.symbol === activeSymbol && quote.exchange &&
+    (activePosition !== undefined || matchingPositions.length === 0)
+      ? confirmedSellCapacity(activePosition, portfolio.positionCoverageComplete)
+      : null;
+  const maxSellQuantity = sellCapacity
+    ? Math.min(MAX_ORDER_SHARES, Math.floor(sellCapacity.availableQuantity))
+    : 0;
+  const sellCapacityIssue = !sellCapacity
+    ? UNKNOWN_SELL_CAPACITY
+    : sellCapacity.heldQuantity === 0
+      ? `${selectedName}은 현재 보유하고 있지 않아 매도할 수 없어요.`
+      : sellCapacity.availableQuantity === 0
+        ? "보유 수량이 대기 매도 또는 보호 설정에 묶여 있어요."
+        : maxSellQuantity === 0
+          ? "주문은 1주 단위예요. 지금 매도 가능 수량은 1주 미만이에요."
+          : "";
   const requestedQuantity = Number(quantity);
   const sellIssue =
     side !== "SELL" || !portfolio.authenticated
       ? ""
-      : !activePosition || activePosition.quantity <= 0
-        ? `${selectedName}은 현재 보유하고 있지 않아 매도할 수 없어요.`
-        : requestedQuantity > availableSellQuantity
-          ? `매도 가능 수량은 ${availableSellQuantity.toLocaleString("ko-KR")}주예요.`
-          : "";
+      : sellCapacityIssue || (requestedQuantity > maxSellQuantity
+          ? `한 번에 ${formatShares(maxSellQuantity)}까지 매도할 수 있어요.`
+          : "");
   const estimatedPrice =
     ["LIMIT", "STOP_LIMIT"].includes(kind) && Number(limitPrice) > 0
       ? Number(limitPrice)
@@ -954,7 +982,7 @@ export default function TradingTerminal() {
           : "매수 주문이라 보유 수량 확인이 필요 없어요.",
       detail:
         side === "SELL"
-          ? `매도 가능 ${availableSellQuantity.toLocaleString("ko-KR")}주`
+          ? sellCapacity ? `매도 가능 ${formatShares(sellCapacity.availableQuantity)}` : UNKNOWN_SELL_CAPACITY
           : "매수 주문 자동 확인",
       disabled: side !== "SELL",
     },
@@ -1269,8 +1297,9 @@ export default function TradingTerminal() {
         credentials: "include",
       });
       notify("대기 중인 지정가 가상주문을 취소했어요.");
-      await refreshPortfolio();
+      await refreshAfterReservationChange();
     } catch (error) {
+      if (error instanceof ApiRequestError && error.uncertain) void refreshAfterReservationChange();
       if (!pendingOrder.current) setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "취소 응답을 확인하지 못했어요. 매매 기록에서 실제 주문 상태를 확인해 주세요." : error instanceof Error ? error.message : "주문 상태를 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -1293,6 +1322,10 @@ export default function TradingTerminal() {
     const protectedQuantity = Number(protectionQuantity);
     if (![protectedQuantity,takeProfit,stopLoss].every(Number.isFinite) || protectedQuantity <= 0 || takeProfit <= 0 || stopLoss <= 0) {
       notify("보호할 수량을 입력해 주세요.");
+      return;
+    }
+    if (sellCapacityIssue || protectedQuantity > maxSellQuantity) {
+      notify(sellCapacityIssue || `한 번에 ${formatShares(maxSellQuantity)}까지 보호할 수 있어요.`);
       return;
     }
     if (
@@ -1324,8 +1357,9 @@ export default function TradingTerminal() {
       );
       setTakeProfitPrice("");
       setStopLossPrice("");
-      await refreshPortfolio();
+      await refreshAfterReservationChange();
     } catch (error) {
+      if (error instanceof ApiRequestError && error.uncertain) void refreshAfterReservationChange();
       setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "보호 설정 응답을 확인하지 못했어요. 해당 종목의 익절·손절 목록을 먼저 확인해 주세요. 자동으로 다시 등록하지 않아요." : error instanceof Error ? error.message : "보호 설정을 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -1346,8 +1380,9 @@ export default function TradingTerminal() {
         credentials: "include",
       });
       notify("익절·손절 보호 설정을 취소했어요.");
-      await refreshPortfolio();
+      await refreshAfterReservationChange();
     } catch (error) {
+      if (error instanceof ApiRequestError && error.uncertain) void refreshAfterReservationChange();
       if (!pendingOrder.current) setOrderResult({kind:"error",message:error instanceof ApiRequestError && error.uncertain ? "보호 설정 취소 응답을 확인하지 못했어요. 해당 종목의 익절·손절 목록에서 상태를 확인해 주세요." : error instanceof Error ? error.message : "보호 설정을 확인해 주세요."});
       notify(
         error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
@@ -1359,12 +1394,10 @@ export default function TradingTerminal() {
   }
 
   function setQuickQuantity(percent: number) {
-    const maximum =
-      side === "SELL" && portfolio.authenticated
-        ? availableSellQuantity
-        : maxBuyQuantity;
+    const maximum = side === "SELL" ? maxSellQuantity : maxBuyQuantity;
     const next =
       percent === 100 ? maximum : Math.floor(maximum * (percent / 100));
+    if (side === "SELL" && next < 1) return;
     setQuantity(String(Math.max(1, next)));
   }
 
@@ -1404,7 +1437,7 @@ export default function TradingTerminal() {
     clearPendingOrder();
     setOrderResult(result);
     notify(result.message);
-    void refreshPortfolio();
+    void refreshAfterReservationChange();
   }
 
   async function checkPendingOrder() {
@@ -1435,6 +1468,11 @@ export default function TradingTerminal() {
     if (accountState !== "ready" || Date.now() - accountLastSuccess.current > 30_000) { notify("잔고를 다시 확인한 뒤 주문해 주세요."); void refreshPortfolio(); return; }
     if (retry && (!pendingOrder.current?.body || pendingOrder.current.owner && pendingOrder.current.owner !== me?.coders_id)) return;
     if (!retry && (pendingOrder.current || !quote)) return;
+    if (!retry && sellIssue) {
+      notify(sellIssue);
+      setConfirmingOrder(false);
+      return;
+    }
     const attempt = retry ? pendingOrder.current! : {
       key:crypto.randomUUID(),name:selectedName,owner:me?.coders_id || null,
       body:JSON.stringify({symbol:activeSymbol,market:quote!.market,exchange:quote!.exchange,side,orderType:kind,quantity:Number(quantity),limitPrice:["LIMIT","STOP_LIMIT"].includes(kind)?Number(limitPrice):null,triggerPrice:["STOP","STOP_LIMIT"].includes(kind)?Number(triggerPrice):null}),
@@ -2432,14 +2470,7 @@ export default function TradingTerminal() {
             </button>
             <button
               className={side === "SELL" ? "sell active" : ""}
-              onClick={() => {
-                setSide("SELL");
-                if (portfolio.authenticated && !activePosition) {
-                  notify(
-                    `${selectedName}은 현재 보유하고 있지 않아 매도할 수 없어요.`,
-                  );
-                }
-              }}
+              onClick={() => setSide("SELL")}
             >
               <ArrowUpRight size={16} /> 매도
             </button>
@@ -2447,27 +2478,27 @@ export default function TradingTerminal() {
           <form onSubmit={submit}>
             {side === "SELL" && portfolio.authenticated && (
               <div
-                className={`sell-availability ${sellIssue ? "warning" : ""}`}
-                role="status"
+                className="sell-availability"
               >
-                <span>
-                  <b>
-                    매도 가능 {availableSellQuantity.toLocaleString("ko-KR")}주
-                  </b>
-                  <small>
-                    보유{" "}
-                    {(activePosition?.quantity ?? 0).toLocaleString("ko-KR")}주
-                    {pendingSellQuantity > 0
-                      ? ` · 대기 주문 ${pendingSellQuantity.toLocaleString("ko-KR")}주`
-                      : ""}
-                  </small>
+                <span role="status">
+                  <b>{sellCapacity ? `매도 가능 ${formatShares(sellCapacity.availableQuantity)}` : UNKNOWN_SELL_CAPACITY}</b>
+                  {sellCapacity ? (
+                    <small>
+                      보유 {formatShares(sellCapacity.heldQuantity)} · 대기 매도 {formatShares(sellCapacity.pendingOrderQuantity)} · 보호 설정 {formatShares(sellCapacity.protectionQuantity)}
+                      {sellCapacity.availableQuantity > MAX_ORDER_SHARES && <><br />한 번에 최대 {formatShares(MAX_ORDER_SHARES)}</>}
+                    </small>
+                  ) : <small>입력한 수량은 그대로 유지돼요.</small>}
                 </span>
-                {availableSellQuantity > 0 && (
+                {!sellCapacity ? (
+                  <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
+                    {accountRefreshing ? "조회 중" : "다시 조회"}
+                  </button>
+                ) : maxSellQuantity > 0 && (
                   <button
                     type="button"
-                    onClick={() => setQuantity(String(availableSellQuantity))}
+                    onClick={() => setQuickQuantity(100)}
                   >
-                    전량
+                    가능 수량 채우기
                   </button>
                 )}
               </div>
@@ -2545,9 +2576,9 @@ export default function TradingTerminal() {
                   type="number"
                   min="1"
                   max={
-                    side === "SELL" && portfolio.authenticated
-                      ? Math.max(1, availableSellQuantity)
-                      : 10000
+                    side === "SELL" && portfolio.authenticated && maxSellQuantity > 0
+                      ? maxSellQuantity
+                      : MAX_ORDER_SHARES
                   }
                   value={quantity}
                   onChange={(event) => setQuantity(event.target.value)}
@@ -2560,31 +2591,31 @@ export default function TradingTerminal() {
                 </button>
               </div>
             </label>
-            <div className="quick-quantity">
-              <span>
-                {side === "BUY"
-                  ? `주문 가능 금액 기준 · 최대 ${maxBuyQuantity.toLocaleString("ko-KR")}주`
-                  : `매도 가능 수량 기준 · 최대 ${availableSellQuantity.toLocaleString("ko-KR")}주`}
-              </span>
-              <div>
-                {[25, 50, 75, 100].map((percent) => (
+            {(side === "BUY" || sellCapacity && maxSellQuantity > 0) && (
+              <div className={`quick-quantity ${side === "SELL" ? "sell-percentages" : ""}`}>
+                <span>
+                  {side === "BUY"
+                    ? `주문 가능 금액 기준 · 최대 ${formatShares(maxBuyQuantity)}`
+                    : "가능 수량의 비율로 입력"}
+                </span>
+                <div>
+                  {(side === "SELL" ? [25, 50, 75] : [25, 50, 75, 100]).map((percent) => (
                   <button
                     type="button"
                     key={percent}
                     disabled={
                       side === "SELL"
-                        ? availableSellQuantity <= 0
+                        ? Math.floor(maxSellQuantity * (percent / 100)) < 1
                         : maxBuyQuantity <= 0
                     }
                     onClick={() => setQuickQuantity(percent)}
                   >
-                    {percent === 100 && side === "SELL"
-                      ? "전량"
-                      : `${percent}%`}
+                    {`${percent}%`}
                   </button>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <div className="estimate">
               <span>예상 가상주문금액</span>
               <b>
@@ -2594,7 +2625,7 @@ export default function TradingTerminal() {
                 )}
               </b>
             </div>
-            {sellIssue && (
+            {sellIssue && sellCapacity && (
               <p className="order-error" role="alert">
                 {sellIssue}
               </p>
@@ -2645,7 +2676,7 @@ export default function TradingTerminal() {
                       <input
                         type="number"
                         min="1"
-                        max={Math.max(1, availableSellQuantity)}
+                        max={maxSellQuantity > 0 ? maxSellQuantity : MAX_ORDER_SHARES}
                         value={protectionQuantity}
                         onChange={(event) =>
                           setProtectionQuantity(event.target.value)
@@ -2698,10 +2729,23 @@ export default function TradingTerminal() {
                         }
                       />
                     </label>
-                    <button disabled={busy || availableSellQuantity <= 0}>
+                    <button disabled={busy || maxSellQuantity <= 0 || orderResult?.kind === "uncertain"}>
                       <Target size={14} /> 보호 설정
                     </button>
                   </form>
+                  {side !== "SELL" && sellCapacityIssue && (
+                    <div className="sell-availability">
+                      <span role="status"><small>{sellCapacityIssue}</small></span>
+                      {!sellCapacity && (
+                        <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
+                          {accountRefreshing ? "조회 중" : "다시 조회"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {sellCapacity && Math.round(activeProtections.reduce((total, plan) => total + plan.quantity, 0) * 1_000_000) < Math.round(sellCapacity.protectionQuantity * 1_000_000) && (
+                    <p className="protection-empty">보호 수량은 전체 기준이고, 이 화면에서는 최근 설정만 볼 수 있어요.</p>
+                  )}
                   {activeProtections.length > 0 && (
                     <div className="protection-list">
                       {activeProtections.map((plan) => (
@@ -2739,7 +2783,7 @@ export default function TradingTerminal() {
                 </>
               ) : (
                 <p className="protection-empty">
-                  선택한 종목을 보유하면 익절·손절 가격을 함께 설정할 수 있어요.
+                  {sellCapacity ? "선택한 종목을 보유하면 익절·손절 가격을 함께 설정할 수 있어요." : "보유 수량을 확인한 뒤 익절·손절을 설정할 수 있어요."}
                 </p>
               )}
             </section>

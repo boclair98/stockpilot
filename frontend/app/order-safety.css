@@ -1,53 +1,67 @@
 .sell-availability {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 13px;
-  border: 1px solid #dceaff;
-  border-radius: 13px;
-  background: #f2f7ff;
-  color: #295caa;
-}
-
-.sell-availability.warning {
-  border-color: #ffd9dd;
-  background: #fff4f5;
-  color: #c93645;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-soft);
+  color: var(--ws-ink);
 }
 
 .sell-availability span {
   display: grid;
-  gap: 3px;
+  flex: 1 1 228px;
+  min-width: 0;
+  gap: 4px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .sell-availability b {
-  font-size: 12px;
+  font-size: 15px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
 
 .sell-availability small {
-  font-size: 10px;
-  opacity: 0.78;
+  color: var(--ws-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .sell-availability button {
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: #fff;
-  box-shadow: 0 1px 4px #1d293912;
-  color: inherit;
-  font-size: 11px;
-  font-weight: 800;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 10px;
+  background: var(--ws-surface);
+  color: var(--ws-brand);
+  font-size: 13px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.sell-availability button:hover:not(:disabled) {
+  background: var(--ws-tint);
+}
+
+.sell-availability button:focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 2px;
 }
 
 .order-error {
   margin: -6px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
-  background: #fff2f3;
-  color: #d13b49;
-  font-size: 11px;
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
 }
@@ -67,6 +81,15 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 5px;
+}
+
+.quick-quantity.sell-percentages > div {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.quick-quantity.sell-percentages button {
+  min-height: 44px;
+  font-size: 13px;
 }
 
 .quick-quantity button {

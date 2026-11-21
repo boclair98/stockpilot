@@ -199,10 +199,14 @@ def quantity_text(value: Decimal) -> str:
     return text.rstrip("0").rstrip(".") if "." in text else text
 
 
+def _available_sell_quantity(held: Decimal, reserved: Decimal) -> Decimal:
+    return max(Decimal("0"), held - reserved)
+
+
 def sell_quantity_error(
     held: Decimal, reserved: Decimal, requested: Decimal
 ) -> tuple[Decimal, str | None]:
-    available = max(Decimal("0"), held - reserved)
+    available = _available_sell_quantity(held, reserved)
     if held <= 0:
         return available, "보유하지 않은 종목은 매도할 수 없습니다."
     if requested > available:
@@ -217,6 +221,65 @@ def sell_quantity_error(
             f"최대 {quantity_text(available)}주까지 가능합니다."
         )
     return available, None
+
+
+def _pending_sell_filters(owner: UUID):
+    return (
+        TradeOrder.owner_id == owner,
+        TradeOrder.side == "SELL",
+        TradeOrder.status.in_(("OPEN", "TRIGGERED")),
+    )
+
+
+def _active_protection_filters(owner: UUID):
+    return (ProtectionPlan.owner_id == owner, ProtectionPlan.status == "ACTIVE")
+
+
+def _positions_with_sell_capacity(owner: UUID):
+    """Take a single statement snapshot; recent history is not a reservation ledger."""
+    pending = (
+        sa.select(
+            TradeOrder.symbol,
+            TradeOrder.exchange,
+            sa.func.sum(TradeOrder.quantity).label("total"),
+        )
+        .where(*_pending_sell_filters(owner))
+        .group_by(TradeOrder.symbol, TradeOrder.exchange)
+        .subquery()
+    )
+    protected = (
+        sa.select(
+            ProtectionPlan.symbol,
+            ProtectionPlan.exchange,
+            sa.func.sum(ProtectionPlan.quantity).label("total"),
+        )
+        .where(*_active_protection_filters(owner))
+        .group_by(ProtectionPlan.symbol, ProtectionPlan.exchange)
+        .subquery()
+    )
+    return (
+        sa.select(
+            Position,
+            sa.func.coalesce(pending.c.total, 0),
+            sa.func.coalesce(protected.c.total, 0),
+        )
+        .select_from(Position)
+        .outerjoin(
+            pending,
+            sa.and_(
+                Position.symbol == pending.c.symbol,
+                Position.exchange == pending.c.exchange,
+            ),
+        )
+        .outerjoin(
+            protected,
+            sa.and_(
+                Position.symbol == protected.c.symbol,
+                Position.exchange == protected.c.exchange,
+            ),
+        )
+        .where(Position.owner_id == owner)
+    )
 
 
 async def sell_capacity(
@@ -241,11 +304,9 @@ async def sell_capacity(
             await session.execute(
                 sa.select(TradeOrder)
                 .where(
-                    TradeOrder.owner_id == owner,
+                    *_pending_sell_filters(owner),
                     TradeOrder.symbol == symbol,
                     TradeOrder.exchange == exchange,
-                    TradeOrder.side == "SELL",
-                    TradeOrder.status.in_(("OPEN", "TRIGGERED")),
                 )
                 .with_for_update()
             )
@@ -256,10 +317,9 @@ async def sell_capacity(
     protection_quantity = (
         await session.execute(
             sa.select(sa.func.coalesce(sa.func.sum(ProtectionPlan.quantity), 0)).where(
-                ProtectionPlan.owner_id == owner,
+                *_active_protection_filters(owner),
                 ProtectionPlan.symbol == symbol,
                 ProtectionPlan.exchange == exchange,
-                ProtectionPlan.status == "ACTIVE",
             )
         )
     ).scalar_one()
@@ -721,11 +781,7 @@ async def portfolio(
 
     await process_open_orders(session, owner)
     wallet = await account(session, owner)
-    positions = (
-        (await session.execute(sa.select(Position).where(Position.owner_id == owner)))
-        .scalars()
-        .all()
-    )
+    positions = (await session.execute(_positions_with_sell_capacity(owner))).all()
     orders = (
         (
             await session.execute(
@@ -752,14 +808,18 @@ async def portfolio(
     )
 
     position_rows = []
+    position_coverage_complete = True
     estimated_positions = 0
     equity_krw = Decimal(wallet.cash_krw)
     equity_usd = Decimal(wallet.cash)
-    for position in positions:
+    for position, pending_sell, protected_sell in positions:
+        if not position.quantity:
+            continue
         instrument = await instrument_catalog.get(
             position.symbol, exchange=position.exchange
         )
-        if not instrument or not position.quantity:
+        if not instrument:
+            position_coverage_complete = False
             continue
         await kis_market.watch(instrument)
         current = kis_market.quote(
@@ -776,6 +836,8 @@ async def portfolio(
         if valuation_basis == "COST":
             estimated_positions += 1
         quantity = Decimal(position.quantity)
+        pending_quantity = Decimal(pending_sell)
+        protection_quantity = Decimal(protected_sell)
         average_price = Decimal(position.average_price)
         cost_basis = quantity * average_price
         market_value = quantity * current_price
@@ -793,6 +855,15 @@ async def portfolio(
                 "exchange": position.exchange,
                 "logoUrl": instrument.public().get("logoUrl"),
                 "quantity": float(quantity),
+                "sellCapacity": {
+                    "pendingOrderQuantity": float(pending_quantity),
+                    "protectionQuantity": float(protection_quantity),
+                    "availableQuantity": float(
+                        _available_sell_quantity(
+                            quantity, pending_quantity + protection_quantity
+                        )
+                    ),
+                },
                 "averagePrice": float(average_price),
                 "currentPrice": float(current_price),
                 "valuationBasis": valuation_basis,
@@ -815,6 +886,7 @@ async def portfolio(
         "authenticated": True,
         "cash": {"KRW": float(wallet.cash_krw), "USD": float(wallet.cash)},
         "positions": position_rows,
+        "positionCoverageComplete": position_coverage_complete,
         "estimatedPositions": estimated_positions,
         "orders": [
             {

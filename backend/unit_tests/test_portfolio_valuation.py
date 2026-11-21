@@ -12,15 +12,17 @@ from fastapi import Request
 
 class ReadOnlySession:
     def __init__(self, positions):
-        self.rows = [positions, [], []]
+        self.rows = [[(row, Decimal("0"), Decimal("0")) for row in positions], [], []]
 
     async def execute(self, statement):
         assert isinstance(statement, sa.sql.Select)
         rows = self.rows.pop(0)
-        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+        return SimpleNamespace(
+            all=lambda: rows, scalars=lambda: SimpleNamespace(all=lambda: rows)
+        )
 
 
-async def isolated_portfolio(monkeypatch, positions, quotes):
+async def isolated_portfolio(monkeypatch, positions, quotes, *, missing_symbols=()):
     """Stub every existing mutating or external boundary; verify the pure response."""
     owner = uuid4()
     snapshots = []
@@ -38,6 +40,8 @@ async def isolated_portfolio(monkeypatch, positions, quotes):
         snapshots.append((krw, usd))
 
     async def instrument(symbol, exchange):
+        if symbol in missing_symbols:
+            return None
         currency = "KRW" if exchange == "KRX" else "USD"
         return SimpleNamespace(
             name=symbol,
@@ -62,7 +66,9 @@ async def isolated_portfolio(monkeypatch, positions, quotes):
     request = Request({"type": "http", "headers": []})
     body = await trading.portfolio(request, owner, session)
     assert not session.rows
-    assert len(watched) == len(positions)
+    assert len(watched) == sum(
+        pos.quantity != 0 and pos.symbol not in missing_symbols for pos in positions
+    )
     assert len(snapshots) == 1
     return body, snapshots[0]
 
@@ -87,6 +93,12 @@ async def test_cached_quote_is_labeled_without_refreshing_or_changing_math(monke
     )
     row = body["positions"][0]
     assert row["valuationBasis"] == "QUOTE" and row["quoteAsOf"] == timestamp
+    assert body["positionCoverageComplete"] is True
+    assert row["sellCapacity"] == {
+        "pendingOrderQuantity": 0,
+        "protectionQuantity": 0,
+        "availableQuantity": 2,
+    }
     assert body["estimatedPositions"] == 0
     assert (row["currentPrice"], row["costBasis"], row["marketValue"]) == (12.5, 20, 25)
     assert (row["profit"], row["returnRate"]) == (5, 25)
@@ -123,7 +135,33 @@ async def test_mixed_currencies_count_only_cost_fallbacks(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_incomplete_catalog_does_not_mask_exact_visible_capacity(monkeypatch):
+    body, _ = await isolated_portfolio(
+        monkeypatch,
+        [position(), position("UNKNOWN", "NAS")],
+        {},
+        missing_symbols={"UNKNOWN"},
+    )
+    assert body["positionCoverageComplete"] is False
+    assert [row["symbol"] for row in body["positions"]] == ["AAPL"]
+    assert body["positions"][0]["sellCapacity"]["availableQuantity"] == 2
+
+
+@pytest.mark.asyncio
+async def test_no_positive_ledger_positions_is_complete(monkeypatch):
+    body, _ = await isolated_portfolio(
+        monkeypatch,
+        [position("EMPTY", "NAS", quantity="0")],
+        {},
+        missing_symbols={"EMPTY"},
+    )
+    assert body["positionCoverageComplete"] is True
+    assert body["positions"] == []
+
+
+@pytest.mark.asyncio
 async def test_guest_response_requires_no_account_or_session():
     body = await trading.portfolio(Request({"type": "http", "headers": []}), None, None)
     assert body["authenticated"] is False
     assert body["positions"] == [] and body["estimatedPositions"] == 0
+    assert "positionCoverageComplete" not in body

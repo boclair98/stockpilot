@@ -20,6 +20,32 @@ function load(file, deps = {}) {
   return exports;
 }
 
+const { confirmedSellCapacity, formatShares } = load('lib/sell-capacity.ts');
+assert.deepEqual(
+  JSON.parse(JSON.stringify(confirmedSellCapacity({
+    quantity: 10.125,
+    sellCapacity: { pendingOrderQuantity: 7.125, protectionQuantity: 1, availableQuantity: 2 },
+  }, false))),
+  { heldQuantity: 10.125, pendingOrderQuantity: 7.125, protectionQuantity: 1, availableQuantity: 2 },
+);
+assert.equal(confirmedSellCapacity(undefined, false), null);
+assert.equal(confirmedSellCapacity(undefined, true)?.availableQuantity, 0);
+assert.equal(confirmedSellCapacity({ quantity: 10 }, true), null);
+for (const invalid of [
+  { pendingOrderQuantity: 7, protectionQuantity: 1, availableQuantity: 9 },
+  { pendingOrderQuantity: -1, protectionQuantity: 0, availableQuantity: 11 },
+  { pendingOrderQuantity: '7', protectionQuantity: 1, availableQuantity: 2 },
+  { pendingOrderQuantity: 7, protectionQuantity: 1, availableQuantity: NaN },
+  { pendingOrderQuantity: 0, protectionQuantity: 0, availableQuantity: 10.00000001 },
+]) {
+  assert.equal(confirmedSellCapacity({ quantity: 10, sellCapacity: invalid }, true), null);
+}
+assert.equal(confirmedSellCapacity({
+  quantity: 10,
+  sellCapacity: { pendingOrderQuantity: 8, protectionQuantity: 3, availableQuantity: 0 },
+}, true)?.availableQuantity, 0);
+assert.equal(formatShares(1234.123456), '1,234.123456주');
+
 const insights = load('lib/portfolio-insights.ts');
 const identity = load('lib/instrument-identity.ts');
 const validation = load('lib/trading-validation.ts', { './instrument-identity': identity });
