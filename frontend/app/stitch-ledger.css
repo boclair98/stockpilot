@@ -11,9 +11,14 @@
 }
 
 .stitch-workspace.view-detail .instrument-heading {
-  padding-bottom: 16px;
-  gap: 12px 20px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "identity" "quote" "meta" "actions";
+  align-items: start;
+  gap: 8px 20px;
+  padding-block: 0 16px;
 }
+
+.stitch-workspace.view-detail .instrument-identity { grid-area: identity; }
 
 .stitch-workspace.view-detail .instrument-identity > div,
 .stitch-workspace.view-detail .instrument-quote {
@@ -27,12 +32,42 @@
   overflow-wrap: anywhere;
 }
 
+.stitch-workspace.view-detail .instrument-quote {
+  grid-area: quote;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  text-align: start;
+  color: var(--ws-muted);
+}
+
 .stitch-workspace.view-detail .instrument-quote strong {
-  font-size: clamp(26px, 2.6vw, 38px);
+  font-size: clamp(30px, 3.5vw, 44px);
+  line-height: 1.16;
   font-variant-numeric: tabular-nums;
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.stitch-workspace.view-detail .instrument-meta {
+  grid-area: meta;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.stitch-workspace.view-detail .instrument-meta time { font-variant-numeric: tabular-nums; }
+
+.stitch-workspace.view-detail .detail-quote-status {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  font-weight: 650;
+}
+
+.stitch-workspace.view-detail .detail-quote-status[data-freshness="fresh"] { color: var(--ws-brand); }
 
 .stitch-workspace.view-detail .instrument-meta,
 .stitch-workspace.view-detail .instrument-identity .workspace-eyebrow {
@@ -42,9 +77,15 @@
 }
 
 .stitch-workspace.view-detail .instrument-actions {
+  grid-area: actions;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.stitch-workspace.view-detail .instrument-actions button {
+  padding-inline: 10px;
+  color: var(--ws-muted);
 }
 
 .stitch-workspace.view-detail :is(.instrument-actions, .workspace-detail-tabs) button {
@@ -60,7 +101,14 @@
 }
 
 .stitch-workspace.view-detail .stock-trend-panel.broker-chart {
-  padding-block: 18px 12px;
+  padding-block: 13px 12px;
+}
+
+.stitch-workspace.view-detail .analysis-column .deferred-placeholder {
+  border-color: var(--ws-line);
+  border-radius: var(--sp-radius-control);
+  background: var(--ws-canvas);
+  animation: none;
 }
 
 .stitch-workspace.view-detail .broker-chart .trend-periods {
@@ -98,6 +146,29 @@
   min-inline-size: 44px;
   min-block-size: 44px;
 }
+
+.stitch-workspace.view-detail .order-stock .favorite-selected {
+  border: 1px solid var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+}
+
+.stitch-workspace.view-detail .order-stock .favorite-selected[aria-pressed="true"] {
+  border-color: var(--ws-brand);
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+.stitch-workspace.view-detail .order-card .side-tabs { border-color: var(--ws-line); }
+
+.stitch-workspace.view-detail .order-card .detail-order-recovery {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+
+.stitch-workspace.view-detail .order-card .detail-order-recovery > button { justify-self: start; }
 
 .stitch-workspace.view-detail .order-stock {
   grid-template-columns: 34px minmax(0, 1fr) 44px;
@@ -207,6 +278,25 @@
 }
 
 @media (max-width: 1023px) {
+  .stitch-workspace.view-detail .mobile-ticket-trigger {
+    border: 1px solid var(--ws-line);
+    background: var(--ws-floating);
+    color: var(--ws-ink);
+    box-shadow: var(--ws-shadow);
+  }
+
+  .stitch-workspace.view-detail .mobile-ticket-trigger > span { min-inline-size: 0; }
+  .stitch-workspace.view-detail .mobile-ticket-trigger small { color: var(--ws-muted); }
+
+  .stitch-workspace.view-detail .mobile-ticket-trigger > b {
+    flex: none;
+    min-block-size: 44px;
+    padding-inline: 11px;
+    border-radius: var(--sp-radius-control);
+    background: var(--ws-brand-solid);
+    color: var(--ws-on-brand);
+  }
+
   .stitch-workspace.view-detail.mobile-order-open .order-card {
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
     border-radius: 18px 18px 0 0;
@@ -214,10 +304,35 @@
   }
 }
 
+@media (min-width: 820px) {
+  .stitch-workspace.view-detail .instrument-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity actions"
+      "quote actions"
+      "meta actions";
+  }
+
+  .stitch-workspace.view-detail .instrument-actions { justify-content: end; }
+}
+
 @media (max-width: 767px) {
   .stitch-workspace.view-detail .instrument-quote {
     flex-wrap: wrap;
     column-gap: 10px;
     row-gap: 4px;
+  }
+  .stitch-workspace.view-detail .broker-chart-toolbar {
+    gap: 4px;
+    margin-block-end: 6px;
+  }
+  .stitch-workspace.view-detail :is(.broker-chart-modes, .broker-chart-actions) { gap: 4px; }
+  .stitch-workspace.view-detail :is(.broker-chart-modes button, .chart-expand) {
+    padding-inline: 6px;
+    font-size: 12px;
+  }
+  .stitch-workspace.view-detail .broker-chart-period {
+    gap: 4px 8px;
+    margin-block: 6px;
   }
 }

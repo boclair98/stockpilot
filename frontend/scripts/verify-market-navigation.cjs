@@ -130,10 +130,10 @@ async function navigationTests() {
   assert.equal(ctx.quoteReadError,null,'Explicit read retry clears the old error without replaying an order');
   reads[6].resolve({...instrument('ABR/D','US'),exchange:'NYS',id:'US:NYS:ABR/D',price:20});await flush();
   assert.equal(ctx.quotes.some(q=>q.id==='US:NYS:ABR/D'),true);
+  assert.equal(ctx.quoteReadError,null,'A successful retry leaves the quote header recovered');
   cleanup();
   assert.equal(listeners.size, 0);
-  assert.equal(notices.length, 1, 'Only the explicitly simulated offline read should show an error');
-  assert.match(notices[0],/시세를 불러오지 못했어요/);
+  assert.equal(notices.length, 0, 'A detail read failure is handled inline without a duplicate toast');
 }
 
 async function searchTests() {

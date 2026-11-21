@@ -906,6 +906,9 @@ export default function TradingTerminal() {
       state: "stale",
     };
   })();
+  const detailQuoteIssue = quoteReadError?.id === selected ? quoteReadError : null;
+  const detailQuoteFailed = Boolean(detailQuoteIssue && !quote);
+  const detailQuoteAsOf = clockMs === undefined ? null : observedQuoteTime(quoteObservedAt, clockMs);
   const matchingPositions = portfolio.positions.filter(
     (position) =>
       position.symbol === activeSymbol && position.exchange === quote?.exchange,
@@ -1191,7 +1194,6 @@ export default function TradingTerminal() {
         .catch(() => {
           if (active && request === selectionRequest.current) {
             setQuoteReadError({id,message:"이 종목의 시세를 불러오지 못했어요. 다시 조회하거나 다른 종목을 선택해 주세요."});
-            notify("이 종목의 시세를 불러오지 못했어요. 검색으로 다시 선택해 주세요.");
           }
         });
     };
@@ -1203,7 +1205,7 @@ export default function TradingTerminal() {
       window.removeEventListener("popstate", restoreInstrument);
       window.removeEventListener("hashchange", restoreInstrument);
     };
-  }, [activateInstrument, loadQuote, notify, quoteAttempt]);
+  }, [activateInstrument, loadQuote, quoteAttempt]);
 
   const toggleFavorite = useCallback(
     async (item: SearchItem) => {
@@ -1524,6 +1526,19 @@ export default function TradingTerminal() {
   const hasConfirmedAccount = accountUpdatedAt !== null;
   const hasVisibleBalance = workspaceView === "MARKET" || workspaceView === "ASSETS";
   const feedConnected = socketConnected && Boolean(status?.connected);
+  const accountReadNotice = !hasVisibleBalance && accountState !== "ready" ? (
+    <section className={`release-account-status is-${accountState}${workspaceView === "DETAIL" ? " detail-order-recovery" : ""}`} aria-label="잔고 조회 상태">
+      <div>
+        <b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b>
+        <p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>
+        {accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}
+      </div>
+      <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}>
+        <RefreshCw size={16} className={accountRefreshing ? "spin" : ""} aria-hidden="true" />
+        {accountRefreshing ? "확인 중" : "잔고 다시 확인"}
+      </button>
+    </section>
+  ) : null;
   const marketOverview = (
       <section
         className="summary workspace-summary"
@@ -1895,10 +1910,7 @@ export default function TradingTerminal() {
           </div>
         )}
       </section>
-      {!hasVisibleBalance && accountState !== "ready" ? <section className={`release-account-status is-${accountState}`} aria-label="잔고 조회 상태">
-        <div><b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b><p>{accountState === "loading" ? "최신 잔고를 받은 뒤 주문할 수 있어요." : accountUpdatedAt ? "마지막으로 받은 잔고를 유지하고 있어요. 다시 확인하기 전에는 새 주문을 보내지 않아요." : "아직 계좌 잔고를 확인하지 못했어요. 새 주문을 보내기 전에 다시 확인해 주세요."}</p>{accountUpdatedAt ? <small>마지막 확인 · {new Date(accountUpdatedAt).toLocaleTimeString("ko-KR")}</small> : null}</div>
-        <button type="button" disabled={accountRefreshing} onClick={() => void refreshPortfolio()}><RefreshCw size={16} className={accountRefreshing ? "spin" : ""}/>{accountRefreshing ? "확인 중" : "잔고 다시 확인"}</button>
-      </section> : null}
+      {workspaceView === "DETAIL" ? null : accountReadNotice}
       {orderResult ? <OrderResult result={orderResult} checking={checkingOrder} onCheck={() => void checkPendingOrder()} onRetry={() => void placeOrder(true)} retryAvailable={pendingRetryAvailable} onDismiss={() => {
         if (window.confirm("결과가 확인되지 않은 주문은 취소되지 않아요. 매매 기록을 확인했으며 새 주문을 준비할까요?")) { clearPendingOrder(); setOrderResult(null); }
       }}/> : null}
@@ -2225,21 +2237,19 @@ export default function TradingTerminal() {
                 {quote ? money(quote.price, quote.currency) : "—"}
               </strong>
               <span
-                className={(quote?.changePercent ?? 0) >= 0 ? "up" : "down"}
+                className={quote && quote.changePercent !== 0 ? (quote.changePercent > 0 ? "up" : "down") : undefined}
               >
                 {quote
                   ? `${percentText(quote.changePercent)} · 전일 대비`
-                  : "시세 확인 중"}
+                  : detailQuoteFailed ? "시세 조회 실패" : "시세 확인 중"}
               </span>
             </div>
-            <div className="instrument-meta">
-              <span>{quoteFreshness.label}</span>
-              <span>
-                {quote?.asOf
-                  ? new Date(quote.asOf).toLocaleString("ko-KR")
-                  : "조회 시간 확인 중"}
+            {detailQuoteAsOf ? <div className="instrument-meta">
+              <span className="detail-quote-status" data-freshness={quoteFreshness.state}>
+                {quoteFreshness.state === "stale" ? "이전 조회 시세" : quoteFreshness.label}
               </span>
-            </div>
+              <time dateTime={detailQuoteAsOf}>조회 · {marketTimeFormat.format(new Date(detailQuoteAsOf))} 한국시간</time>
+            </div> : null}
             <div className="instrument-actions">
               <button
                 type="button"
@@ -2272,7 +2282,7 @@ export default function TradingTerminal() {
               </button>
             </div>
           </header>
-          {quoteReadError?.id === selected && !quote ? <div className="instrument-quote-recovery" role="alert"><p>{quoteReadError.message}</p><button type="button" onClick={() => setQuoteAttempt(value => value + 1)}>시세 다시 조회</button><a href={`/stocks?market=${activeMarket}`}>다른 종목 찾기</a></div> : null}
+          {detailQuoteIssue ? <div className="instrument-quote-recovery" role="alert"><p>{quote ? "종목 시세 요청이 실패했어요. 표시된 조회 시각을 확인하거나 다시 조회해 주세요." : detailQuoteIssue.message}</p><button type="button" onClick={() => setQuoteAttempt(value => value + 1)}>시세 다시 조회</button><a href={`/stocks?market=${activeMarket}`}>다른 종목 찾기</a></div> : null}
           <DeferredMount minHeight={390} rootMargin="420px 0px" eager={workspaceView === "DETAIL"}>
             <StockTrendPanel
               symbol={activeSymbol}
@@ -2418,6 +2428,7 @@ export default function TradingTerminal() {
               <X size={20} />
             </button>
           </div>
+          {workspaceView === "DETAIL" ? accountReadNotice : null}
           <div className="order-stock">
             <StockLogo
               symbol={activeSymbol}
@@ -2893,7 +2904,7 @@ export default function TradingTerminal() {
         <span>
           {selectedName}
           <small>
-            {quote ? money(quote.price, quote.currency) : "시세 확인 중"}
+            {accountState === "error" ? "잔고 확인 필요" : "연습용 자금"}
           </small>
         </span>
         <b>
