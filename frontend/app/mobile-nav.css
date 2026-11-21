@@ -153,14 +153,26 @@
   }
 
   .mobile-menu-sheet > header button {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
     border: 0;
     border-radius: 13px;
     background: #fff;
     color: #59636e;
+  }
+
+  .mobile-menu-group + .mobile-menu-group {
+    margin-block-start: 20px;
+  }
+
+  .mobile-menu-group h3 {
+    margin: 0 2px 8px;
+    color: var(--ws-ink);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.4;
   }
 
   .mobile-menu-grid {
@@ -217,6 +229,35 @@
     font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .mobile-menu-group .mobile-menu-grid > a {
+    grid-template-columns: 36px minmax(0, 1fr);
+    min-height: 52px;
+    padding: 8px 12px;
+  }
+
+  .mobile-menu-group .mobile-menu-grid > a > span {
+    width: 36px;
+    height: 36px;
+  }
+
+  .mobile-menu-group .mobile-menu-grid small {
+    overflow: visible;
+    color: var(--ws-muted);
+    font-size: .8125rem;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* Short/wide sheets already switch to compact multi-column tiles. */
+  @media (max-height: 560px) and (max-width: 900px) {
+    .mobile-menu-group .mobile-menu-grid > a {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+    }
   }
 
   .mobile-menu-note {

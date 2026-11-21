@@ -39,70 +39,30 @@ const primaryItems = [
   { href: "/#decision-review", label: "투자 기록", icon: History },
 ];
 
-const moreItems = [
-  { href:ALL_INSTRUMENTS_HREF,label:"전체 종목",description:"시장에서 바로 전체 종목 검색",icon:Search },
-  { href:"/notifications",label:"알림 모아보기",description:"주문·가격·공시와 문의 답변",icon:MessageCircle },
-  { href:"/account-tools",label:"계좌 관리",description:"정기 모의 매수·가상 환전·권리 일정",icon:Wallet },
-  { href:"/support",label:"고객지원",description:"문의와 서비스 공지 확인",icon:ShieldCheck },
-  { href:"/compare",label:"종목 비교",description:"같은 기간의 가격 변화와 하락폭",icon:BarChart3 },
-  {
-    href: "/practice",
-    label: "투자 연습",
-    description: "별도 시나리오에서 익히는 판단",
-    icon: BrainCircuit,
-  },
-  {
-    href: "/league",
-    label: "수익률 리그",
-    description: "보유 종목 비공개 · 수익률 순위",
-    icon: Trophy,
-  },
-  {
-    href: "/learn",
-    label: "주식 학습",
-    description: "기초부터 연습까지",
-    icon: GraduationCap,
-  },
-  {
-    href: "/#decision-review",
-    label: "판단 기록",
-    description: "종목별 개인 메모와 주문 기록",
-    icon: BookOpen,
-  },
-  {
-    href: "/pricing",
-    label: "Pro 플랜",
-    description: "개인·팀 멤버십과 출시 알림",
-    icon: BadgeCheck,
-  },
-  {
-    href: "/growth",
-    label: "성장 허브",
-    description: "미션과 리포트로 습관을 키워요",
-    icon: Gauge,
-  },
-  {
-    href: "/lounge",
-    label: "투자 라운지",
-    description: "투자 습관과 배움을 나눠요",
-    icon: MessageCircle,
-  },
-  {
-    href: "/profile",
-    label: "내 프로필",
-    description: "계정과 알림 설정을 확인해요",
-    icon: UserRound,
-  },
-  {
-    href: "/guide",
-    label: "처음 이용 안내",
-    description: "StockPilot의 모든 기능을 살펴봐요",
-    icon: BookOpen,
-  },
+const menuGroups = [
+  { title: "투자 도구", items: [
+    { href: ALL_INSTRUMENTS_HREF, label: "전체 종목", description: "국내·미국 종목 검색", icon: Search },
+    { href: "/compare", label: "종목 비교", description: "같은 기간의 가격 변화 비교", icon: BarChart3 },
+    { href: "/notifications", label: "알림 모아보기", description: "주문·가격·공시 알림", icon: MessageCircle },
+    { href: "/account-tools", label: "계좌 관리", description: "정기 모의 매수·가상 환전·권리 일정", icon: Wallet },
+  ] },
+  { title: "학습과 커뮤니티", items: [
+    { href: "/learn", label: "주식 학습", description: "주식의 기초와 용어", icon: GraduationCap },
+    { href: "/practice", label: "투자 연습", description: "시나리오로 연습하는 투자 판단", icon: BrainCircuit },
+    { href: "/growth", label: "성장 허브", description: "미션과 활동 리포트", icon: Gauge },
+    { href: "/league", label: "수익률 리그", description: "보유 종목 비공개 수익률 순위", icon: Trophy },
+    { href: "/lounge", label: "투자 라운지", description: "투자 경험과 학습 이야기", icon: MessageCircle },
+  ] },
+  { title: "계정과 도움말", items: [
+    { href: "/profile", label: "내 프로필", description: "계정과 알림 설정", icon: UserRound },
+    { href: "/support", label: "고객지원", description: "문의와 서비스 공지", icon: ShieldCheck },
+    { href: "/guide", label: "처음 이용 안내", description: "종목 찾기부터 첫 모의주문까지", icon: BookOpen },
+    { href: "/pricing", label: "Pro 플랜", description: "멤버십 소개와 출시 알림", icon: BadgeCheck },
+  ] },
 ];
 
 function isCurrent(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
 }
 
 export default function MobileServiceNav() {
@@ -128,7 +88,7 @@ export default function MobileServiceNav() {
 
   if (hideNavigation) return null;
 
-  const moreActive = moreItems.some((item) => isCurrent(pathname, item.href));
+  const moreActive = menuGroups.some(group => group.items.some(item => isCurrent(pathname, item.href)));
 
   return (
     <>
@@ -161,24 +121,26 @@ export default function MobileServiceNav() {
               </button>
             </header>
 
-            <div className="mobile-menu-grid">
-              {moreItems.map(({ href, label, description, icon: Icon }) => (
-                <Link
-                  className={isCurrent(pathname, href) ? "active" : ""}
-                  href={href}
-                  key={href}
-                  onClick={event => { followMarketBrowseLink(event); closeMenu(); }}
-                >
-                  <span>
-                    <Icon size={20} />
-                  </span>
-                  <div>
-                    <b>{label}</b>
-                    <small>{description}</small>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            {menuGroups.map(group => (
+              <section className="mobile-menu-group" key={group.title}>
+                <h3>{group.title}</h3>
+                <div className="mobile-menu-grid">
+                  {group.items.map(({ href, label, description, icon: Icon }) => (
+                    <Link
+                      className={isCurrent(pathname, href) ? "active" : ""}
+                      aria-current={isCurrent(pathname, href) ? "page" : undefined}
+                      href={href}
+                      prefetch={false}
+                      key={href}
+                      onClick={event => { followMarketBrowseLink(event); closeMenu(); }}
+                    >
+                      <span><Icon size={20} aria-hidden="true" /></span>
+                      <div><b>{label}</b><small>{description}</small></div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ))}
 
             <div className="mobile-menu-note">
               <ShieldCheck size={18} />

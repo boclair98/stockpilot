@@ -98,6 +98,12 @@ button,select,input,textarea { font:inherit; }
 .product-edition .practice-discovery { background:var(--ws-tint); padding:20px; }
 .product-edition .practice-discovery h2 { font-size:18px; }
 .product-edition .workspace-secondary { padding-top:32px; }
+.product-edition .workspace-extras { margin-block:8px; }
+.product-edition .workspace-extras nav { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr)); gap:4px 12px; padding-bottom:8px; }
+.product-edition .workspace-extras a { display:flex; align-items:center; gap:8px; min-height:44px; padding-inline:8px; color:var(--ws-ink); font-size:14px; text-decoration:none; border-radius:8px; }
+.product-edition .workspace-extras svg { flex:none; color:var(--ws-muted); }
+.product-edition .workspace-extras :is(summary,a):focus-visible { outline:2px solid var(--ws-brand); outline-offset:2px; }
+@media(hover:hover) { .product-edition .workspace-extras a:hover { background:var(--ws-tint); } }
 .product-edition .workspace-secondary > nav { margin:0; padding:20px 0; gap:8px; border-bottom:1px solid var(--ws-line); }
 .product-edition .workspace-secondary > nav a { min-height:48px; border-radius:12px; }
 .product-edition .broker-service-access { border-top:0; margin:0; padding:0 0 16px; }

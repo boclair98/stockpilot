@@ -1,5 +1,15 @@
 # OpenUI Design Plan
 
+## 2026-11-21 · 핵심 투자 흐름과 선택 기능 구분
+
+- Topic / Offer: 시장을 확인하고 종목을 찾아 모의주문한 뒤 내 자산·매매 기록을 확인하는 웹. 처음부터 모든 부가 도구를 펼쳐 보이지 않는다.
+- Audience / Primary user action: 모바일 초보자와 기존 투자자. 시장의 ‘전체 종목’ → 기존 검색·상세·모의주문 경로. 관심종목·자산·기록은 여전히 상시 접근한다.
+- Deliverable / Style / Tonal key: 기존 Next.js 시장 화면과 모바일 메뉴 한 가지. 현재 밝은/어두운 테마, Pretendard, 금융 부호·통화 표기, 기존 API·인증 유지.
+- Icons / Proof / Motion: 현재 Lucide와 실제 시장·계좌 상태만 사용. 아이콘·가격 예시·일러스트를 추가하지 않고 모션은 최소화한다.
+- Composition contract: 기존 비대칭 시장지수·자산 요약과 실종목 목록이 첫 화면이다. 관심 패널의 반복 홍보와 중복 학습 카드를 덜어내고, 주요 도구와 고객지원은 바로 열 수 있게, 학습·리그·커뮤니티 등은 목적별로 한 단계 뒤에 둔다. 모바일 전체 메뉴는 영구 탭에 없는 도구를 역할별로 제공한다. 모든 기존 URL은 보존한다.
+- 구체 규칙: 기존 --ws-ink/surface/muted/line/brand 시맨틱 토큰과 양 테마 값 재사용, 섹션 제목 16–20px·본문 14–16px, 8/12/16px 간격, 조작 높이 최소 44px, 숫자·한국어 줄바꿈 및 보이는 키보드 포커스. 네이티브 펼치기/닫기로 별도 애니메이션 불필요. 주문·계좌 쓰기나 DB 변경 없음.
+- Filled prompt / Output: Simplify the existing StockPilot market workspace around finding an instrument, placing a simulated order and reviewing holdings or records. Keep the actual index, stock rows, live states and current navigation dominant. Consolidate repeated promotional entry points and group optional destinations behind descriptive, keyboard-accessible controls. Preserve theme colors, URLs, compact mobile navigation, account data and all order semantics. Output integrated TradingTerminal, MobileServiceNav and scoped styles, regression coverage and README. Verify links, keyboard behavior, responsive widths and production; do not create a landing page or a new service.
+
 ## 2026-11-07 · 웹 출시 전 고도화와 배포 점검
 
 - 목적/사용자: 국내·미국 모의투자 웹의 재방문 사용자. 기존 디자인·계좌·주문 규칙·앱인토스·별도 사용자 변경을 유지하고 Nov6 개선을 출시에 맞게 점검한다.

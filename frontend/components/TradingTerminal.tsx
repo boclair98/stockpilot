@@ -51,7 +51,6 @@ import { ALL_INSTRUMENTS_HREF, MARKET_BROWSE_EVENT, followMarketBrowseLink, mark
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { isInstrument } from "@/lib/instrument-identity";
 import StockLogo from "./StockLogo";
-import KospiBenchmarkCard from "./KospiBenchmarkCard";
 import MarketWatchlist, { type WatchlistItem } from "./MarketWatchlist";
 import HoldingsPanel from "./HoldingsPanel";
 import { portfolioRisk } from "@/lib/portfolio-insights";
@@ -66,6 +65,9 @@ import { mergeQuoteSnapshots } from "@/lib/quote-snapshots";
 
 const InvestmentHistory = dynamic(() => import("./InvestmentHistory"), {
   loading: () => <p role="status">투자 기록 화면을 준비하고 있어요…</p>,
+});
+const KospiBenchmarkCard = dynamic(() => import("./KospiBenchmarkCard"), {
+  loading: () => <p role="status">코스피 비교 지표를 준비하고 있어요…</p>,
 });
 const CompanyInsight = dynamic(() => import("./CompanyInsight"), {
   loading: () => (
@@ -407,6 +409,7 @@ export default function TradingTerminal() {
   const [takeProfitPrice, setTakeProfitPrice] = useState("");
   const [stopLossPrice, setStopLossPrice] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
   const [workspaceView, setWorkspaceView] = useState<
     "MARKET" | "DETAIL" | "WATCH" | "ASSETS" | "RECORDS"
@@ -1655,11 +1658,11 @@ export default function TradingTerminal() {
                   : "시세 수신 대기"}
               </small>
             </div>
-            <strong className={marketPulse.average >= 0 ? "up" : "down"}>
-              {percentText(marketPulse.average)}
+            <strong className={marketPulse.total ? (marketPulse.average >= 0 ? "up" : "down") : undefined}>
+              {marketPulse.total ? percentText(marketPulse.average) : "—"}
             </strong>
             <p>
-              주요 종목 중 {marketPulse.risingCount}개가 상승 중이에요.
+              {marketPulse.total ? `주요 종목 중 ${marketPulse.risingCount}개가 상승 중이에요. ` : null}
               {marketPulse.riser && marketPulse.faller
                 ? ` 강한 종목은 ${marketPulse.riser.name}, 약한 종목은 ${marketPulse.faller.name}입니다.`
                 : " 시세가 들어오면 상승·하락 종목을 자동으로 요약해요."}
@@ -2055,45 +2058,6 @@ export default function TradingTerminal() {
               <button type="button" disabled={cloudFavorites.busy || importingFavorites} onClick={cloudFavorites.refresh}>다시 조회</button>
             </div> : null}
             {cloudFavorites.error?<p className="personal-inline-error" role="alert">{cloudFavorites.error}<button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></p>:null}
-            <section className="continue-section">
-              <span className="workspace-eyebrow">투자 연습 이어하기</span>
-              <h2>관찰에서 판단으로</h2>
-              <p>가격을 확인하고, 나만의 이유를 남겨보세요.</p>
-              {quote ? (
-                <button
-                  type="button"
-                  className="continue-stock"
-                  onClick={() =>
-                    void chooseSearchResult({ ...quote, englishName: "" })
-                  }
-                >
-                  <StockLogo
-                    symbol={quote.symbol}
-                    name={quote.name}
-                    color="#18c899"
-                    logoUrl={quote.logoUrl}
-                  />
-                  <span>
-                    <b>{quote.name}</b>
-                    <small>{money(quote.price, quote.currency)}</small>
-                  </span>
-                  <ArrowUpRight size={18} />
-                </button>
-              ) : (
-                <p>종목을 선택하면 이어서 살펴볼 수 있어요.</p>
-              )}
-            </section>
-            <section className="practice-discovery">
-              <div>
-                <GraduationCap size={22} />
-                <span>처음이라면</span>
-              </div>
-              <h2>처음이라도 괜찮아요</h2>
-              <p>기초를 배우고 연습으로 확인해요.</p>
-              <a href="/learn">
-                주식의 기초부터 <ArrowUpRight size={17} />
-              </a>
-            </section>
           </aside>
         ) : null}
         <div className="analysis-column" id="instrument-workspace">
@@ -2749,38 +2713,28 @@ export default function TradingTerminal() {
           <div><strong>투자, 내 돈 없이 먼저 연습해요.</strong><p>실제 시세를 살펴보고 연습 자금으로 모의주문해 보세요.</p></div>
           <div className="welcome-entry-actions"><button type="button" onClick={focusSearch}>종목 찾아보기<ArrowUpRight size={16} aria-hidden="true"/></button><Link href="/guide">어떻게 이용하나요?<ChevronRight size={16} aria-hidden="true"/></Link></div>
         </aside> : null}
-        <details>
+        <details onToggle={event => setEnvironmentOpen(event.currentTarget.open)}>
           <summary>투자 환경·비교 지표</summary>
+          {environmentOpen && (workspaceView === "MARKET" || workspaceView === "WATCH") ? <>
           <KospiBenchmarkCard />
           <SimulationControlCenter
             authenticated={portfolio.authenticated}
             onNotice={notify}
           />
+          </> : null}
         </details>
-        <nav aria-label="더 많은 투자 기능">
-          {workspaceView !== "MARKET" ? <><a href="/compare"><BarChart3 size={17} />종목 비교</a><a href="/notifications"><Bell size={17} />알림 모아보기</a><a href="/account-tools"><Wallet size={17} />계좌 관리·정기 매수</a></> : null}
-          <a href="/support">고객지원·공지</a>
-          <a href="/league">
-            <Trophy size={17} />
-            수익률 리그
-          </a>
-          <a href="/learn">
-            <GraduationCap size={17} />
-            주식 학습
-          </a>
-          <a href="/growth">
-            <Gauge size={17} />
-            성장 허브
-          </a>
-          <a href="/lounge">
-            <MessageCircle size={17} />
-            투자 라운지
-          </a>
-          <a href="/pricing">
-            <BadgeCheck size={17} />
-            Pro 플랜
-          </a>
-        </nav>
+        <details className="workspace-extras">
+          <summary>학습·리그·기타 서비스</summary>
+          <nav aria-label="학습과 추가 서비스">
+            <a href="/learn"><GraduationCap size={17} />주식 학습</a>
+            <a href="/practice"><BrainCircuit size={17} />시나리오 연습</a>
+            <a href="/league"><Trophy size={17} />수익률 리그</a>
+            <a href="/growth"><Gauge size={17} />성장 허브</a>
+            <a href="/lounge"><MessageCircle size={17} />투자 라운지</a>
+            <a href="/pricing"><BadgeCheck size={17} />Pro 플랜</a>
+          </nav>
+        </details>
+        {workspaceView === "WATCH" ? <nav aria-label="관심종목 투자 도구"><a href="/compare"><BarChart3 size={17} />종목 비교</a><a href="/notifications"><Bell size={17} />알림 모아보기</a><a href="/account-tools"><Wallet size={17} />계좌 관리·정기 매수</a></nav> : null}
       </div>
       <button
         type="button"
@@ -2803,6 +2757,7 @@ export default function TradingTerminal() {
           KIS 실제 시세 기반 자체 가상투자 서비스 · 실제 주문이 체결되지 않아요
         </span>
         <span className="footer-links">
+          <a href="/support">고객지원·공지</a>
           <a href="/guide">이용 가이드</a>
           <a href="/privacy">개인정보처리방침</a>
           <a href="/terms">이용약관</a>
