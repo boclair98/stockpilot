@@ -2071,8 +2071,16 @@ export default function TradingTerminal() {
               <details className="recent-stocks">
                 <summary>
                   <History size={14} /> 최근 본 종목
+                  <span className="recent-stocks-count" aria-label={`${recentStocks.length}개`}>
+                    {recentStocks.length}
+                  </span>
                 </summary>
-                <div>
+                <div
+                  className="recent-stocks-list"
+                  role="region"
+                  aria-label={`최근 본 종목 ${recentStocks.length}개`}
+                  tabIndex={0}
+                >
                   {recentStocks.map((item) => (
                     <button
                       type="button"

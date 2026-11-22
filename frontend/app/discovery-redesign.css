@@ -26,7 +26,7 @@
   gap: 6px 12px;
   max-width: 780px;
 }
-.stitch-workspace.view-market .market-quote-time-caption { font-size: 11px; }
+.stitch-workspace.view-market .market-quote-time-caption { font-size: 12px; }
 .stitch-workspace.view-market .market-quote-times > div {
   border: 0;
   padding: 2px 0;
@@ -130,7 +130,20 @@
   padding: 0 8px;
   color: var(--ws-muted);
 }
-.stitch-workspace.product-edition.view-market .search-card .recent-stocks > div {
+.stitch-workspace.product-edition.view-market .search-card .recent-stocks-count {
+  display: inline-grid;
+  min-width: 20px;
+  min-height: 20px;
+  place-items: center;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.stitch-workspace.product-edition.view-market .search-card .recent-stocks > .recent-stocks-list {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -357,6 +370,31 @@
   .stitch-workspace.product-edition.view-market .search-card .search-controls { flex-basis: 100%; }
   .stitch-workspace.product-edition.view-market .search-card .recent-stocks { flex-basis: 100%; }
   .stitch-workspace.product-edition.view-market .search-card .recent-stocks > summary { min-height: 44px; padding-inline: 0; }
+  .stitch-workspace.product-edition.view-market .search-card .recent-stocks > .recent-stocks-list {
+    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stitch-workspace.product-edition.view-market .search-card .recent-stocks-list:focus-visible {
+    outline: 2px solid var(--ws-brand);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  .stitch-workspace.product-edition.view-market .search-card .recent-stocks-list > button {
+    flex: 0 0 auto;
+    max-inline-size: min(78vw, 320px);
+    scroll-snap-align: start;
+  }
+  .stitch-workspace.product-edition.view-market .search-card .recent-stocks-list > button > span:last-child {
+    min-width: 0;
+    max-width: min(190px, calc(78vw - 70px));
+  }
   .stitch-workspace.view-market .search-key-hint { display: none; }
   .stitch-workspace.product-edition.view-market .broker-rankings > header { padding-block: 6px; }
   /* The input and list already establish the visible context; keep this
