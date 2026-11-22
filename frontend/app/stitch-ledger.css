@@ -261,6 +261,48 @@
   flex-wrap: wrap;
 }
 
+.stitch-workspace.view-assets .analysis-column {
+  inline-size: 100%;
+}
+
+.stitch-workspace .balance-coverage-note {
+  margin: 8px 0 0;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.stitch-workspace .holdings-panel .holdings-read-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-block: 12px;
+  padding: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+}
+
+.stitch-workspace .holdings-read-notice > div { flex: 1 1 16rem; min-width: 0; }
+.stitch-workspace .holdings-read-notice b { font-size: 14px; color: var(--ws-ink); }
+.stitch-workspace .holdings-read-notice p { margin: 4px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.55; }
+.stitch-workspace .holdings-read-notice :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.stitch-workspace .holdings-read-notice :is(a, button):focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 2px;
+}
+
 .stitch-workspace .history-filters {
   border: 1px solid var(--ws-line);
 }

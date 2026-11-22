@@ -6,7 +6,18 @@ import StockLogo from "./StockLogo";
 import { findHoldings, holdingQuoteTime, type HoldingRecord } from "@/lib/portfolio-insights";
 import { orderMoney } from "@/lib/order-history";
 
-export default function HoldingsPanel({positions,authenticated,onSelect}: {positions: HoldingRecord[];authenticated: boolean;onSelect:(position: HoldingRecord)=>Promise<void>}) {
+type HoldingsReadState = "loading" | "unavailable" | "guest" | "ready" | "previous";
+
+type HoldingsProps = {
+  positions: HoldingRecord[];
+  readState: HoldingsReadState;
+  incomplete: boolean;
+  refreshing: boolean;
+  onRetry: () => void;
+  onSelect: (position: HoldingRecord) => Promise<void>;
+};
+
+export default function HoldingsPanel({positions,readState,incomplete,refreshing,onRetry,onSelect}: HoldingsProps) {
   const [query,setQuery]=useState("");
   const [market,setMarket]=useState("ALL");
   const [sort,setSort]=useState("saved");
@@ -15,10 +26,29 @@ export default function HoldingsPanel({positions,authenticated,onSelect}: {posit
   const [openError,setOpenError]=useState("");
   const visible=useMemo(()=>findHoldings(positions,query,market,sort),[positions,query,market,sort]);
   const estimatedCount=positions.filter(position=>position.valuationBasis==="COST").length;
+  const hasSnapshot = readState === "ready" || readState === "previous";
+  const pending = readState === "loading" || refreshing;
   function reset(){setQuery("");setMarket("ALL");setSort("saved");setDisplayCount(20);}
   return <section className="portfolio-panel holdings-panel" id="holdings" aria-labelledby="holdings-title">
-    <div className="section-head"><div><h2 id="holdings-title">보유 주식</h2><p>{authenticated?"종목을 선택해 현재 시세와 주문 화면으로 이동하세요.":"로그인하면 내 계정에 투자 기록이 저장돼요."}</p></div></div>
-    {positions.length>0?<>
+    <div className="section-head"><div><h2 id="holdings-title">보유 주식</h2>{hasSnapshot && positions.length > 0 ? <p>종목을 선택하면 시세와 모의주문 화면으로 이동해요.</p> : null}</div></div>
+    {hasSnapshot && (incomplete || readState === "previous") ? (
+      <div className="holdings-read-notice">
+        <div role="status">
+          <b>{incomplete ? "일부 보유 종목을 확인하지 못했어요" : "마지막으로 확인한 보유 주식"}</b>
+          <p>{incomplete ? "확인된 종목만 표시해요. 전체 보유 내역은 다시 확인해 주세요." : "최신 보유 내역을 확인하려면 잔고를 다시 확인해 주세요."}</p>
+        </div>
+        {readState === "ready" ? <button type="button" disabled={refreshing} onClick={onRetry}>{refreshing ? "확인 중" : "잔고 다시 확인"}</button> : null}
+      </div>
+    ) : null}
+    {!hasSnapshot ? (
+      <div className="holdings-read-notice">
+        <div role="status">
+          <b>{pending ? "보유 주식을 확인하고 있어요" : readState === "guest" ? "로그인하면 내 보유 주식을 볼 수 있어요" : "보유 주식을 확인하지 못했어요"}</b>
+          <p>{pending ? "잔고 확인이 끝나면 이곳에 표시해요." : readState === "guest" ? "모의주문으로 보유한 종목을 확인할 수 있어요." : "위 잔고 카드에서 다시 확인해 주세요."}</p>
+        </div>
+        {readState === "guest" && !pending ? <a href="/api/auth/google/login?return_to=%2F%23holdings">Google로 로그인</a> : null}
+      </div>
+    ) : positions.length>0?<>
       <div className="holdings-filters">
         <label>보유 종목 찾기<input type="search" maxLength={100} placeholder="회사명·종목 코드" value={query} onChange={event=>{setQuery(event.target.value);setDisplayCount(20);}}/></label>
         <label>시장<select value={market} onChange={event=>{setMarket(event.target.value);setDisplayCount(20);}}><option value="ALL">전체</option><option value="KR">한국</option><option value="US">미국</option></select></label>
@@ -45,6 +75,6 @@ export default function HoldingsPanel({positions,authenticated,onSelect}: {posit
       {visible.length>displayCount&&<button className="holdings-more" type="button" onClick={()=>setDisplayCount(count=>count+20)}>보유 종목 20개 더 보기</button>}
       {!visible.length&&<div className="holdings-empty"><p>조건에 맞는 보유 종목이 없어요.</p><button type="button" onClick={reset}>전체 보유 종목 보기</button></div>}
       <p className="holdings-note">평가액과 평가손익은 원화·달러 각각의 금액이에요. 시세가 있는 종목은 마지막으로 받은 시세 기준이며, 계좌 조회 시각과 다를 수 있어요.</p>
-    </>:<div className="holdings-empty"><b>아직 보유한 주식이 없어요</b><p>관심 있는 종목을 찾아 연습을 시작해 보세요.</p><Link href="/#market-rankings">주식 둘러보기</Link></div>}
+    </>:readState === "ready" && !incomplete ? <div className="holdings-empty"><b>아직 보유한 주식이 없어요</b><p>관심 있는 종목을 찾아 연습을 시작해 보세요.</p><Link href="/#market-rankings">주식 둘러보기</Link></div> : null}
   </section>;
 }

@@ -1527,6 +1527,11 @@ export default function TradingTerminal() {
   }
 
   const hasConfirmedAccount = accountUpdatedAt !== null;
+  const hasKnownHoldings = hasConfirmedAccount && portfolio.authenticated;
+  const holdingsIncomplete = hasKnownHoldings && portfolio.positionCoverageComplete === false;
+  const holdingsReadState = accountState === "ready"
+    ? portfolio.authenticated ? "ready" : "guest"
+    : hasKnownHoldings ? "previous" : accountState === "loading" ? "loading" : "unavailable";
   const hasVisibleBalance = workspaceView === "MARKET" || workspaceView === "ASSETS";
   const feedConnected = socketConnected && Boolean(status?.connected);
   const accountReadNotice = !hasVisibleBalance && accountState !== "ready" ? (
@@ -1551,14 +1556,14 @@ export default function TradingTerminal() {
         <article className="balance-card">
           <div className="card-title">
             <span>
-              {!hasConfirmedAccount ? "모의투자 자산" : portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
+              {!hasConfirmedAccount ? "모의투자 자산" : holdingsIncomplete ? "모의 주문 가능 금액" : portfolio.authenticated ? "내 모의투자 자산" : "시작 연습 자금"}
             </span>
-            {hasConfirmedAccount ? <small>{valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small> : null}
+            {hasConfirmedAccount ? <small>{holdingsIncomplete ? "원화 현금 · 달러 별도" : valuation.KRW ? "원화 참고 평가액 · 달러 별도" : "원화 평가액 · 달러 별도"}</small> : null}
             {workspaceView === "MARKET" ? <a className="balance-account-link" href="#holdings" aria-label="내 자산 보기"><ArrowUpRight size={18} aria-hidden="true"/></a> : null}
           </div>
           {hasConfirmedAccount ? <>
           <strong className="private-value">
-            {money(portfolio.cash.KRW + positionValues.KRW, "KRW")}
+            {money(holdingsIncomplete ? portfolio.cash.KRW : portfolio.cash.KRW + positionValues.KRW, "KRW")}
           </strong>
           {workspaceView === "MARKET" ? <details className="balance-mobile-disclosure"><summary>주문 가능 금액<ChevronDown size={14} aria-hidden="true"/></summary><div><span>원화<b className="private-value">{money(portfolio.cash.KRW,"KRW")}</b></span><span>달러<b className="private-value">{money(portfolio.cash.USD,"USD")}</b></span></div></details> : null}
           <div className="balance-detail">
@@ -1577,20 +1582,21 @@ export default function TradingTerminal() {
             <span>
               국내 평가손익{" "}
               <b
-                className={`private-value ${valuation.KRW ? "" : performance.KRW >= 0 ? "up" : "down"}`}
+                  className={`private-value ${holdingsIncomplete || valuation.KRW ? "" : performance.KRW >= 0 ? "up" : "down"}`}
               >
-                {valuation.KRW ? "시세 확인 필요" : money(performance.KRW, "KRW")}
+                {holdingsIncomplete ? "보유 종목 확인 필요" : valuation.KRW ? "시세 확인 필요" : money(performance.KRW, "KRW")}
               </b>
             </span>
             <span>
               미국 평가손익{" "}
               <b
-                className={`private-value ${valuation.USD ? "" : performance.USD >= 0 ? "up" : "down"}`}
+                  className={`private-value ${holdingsIncomplete || valuation.USD ? "" : performance.USD >= 0 ? "up" : "down"}`}
               >
-                {valuation.USD ? "시세 확인 필요" : money(performance.USD, "USD")}
+                {holdingsIncomplete ? "보유 종목 확인 필요" : valuation.USD ? "시세 확인 필요" : money(performance.USD, "USD")}
               </b>
             </span>
           </div>
+          {holdingsIncomplete ? <p className="balance-coverage-note">일부 보유 종목을 확인하지 못해 전체 평가액을 표시하지 않아요.</p> : null}
           </> : null}
           {accountState !== "ready" ? (
             <div className="workspace-balance-status">
@@ -2403,7 +2409,7 @@ export default function TradingTerminal() {
             )}
           </div>
 
-          <HoldingsPanel positions={portfolio.positions} authenticated={portfolio.authenticated} onSelect={position=>chooseSearchResult({...position,id:`${position.market}:${position.exchange}:${position.symbol}`,englishName:""})}/>
+          <HoldingsPanel positions={portfolio.positions} readState={holdingsReadState} incomplete={holdingsIncomplete} refreshing={accountRefreshing} onRetry={() => void refreshPortfolio()} onSelect={position=>chooseSearchResult({...position,id:`${position.market}:${position.exchange}:${position.symbol}`,englishName:""})}/>
         </div>
 
         {mobileOrderOpen ? (

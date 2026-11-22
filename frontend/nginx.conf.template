@@ -113,6 +113,10 @@ server {
   # SPA fallback: any unknown path serves the closest matching exported
   # HTML, defaulting to /index.html so client-side routing can pick up.
   location / {
+    # Next exports /guide.html, not /guide/index.html. Normalize page
+    # links before fallback. Keep the redirect relative behind HTTPS ingress.
+    absolute_redirect off;
+    rewrite ^(/[-a-z0-9]+(?:/[-a-z0-9]+)*)/$ $1 permanent;
     try_files $uri $uri.html $uri/index.html /index.html;
   }
 }

@@ -14,6 +14,7 @@ export function isValidPortfolio(value: unknown): boolean {
   const cash = item.cash as Record<string, unknown> | null;
   if (typeof item.authenticated !== "boolean" || !cash || ![cash.KRW, cash.USD].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0)) return false;
   if (![item.positions, item.orders, item.protections].every(Array.isArray)) return false;
+  if (item.positionCoverageComplete !== undefined && typeof item.positionCoverageComplete !== "boolean") return false;
   if (item.estimatedPositions !== undefined && (typeof item.estimatedPositions !== "number" || !Number.isSafeInteger(item.estimatedPositions) || item.estimatedPositions < 0 || item.estimatedPositions > (item.positions as unknown[]).length)) return false;
   return (item.positions as unknown[]).every(row => {
     if (!row || typeof row !== "object") return false;

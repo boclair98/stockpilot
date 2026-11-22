@@ -76,12 +76,14 @@ assert.match(insights.holdingQuoteTime(quoted), /2024.*01.*02.*12:04/);
 const portfolio = rows => ({ authenticated: true, cash: { KRW: 1000, USD: 100 }, positions: rows, orders: [], protections: [] });
 assert.equal(validation.isValidPortfolio(portfolio([original])), true);
 assert.equal(validation.isValidPortfolio({ ...portfolio(positions), estimatedPositions: 1 }), true);
+assert.equal(validation.isValidPortfolio({ ...portfolio([]), positionCoverageComplete: false }), true);
+for (const badCoverage of [null, "false", 0, []]) assert.equal(validation.isValidPortfolio({ ...portfolio([]), positionCoverageComplete: badCoverage }), false);
 assert.equal(validation.isValidPortfolio(portfolio([{ ...quoted, quoteAsOf: null }])), true);
 for (const valuationBasis of ['LIVE', '', null, 1]) assert.equal(validation.isValidPortfolio(portfolio([{ ...quoted, valuationBasis }])), false);
 for (const quoteAsOf of ['bad', 1, {}]) assert.equal(validation.isValidPortfolio(portfolio([{ ...quoted, quoteAsOf }])), false);
 for (const estimatedPositions of [-1, 0.5, 4, NaN, '1', null]) assert.equal(validation.isValidPortfolio({ ...portfolio(positions), estimatedPositions }), false);
 
-const render = rows => renderToStaticMarkup(React.createElement(HoldingsPanel, { positions: rows, authenticated: true, onSelect: async () => {} }));
+const render = (rows, overrides = {}) => renderToStaticMarkup(React.createElement(HoldingsPanel, { positions: rows, readState: "ready", incomplete: false, refreshing: false, onRetry: () => {}, onSelect: async () => {}, ...overrides }));
 const costMarkup = render([cost]);
 assert.match(costMarkup, /매입금액 기준 참고액/);
 assert.match(costMarkup, /시세 미확인 · 손익 확인 불가/);
@@ -98,4 +100,14 @@ assert.match(render([{ ...quoted, quoteAsOf: null }]), /시세 기준 시각 미
 assert.match(render([original]), /평가 기준 미제공/);
 assert.match(render([original]), /0\.00%/);
 assert.match(render([]), /아직 보유한 주식이 없어요/);
+assert.match(render([], { readState: "loading" }), /보유 주식을 확인하고 있어요/);
+assert.match(render([], { readState: "unavailable" }), /보유 주식을 확인하지 못했어요/);
+assert.match(render([quoted], { readState: "guest" }), /Google로 로그인/);
+assert.doesNotMatch(render([quoted], { readState: "guest" }), /25\.00%/);
+assert.match(render([quoted], { readState: "previous" }), /마지막으로 확인한 보유 주식/);
+assert.match(render([quoted], { readState: "previous" }), /25\.00%/);
+assert.match(render([], { incomplete: true }), /일부 보유 종목을 확인하지 못했어요/);
+for (const overrides of [{readState:"loading"}, {readState:"unavailable"}, {readState:"guest"}, {readState:"previous"}, {incomplete:true}]) {
+  assert.doesNotMatch(render([], overrides), /아직 보유한 주식이 없어요/);
+}
 console.log('Holding valuation metadata, backward compatibility, cost-last sorting and honest rendered states passed.');
