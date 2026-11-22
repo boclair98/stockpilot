@@ -137,8 +137,8 @@ export default function RankedMarketBrowser({
   }
   return (
     <section className={`ranked-browser broker-rankings${metric === "ALL" ? " is-directory" : ""}`} aria-label="시장 종목 탐색">
-      <div className="market-discovery-heading"><div><span>MARKET DISCOVERY</span><h2 id="market-discovery-title" ref={marketHeading} tabIndex={-1}>주식 골라보기</h2></div></div>
       <header>
+        <div className="market-discovery-heading"><h2 id="market-discovery-title" ref={marketHeading} tabIndex={-1}>종목 순위·목록</h2></div>
         <div className="ranked-market-switch">
           {(["KR", "US"] as const).map((v) => (
             <button
@@ -196,13 +196,13 @@ export default function RankedMarketBrowser({
         </select></label>
       </div></> : null}
       </header>
-      <section className={`ranking-comparison${comparison.length ? " has-selection" : " is-empty"}`} aria-labelledby="ranking-comparison-title">
+      {comparison.length ? <section className="ranking-comparison has-selection" aria-labelledby="ranking-comparison-title">
         <div className="ranking-comparison-heading"><div><h3 id="ranking-comparison-title">함께 비교하기 <span>{comparison.length}/3</span></h3><p>종목 옆 비교 버튼으로 2~3개를 골라보세요.</p></div>
           {comparison.length ? <button className="ranking-comparison-clear" type="button" onClick={clearComparison}>선택 초기화</button> : null}
         </div>
         {comparison.length ? <ul className="ranking-comparison-items">{comparison.map(item => <li key={item.id}><span><b>{item.name}</b><small>{item.symbol} · {item.exchange}</small></span><button type="button" aria-label={`${item.name} 비교 선택 해제`} onClick={() => { marketHeading.current?.focus(); selectForComparison(item); }}><X size={16} aria-hidden="true" /></button></li>)}</ul> : null}
         {comparison.length ? <div className="ranking-comparison-action">{comparisonHref ? <Link href={comparisonHref}>선택한 {comparison.length}개 비교 <ArrowUpRight size={16} aria-hidden="true" /></Link> : <button type="button" disabled>2개부터 비교할 수 있어요</button>}<small>계좌·보유 정보는 전달하지 않아요.</small></div> : null}
-      </section>
+      </section> : null}
       <p className="ranking-selection-status" role="status">{selectionNotice}</p>
       {metric === "ALL" ? <StockDirectory embedded comparison={comparison} onCompare={selectForComparison} /> : <>
       <label className="ranked-sort">

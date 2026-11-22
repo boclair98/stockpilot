@@ -77,8 +77,8 @@ for(const width of [320,360,390,430,768,1024,1440,1920]){
   const rank23=await page.locator('.rank-number').nth(22).evaluate(el=>({h:el.offsetHeight,line:parseFloat(getComputedStyle(el).lineHeight)}));assert.ok(rank23.h<=rank23.line+1);checks++;
   await page.getByRole('button',{name:'빠른 종목 검색',exact:true}).click();await page.getByRole('textbox',{name:'빠른 검색어'}).fill('삼성');
   await page.locator('.command-results button').first().waitFor();await page.keyboard.press('Enter');await page.locator('.command-dialog').waitFor({state:'hidden'});checks++;
-  await page.waitForFunction(()=>document.querySelector('.instrument-identity h2')?.textContent==='삼성전자'&&document.querySelector('.analysis-column')?.getClientRects().length>0);
-  await page.locator('.instrument-identity h2').waitFor({state:'visible'});assert.equal(await page.locator('.instrument-identity h2').innerText(),'삼성전자');checks++;
+  const instrumentTitle = page.locator('.view-detail .instrument-identity').getByRole('heading', { name: '삼성전자', exact: true });
+  await instrumentTitle.waitFor({state:'visible'});checks++;
   await page.locator('.stock-trend-chart svg').waitFor();await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:`${output}/instrument-${width}.png`});
   if(width<=1000){await page.getByRole('button',{name:/모의주문/}).last().click();await page.locator('.order-card').evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(animation=>animation.finished.catch(()=>{}))));}
   await page.getByRole('button',{name:'삼성전자 관심종목 추가',exact:true}).click();

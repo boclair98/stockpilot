@@ -273,10 +273,16 @@ test("saved item guards accept legacy versions and compare periods but reject in
 });
 
 test("watchlist distinguishes initial loading and error from an actually empty saved list", () => {
-  const props = { items: [], selectedId: "", onSelect() {}, onRemove() {}, colorFor() {} };
+  let retried = 0;
+  const props = { items: [], selectedId: "", onSelect() {}, onRemove() {}, onRetry() { retried++; }, dedicated: true };
   const h = harness("components/MarketWatchlist.tsx", { ...props, loadState: "loading" }); h.render();
   assert(h.text().includes("확인 중")); assert(!h.text().includes("0/12")); assert(!h.text().includes("모아보세요"));
   h.props({ ...props, loadState: "error" }); assert(h.text().includes("확인하지 못했어요")); assert(!h.text().includes("0/12"));
+  h.props({ ...props, items: [KR], loadState: "error", errorMessage: "격리 검증: 저장 목록 응답 실패" });
+  assert(h.nodes().some(node => node.props?.stock?.id === KR.id), "Keep confirmed rows visible when refresh fails");
+  assert(h.nodes().some(node => node.props?.role === "alert" && text(node).includes("저장 목록 응답 실패")));
+  h.click("다시 조회"); assert.equal(retried, 1);
+  assert(h.nodes().some(node => node.type === "a" && node.props?.href === "#search-card"));
   h.props({ ...props, loadState: "ready", accountSaved: true }); assert(h.text().includes("0/50")); assert(h.text().includes("모아보세요"));
 });
 

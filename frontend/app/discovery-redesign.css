@@ -1,0 +1,292 @@
+/* One workspace shell, with discovery-only content styling below. */
+.stitch-workspace {
+  --discovery-gutter: clamp(14px, 2.7vw, 40px);
+}
+
+.stitch-workspace:is(.view-market, .view-watch) .workspace-intro {
+  border-block-end: 1px solid var(--ws-line);
+  padding-block: clamp(14px, 2.1vw, 28px) 14px;
+  margin-block-end: 14px;
+}
+
+.stitch-workspace:is(.view-market, .view-watch) .workspace-intro h1 {
+  font-size: clamp(25px, 3.1vw, 38px);
+  line-height: 1.18;
+  font-weight: 760;
+  letter-spacing: -.045em;
+}
+
+/* Place navigation across the top so the list and reference rail use the width. */
+@media (min-width: 1280px) {
+  .consumer-app.product-edition.stitch-workspace {
+    padding-inline: var(--discovery-gutter);
+  }
+
+  .consumer-app.stitch-workspace .workspace-primary {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-inline: 18px auto;
+    padding: 0;
+    width: auto;
+    border: 0;
+    background: transparent;
+  }
+
+  .consumer-app.stitch-workspace .workspace-primary a:is(:hover, [aria-current="page"]) {
+    box-shadow: none;
+    background: var(--ws-tint);
+  }
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card {
+  padding: 14px clamp(12px, 2vw, 22px);
+  background: var(--ws-tint);
+  border: 1px solid var(--ws-line);
+  border-radius: 14px 14px 0 0;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .search-controls {
+  grid-area: auto;
+  grid-column: 1 / -1;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .search-input {
+  background: var(--ws-surface);
+  min-block-size: 48px;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .section-head h2 { color: var(--ws-brand); }
+.stitch-workspace.product-edition.view-market .market-discovery-stage .broker-rankings { border-block-start: 0; }
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading h2 {
+  margin: 0;
+  color: var(--ws-ink);
+  font-size: 14px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings > header {
+  gap: 8px;
+  padding-inline: clamp(10px, 1.3vw, 18px);
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .ranked-metric-tabs button {
+  min-block-size: 44px;
+  font-size: 13px;
+}
+
+.stitch-workspace.view-market .stock-list-heading { background: var(--ws-canvas); }
+.stitch-workspace.view-market .broker-rankings .stock-row-metric { color: var(--ws-ink); }
+
+.watchlist-filter-disclosure { min-inline-size: 0; }
+.watchlist-filter-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 44px;
+  padding-inline: 10px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  color: var(--ws-ink);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+.watchlist-filter-disclosure > summary::-webkit-details-marker { display: none; }
+.watchlist-filter-disclosure[open] > summary { background: var(--ws-soft); }
+.watchlist-filter-disclosure[open] > summary svg:last-child { transform: rotate(180deg); }
+.watchlist-filter-disclosure .watchlist-fields { margin-block-start: 12px; }
+.watchlist-filter-active { color: var(--ws-brand); font-size: 12px; }
+
+.stitch-workspace:is(.view-market, .view-watch) .watchlist-toolbar {
+  display: flex;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-block: 8px;
+}
+.stitch-workspace .watchlist-toolbar:has(details[open]) > details { flex-basis: 100%; }
+.stitch-workspace .watchlist-toolbar .watchlist-scope { margin: 0; min-block-size: 44px; }
+.stitch-workspace.view-watch .watchlist-board .favorite-board-head { padding-block: 10px; }
+.stitch-workspace.view-watch .watchlist-board .watchlist-rows { border-block-start: 1px solid var(--ws-line); }
+.stitch-workspace.view-watch .watchlist-board h2 { scroll-margin-block-start: 80px; }
+
+.stitch-workspace.view-detail .instrument-breadcrumb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 5px;
+  color: var(--ws-muted);
+  font-size: 13px;
+}
+.stitch-workspace.view-detail .instrument-breadcrumb > span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+  white-space: nowrap;
+}
+.consumer-app.stitch-workspace.view-detail .analysis-column {
+  --quote-pad: clamp(12px, 2.2vw, 24px);
+  padding: 0 var(--quote-pad) var(--quote-pad);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.stitch-workspace.view-detail .instrument-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "identity actions" "quote actions" "meta meta";
+  align-items: start;
+  gap: 8px 14px;
+  margin-inline: calc(0px - var(--quote-pad));
+  padding: var(--quote-pad);
+  border-radius: 13px 13px 0 0;
+  background: var(--ws-tint);
+}
+.stitch-workspace.view-detail .instrument-identity { grid-area: identity; }
+.stitch-workspace.view-detail .instrument-identity h1 {
+  margin: 2px 0 0;
+  color: var(--ws-ink);
+  font-size: clamp(23px, 2.7vw, 34px);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.stitch-workspace.view-detail .instrument-quote {
+  grid-area: quote;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 3px 12px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.stitch-workspace.view-detail .instrument-meta { grid-area: meta; font-size: 12px; }
+.stitch-workspace.view-detail .instrument-actions { grid-area: actions; align-self: start; }
+.stitch-workspace.view-detail .instrument-actions button {
+  min-block-size: 44px;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card {
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .stitch-workspace.product-edition.view-market .search-card .search-controls { grid-area: 1 / 2; }
+  .stitch-workspace.product-edition.view-market .search-card :is(.search-results, .recent-stocks) { grid-column: 1 / -1; }
+  .stitch-workspace.product-edition.view-market .search-card .section-head > div {
+    flex-direction: column;
+    align-items: start;
+    gap: 2px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .stitch-workspace.product-edition.view-market .broker-rankings > header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .stitch-workspace.view-market .market-discovery-heading { order: -2; }
+  .stitch-workspace.view-market .broker-rankings .ranked-market-switch { order: -1; }
+  .stitch-workspace.view-market .broker-rankings .ranked-metric-tabs { flex: 1 1 auto; }
+  .stitch-workspace.product-edition.view-market .broker-rankings .ranking-exchange-filter {
+    flex: 0 1 146px;
+    width: 146px;
+    order: 1;
+  }
+  .stitch-workspace.view-market .broker-rankings .ranked-refresh { order: 2; }
+}
+
+@media (max-width: 767px) {
+  .stitch-workspace.view-market .workspace-intro {
+    padding-block-end: 8px;
+    margin-block-end: 8px;
+  }
+  .stitch-workspace.view-market .market-overview-context { grid-template-columns: minmax(0, 1fr) auto; }
+  .stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card { padding: 10px 11px; }
+  .stitch-workspace.product-edition.view-market .search-card .section-head { display: none; }
+  .stitch-workspace.product-edition.view-market .broker-rankings > header { padding-block: 6px; }
+  /* The input and list already establish the visible context; keep this
+     heading in the reading order and visible when used as a focus target. */
+  .stitch-workspace.view-market .market-discovery-heading:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .stitch-workspace.view-market .market-discovery-heading:focus-within { flex-basis: 100%; }
+  .stitch-workspace.product-edition.view-market .broker-rankings .ranked-metric-tabs button {
+    padding-inline: clamp(7px, 2vw, 10px);
+    font-size: 12px;
+  }
+  .stitch-workspace.view-detail .instrument-heading {
+    grid-template-areas: "identity" "quote" "meta" "actions";
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .stitch-workspace.view-detail .instrument-actions { flex-wrap: wrap; margin-block-start: 4px; }
+  .stitch-workspace.view-detail .instrument-actions button { font-size: 12px; }
+  .stitch-workspace.view-detail .stock-trend-panel { padding-top: 10px; }
+}
+
+@media (min-width: 375px) and (max-width: 767px) {
+  .stitch-workspace.product-edition.view-market .broker-rankings .consumer-stock-row .stock-row-open {
+    grid-template-columns: minmax(2ch, max-content) 28px minmax(0, 1fr) max-content;
+    column-gap: 6px;
+    row-gap: 2px;
+    padding-block: 8px;
+  }
+  .stitch-workspace.view-market .broker-rankings .stock-row-open .symbol-logo {
+    width: 28px;
+    height: 28px;
+  }
+  .stitch-workspace.view-market .broker-rankings .stock-row-open .rank-identity { grid-column: 3; grid-row: 1; }
+  .stitch-workspace.view-market .broker-rankings .stock-row-open .rank-identity b {
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .stitch-workspace.view-market .broker-rankings .stock-row-open .rank-price {
+    grid-column: 4;
+    grid-row: 1;
+    display: grid;
+    text-align: right;
+    gap: 2px;
+  }
+  .stitch-workspace.view-market .broker-rankings .stock-row-metric {
+    grid-column: 3 / -1;
+    grid-row: 2;
+    justify-content: end;
+  }
+}
+
+@container watchlist (min-width: 300px) and (max-width: 430px) {
+  .consumer-app.stitch-workspace .consumer-personal .watchlist-board .watchlist-rows .stock-row-open {
+    grid-template-columns: 30px minmax(0, 1fr) max-content;
+  }
+  .consumer-app.stitch-workspace .watchlist-board .watchlist-rows .symbol-logo { grid-row: 1; }
+  .consumer-app.stitch-workspace .watchlist-board .watchlist-rows .rank-price {
+    grid-column: 3;
+    grid-row: 1;
+    display: grid;
+    text-align: right;
+  }
+}

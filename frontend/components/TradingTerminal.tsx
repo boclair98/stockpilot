@@ -456,6 +456,7 @@ export default function TradingTerminal() {
   const [workspaceView, setWorkspaceView] = useState<
     "MARKET" | "DETAIL" | "WATCH" | "ASSETS" | "RECORDS"
   >("MARKET");
+  const [detailFromWatch, setDetailFromWatch] = useState(false);
   useWorkspaceStart(workspaceView);
   const showMarket = useCallback(() => {
     selectionRequest.current++;
@@ -496,6 +497,7 @@ export default function TradingTerminal() {
     const sync = () => {
       const params = new URLSearchParams(location.search);
       const hash = location.hash;
+      setDetailFromWatch(history.state?.stockpilotReturn === "WATCH");
       setWorkspaceView(
         hash === "#holdings"
           ? "ASSETS"
@@ -889,26 +891,17 @@ export default function TradingTerminal() {
     return latest;
   }, [bootstrapQuoteTimes, clockMs, quotes]);
   const quoteObservedAt = quote?.asOf;
+  const detailQuoteAsOf = clockMs === undefined ? null : observedQuoteTime(quoteObservedAt, clockMs);
   const quoteFreshness = (() => {
-    if (!clockMs || !quoteObservedAt)
-      return { label: "시세 연결 중", state: "waiting" };
-    const ageSeconds = Math.max(
-      0,
-      Math.floor((clockMs - new Date(quoteObservedAt).getTime()) / 1000),
-    );
-    if (!Number.isFinite(ageSeconds))
-      return { label: "시세 확인 중", state: "waiting" };
-    if (ageSeconds < 10) return { label: "방금 갱신", state: "fresh" };
-    if (ageSeconds < 60)
-      return { label: `${ageSeconds}초 전 갱신`, state: "fresh" };
-    return {
-      label: `${Math.floor(ageSeconds / 60)}분 전 갱신`,
-      state: "stale",
-    };
+    if (!clockMs || !detailQuoteAsOf)
+      return { label: "기준 시각 확인 중", state: "waiting" };
+    const isOlder = clockMs - Date.parse(detailQuoteAsOf) >= 60_000;
+    if (isOlder || /cached|cache|백업/i.test(quote?.source ?? ""))
+      return { label: "이전 조회 시세", state: "stale" };
+    return { label: "조회 시세", state: "fresh" };
   })();
   const detailQuoteIssue = quoteReadError?.id === selected ? quoteReadError : null;
   const detailQuoteFailed = Boolean(detailQuoteIssue && !quote);
-  const detailQuoteAsOf = clockMs === undefined ? null : observedQuoteTime(quoteObservedAt, clockMs);
   const matchingPositions = portfolio.positions.filter(
     (position) =>
       position.symbol === activeSymbol && position.exchange === quote?.exchange,
@@ -1269,7 +1262,9 @@ export default function TradingTerminal() {
       if (request !== selectionRequest.current) return;
       setWorkspaceView("DETAIL");
       const url = terminalDetailUrl(location.href, data);
-      history.pushState({ stockpilotView: "DETAIL" }, "", url);
+      const fromWatch = location.hash === "#favorite-board-title";
+      setDetailFromWatch(fromWatch);
+      history.pushState({ stockpilotView: "DETAIL", stockpilotReturn: fromWatch ? "WATCH" : "MARKET" }, "", url);
       setQuotes(current => mergeQuoteSnapshots(current, [data]));
       activateInstrument(data.id, data.price);
       rememberStock({
@@ -1534,7 +1529,7 @@ export default function TradingTerminal() {
     : hasKnownHoldings ? "previous" : accountState === "loading" ? "loading" : "unavailable";
   const hasVisibleBalance = workspaceView === "MARKET" || workspaceView === "ASSETS";
   const feedConnected = socketConnected && Boolean(status?.connected);
-  const accountReadNotice = !hasVisibleBalance && accountState !== "ready" ? (
+  const accountReadNotice = !hasVisibleBalance && workspaceView !== "WATCH" && accountState !== "ready" ? (
     <section className={`release-account-status is-${accountState}${workspaceView === "DETAIL" ? " detail-order-recovery" : ""}`} aria-label="잔고 조회 상태">
       <div>
         <b>{accountState === "loading" ? "계좌를 확인하고 있어요" : "잔고를 다시 확인해 주세요"}</b>
@@ -1870,6 +1865,7 @@ export default function TradingTerminal() {
         </div>
       </header>
 
+      {workspaceView !== "DETAIL" ? (
       <section className="workspace-intro" id="market-content" tabIndex={-1}>
         <div>
           <span className="workspace-eyebrow">
@@ -1879,7 +1875,6 @@ export default function TradingTerminal() {
             {
               {
                 MARKET: "오늘의 시장",
-                DETAIL: "종목 상세",
                 WATCH: "관심종목",
                 ASSETS: "내 자산",
                 RECORDS: "투자 기록",
@@ -1919,14 +1914,18 @@ export default function TradingTerminal() {
           </div>
         )}
       </section>
+      ) : null}
       {workspaceView === "DETAIL" ? null : accountReadNotice}
       {orderResult ? <OrderResult result={orderResult} checking={checkingOrder} onCheck={() => void checkPendingOrder()} onRetry={() => void placeOrder(true)} retryAvailable={pendingRetryAvailable} onDismiss={() => {
         if (window.confirm("결과가 확인되지 않은 주문은 취소되지 않아요. 매매 기록을 확인했으며 새 주문을 준비할까요?")) { clearPendingOrder(); setOrderResult(null); }
       }}/> : null}
       {workspaceView === "DETAIL" ? (
-        <button type="button" className="back-to-market" onClick={showMarket}>
-          ← 시장으로 돌아가기
-        </button>
+        <div className="instrument-breadcrumb" id="market-content" tabIndex={-1}>
+          <button type="button" className="back-to-market" onClick={detailFromWatch ? () => history.back() : showMarket}>
+            {detailFromWatch ? "← 관심종목으로 돌아가기" : "← 시장으로 돌아가기"}
+          </button>
+          <span>모의투자</span>
+        </div>
       ) : null}
       {workspaceView !== "MARKET" ? <>{marketOverview}{marketCheckup}</> : null}
 
@@ -2197,10 +2196,13 @@ export default function TradingTerminal() {
             {workspaceView === "MARKET" ? marketOverview : null}
             <MarketWatchlist
               accountSaved={cloudFavorites.authenticated===true}
-              loadState={cloudFavorites.authenticated===null ? cloudFavorites.error ? "error" : "loading" : "ready"}
+              loadState={cloudFavorites.error ? "error" : cloudFavorites.authenticated === null ? "loading" : "ready"}
+              errorMessage={cloudFavorites.error}
+              onRetry={cloudFavorites.refresh}
+              retryDisabled={cloudFavorites.busy || importingFavorites}
+              dedicated={workspaceView === "WATCH"}
               items={favoriteItems}
               selectedId={selected}
-              colorFor={colorFor}
               onSelect={(item) => {
                 void chooseSearchResult({ ...item, englishName: "" });
               }}
@@ -2218,9 +2220,8 @@ export default function TradingTerminal() {
                 } catch { notify("브라우저 저장 기록을 확인하지 못했어요. 기존 기록은 그대로 유지돼요."); }
                 finally { importFavoritesLock.current = false; setImportingFavorites(false); }
               }}>{importingFavorites ? "관심종목 가져오는 중…" : "이 브라우저의 관심종목 가져오기"}</button>
-              <button type="button" disabled={cloudFavorites.busy || importingFavorites} onClick={cloudFavorites.refresh}>다시 조회</button>
+              {!cloudFavorites.error ? <button type="button" disabled={cloudFavorites.busy || importingFavorites} onClick={cloudFavorites.refresh}>다시 조회</button> : null}
             </div> : null}
-            {cloudFavorites.error?<p className="personal-inline-error" role="alert">{cloudFavorites.error}<button type="button" onClick={cloudFavorites.refresh}>다시 조회</button></p>:null}
           </aside>
         ) : null}
         <div className="analysis-column" id="instrument-workspace">
@@ -2238,7 +2239,7 @@ export default function TradingTerminal() {
                   {activeSymbol} · {activeExchange} ·{" "}
                   {activeCurrency}
                 </span>
-                <h2>{selectedName}</h2>
+                {workspaceView === "DETAIL" ? <h1>{selectedName}</h1> : <h2>{selectedName}</h2>}
               </div>
             </div>
             <div className="instrument-quote">
@@ -2255,7 +2256,7 @@ export default function TradingTerminal() {
             </div>
             {detailQuoteAsOf ? <div className="instrument-meta">
               <span className="detail-quote-status" data-freshness={quoteFreshness.state}>
-                {quoteFreshness.state === "stale" ? "이전 조회 시세" : quoteFreshness.label}
+                {quoteFreshness.label}
               </span>
               <time dateTime={detailQuoteAsOf}>조회 · {marketTimeFormat.format(new Date(detailQuoteAsOf))} 한국시간</time>
             </div> : null}

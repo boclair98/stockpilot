@@ -66,6 +66,7 @@ import "./alert-management.css";
 import "./stitch-workspace.css";
 import "./stitch-market.css";
 import "./stitch-ledger.css";
+import "./discovery-redesign.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

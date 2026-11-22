@@ -7,19 +7,74 @@
 /* The dedicated watch view is for saved instruments. Discovery remains in the
    market view, global search and the empty-state "종목 찾아보기" link. */
 .consumer-app.view-watch .instrument-browser { display: none; }
+.consumer-app.view-watch .personal-inline-actions button {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .consumer-app .watchlist-board .favorite-board-head {
   flex-wrap: wrap;
   gap: 8px 12px;
 }
 .consumer-app .watchlist-board .favorite-board-head > div { min-width: 0; }
-.consumer-app .watchlist-board .favorite-board-head > small {
+.consumer-app .watchlist-board .favorite-board-head > .watchlist-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.consumer-app .watchlist-board .watchlist-source {
   flex: 0 0 auto;
   font-size: 12px;
   line-height: 1.5;
   white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
   color: var(--ws-muted);
   background: var(--ws-soft);
 }
+.consumer-app .watchlist-board .watchlist-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  color: var(--ws-brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.consumer-app .watchlist-board .watchlist-action:focus-visible {
+  outline: 2px solid var(--ws-brand);
+  outline-offset: 2px;
+}
+.consumer-app .watchlist-board .watchlist-action:disabled { opacity: .55; }
+.watchlist-feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 12px 16px;
+  padding: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: 8px;
+  background: var(--ws-soft);
+}
+.watchlist-feedback > div {
+  flex: 1 1 14rem;
+  min-width: 0;
+  color: var(--ws-ink);
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.watchlist-feedback p { margin: 4px 0 0; color: var(--ws-muted); font-size: 13px; }
 .watchlist-toolbar { min-width: 0; padding: 8px 16px 12px; }
 .watchlist-fields {
   display: grid;
