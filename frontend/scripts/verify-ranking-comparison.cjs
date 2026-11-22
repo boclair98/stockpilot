@@ -155,6 +155,24 @@ test("timeout, malformed response, first-page retry and stale pagination recover
   assert(h.requests.every(request => !request.init.method && !request.init.body && request.init.cache === "no-store"));
 });
 
+test("first ranking failure stays distinct from an empty list and links to the same market catalog", async t => {
+  const h = harness(); t.after(h.unmount);
+  h.pop("/?browse=down&browseMarket=US#market-rankings");
+  h.render(); await h.flush();
+  h.respond(0, {detail: "다음 자료를 준비하고 있어요. 다시 시도해 주세요."}, 503);
+  await h.flush();
+  assert(h.text().includes("하락률 순위를 불러오지 못했어요."));
+  assert(!h.text().includes("0종목") && !h.text().includes("이 조건의 자료가 없어요."));
+  assert(!h.text().includes("다음 자료를 준비하고"));
+  const fallback = h.nodes().find(node => node.type === "a" && text(node).includes("전체 종목에서 찾기"));
+  assert(fallback);
+  assert.equal(new URL(fallback.props.href, "https://example.test").searchParams.get("browseMarket"), "US");
+  fallback.props.onClick({button: 0, preventDefault() {}, currentTarget: {getAttribute: () => fallback.props.href}});
+  await h.flush();
+  assert(h.nodes().some(node => node.type === "catalog" && node.props.embedded));
+  assert.equal(h.requests.length, 1, "An explicit catalog transition must not retry the failed ranking");
+});
+
 test("actual list lens filters loaded rows, keeps server rank, and resets price units on market change", async t => {
   const h=harness();t.after(h.unmount);h.render();await h.flush();h.respond(0,page([kr(),{...kr("000660","SK하이닉스"),price:175000,changePercent:-2}],{hasMore:true,nextOffset:20}));await h.flush();
   const field=label=>h.nodes().find(node=>node.type==="input"&&node.props["aria-label"]===label);

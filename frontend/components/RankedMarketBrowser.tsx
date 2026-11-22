@@ -64,6 +64,7 @@ export default function RankedMarketBrowser({
   const request = useRef<AbortController | null>(null);
   const marketHeading = useRef<HTMLHeadingElement>(null);
   const comparisonHref = rankingComparisonHref(comparison);
+  const metricLabel = BROWSE_METRICS.find(([value]) => value === metric)?.[1] ?? "종목";
   const filtered = filterRankedStocks(data?.items ?? [], lens, savedIds, market === "KR" ? "KRW" : "USD");
   function selectForComparison(item: Stock | InstrumentIdentity) {
     const next = toggleComparison(comparison, item);
@@ -233,8 +234,8 @@ export default function RankedMarketBrowser({
               : "전일 대비 하락률 순서"}{" "}
         · 제공 자료 기준
       </p>
-      <MarketLens items={data?.items ?? []} value={lens} currency={market === "KR" ? "KRW" : "USD"} matched={filtered.items.length} error={filtered.error} onChange={setLens}/>
-      <div
+      {data ? <MarketLens items={data.items} value={lens} currency={market === "KR" ? "KRW" : "USD"} matched={filtered.items.length} error={filtered.error} onChange={setLens}/> : null}
+      {Boolean(data?.items.length) ? <div
         className={`stock-list-heading${metric === "CAP" || metric === "VOLUME" ? " with-metric" : ""}`}
       >
         <span>종목</span>
@@ -244,7 +245,7 @@ export default function RankedMarketBrowser({
             {metric === "CAP" ? "시가총액" : "거래량"}
           </span>
         ) : null}
-      </div>
+      </div> : null}
       <ol className="ranked-list">
         {filtered.items.map(({ stock: s, rank }) => (
           <li key={s.id}>
@@ -288,8 +289,12 @@ export default function RankedMarketBrowser({
         </p>
       ) : null}
       {error ? (
-        <div className="ranked-state" role="alert">
-          <p>{error}</p>
+        <div className={`ranked-state ranked-recovery${data?.items.length ? " has-previous" : ""}`} role="alert">
+          <b>{data?.items.length ? "불러온 목록은 그대로 두었어요." : `${metricLabel} 순위를 불러오지 못했어요.`}</b>
+          <p>{failedPage === "first" && !data?.items.length && error.includes("다음 자료")
+            ? "시세 제공이 늦어지고 있어요. 다시 조회하거나 전체 종목에서 찾아보세요."
+            : error}</p>
+          <div className="ranked-recovery-actions">
           <button
             type="button"
             onClick={() =>
@@ -302,6 +307,12 @@ export default function RankedMarketBrowser({
           >
             다시 조회
           </button>
+          {!data?.items.length ? <a href={marketBrowseHref(browseLocation, {metric: "ALL"})} onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigateMarketBrowse(event.currentTarget.getAttribute("href")!);
+          }}>전체 종목에서 찾기 <ArrowUpRight size={15} aria-hidden="true" /></a> : null}
+          </div>
         </div>
       ) : null}
       {!busy && data?.items.length === 0 && !error ? (

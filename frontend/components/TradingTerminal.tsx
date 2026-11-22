@@ -1936,18 +1936,12 @@ export default function TradingTerminal() {
             id="search-card"
             data-query={Boolean(searchQuery.trim())}
           >
-            <div className="section-head">
-              <div>
-                <h2>종목 검색</h2>
-                <p>
-                  키보드 바로가기 <kbd>/</kbd>
-                </p>
-              </div>
-            </div>
+            <label className="discovery-search-label" htmlFor="market-instrument-query">종목 검색</label>
             <div className="search-controls">
               <div className="search-input">
                 <Search size={18} />
                 <input
+                  id="market-instrument-query"
                   ref={searchInputRef}
                   aria-label="종목명·종목코드·티커 검색"
                   aria-controls="search-results"
@@ -1985,6 +1979,7 @@ export default function TradingTerminal() {
                   }}
                   placeholder="회사명 · 종목코드 · 티커 검색"
                 />
+                <kbd className="search-key-hint" aria-hidden="true">/</kbd>
               </div>
               <div className="search-market">
                 {(["ALL", "KR", "US"] as const).map((item) => (
