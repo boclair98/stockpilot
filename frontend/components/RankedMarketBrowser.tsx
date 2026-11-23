@@ -138,64 +138,72 @@ export default function RankedMarketBrowser({
   }
   return (
     <section className={`ranked-browser broker-rankings${metric === "ALL" ? " is-directory" : ""}`} aria-label="시장 종목 탐색">
-      <header>
-        <div className="market-discovery-heading"><h2 id="market-discovery-title" ref={marketHeading} tabIndex={-1}>종목 순위·목록</h2></div>
-        <div className="ranked-market-switch">
-          {(["KR", "US"] as const).map((v) => (
-            <button
-              type="button"
-              key={v}
-              aria-pressed={market === v}
-              onClick={() => {
-                if (market === v) return;
-                setData(null);
-                setError("");
-                setBusy(true);
-                navigateMarketBrowse(marketBrowseHref(browseLocation, {market: v, exchange: "ALL"}));
-                setLens({ ...EMPTY_MARKET_LENS });
-              }}
-            >
-              {v === "KR" ? "한국" : "미국"}
-            </button>
-          ))}
+      <header className="market-rankings-header min-w-0">
+        <div className="market-rankings-topline min-w-0">
+          <div className="market-discovery-heading"><h2 id="market-discovery-title" ref={marketHeading} tabIndex={-1}>종목 순위·목록</h2></div>
+          <div className="ranked-market-switch">
+            {(["KR", "US"] as const).map((v) => (
+              <button
+                type="button"
+                key={v}
+                aria-pressed={market === v}
+                onClick={() => {
+                  if (market === v) return;
+                  setData(null);
+                  setError("");
+                  setBusy(true);
+                  navigateMarketBrowse(marketBrowseHref(browseLocation, {market: v, exchange: "ALL"}));
+                  setLens({ ...EMPTY_MARKET_LENS });
+                }}
+              >
+                {v === "KR" ? "한국" : "미국"}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="ranked-metric-tabs" aria-label="종목 탐색 방식">
-          {BROWSE_METRICS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={metric === value}
-              onClick={() => {
-                if (metric === value) return;
-                setData(null);
-                setError("");
-                setBusy(true);
-                navigateMarketBrowse(marketBrowseHref(browseLocation, {metric: value}));
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="market-rankings-controls min-w-0">
+          <div className="ranked-metric-tabs" aria-label="종목 탐색 방식">
+            {BROWSE_METRICS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={metric === value}
+                onClick={() => {
+                  if (metric === value) return;
+                  setData(null);
+                  setError("");
+                  setBusy(true);
+                  navigateMarketBrowse(marketBrowseHref(browseLocation, {metric: value}));
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {metric !== "ALL" ? (
+            <div className="market-rankings-actions">
+              <div className="record-filters ranking-exchange-filter">
+                <label><span>거래소</span><select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); navigateMarketBrowse(marketBrowseHref(browseLocation, {exchange: e.target.value})); }}>
+                  <option value="ALL">전체</option>
+                  {market === "KR" ? <><option value="KOSPI">코스피</option><option value="KOSDAQ">코스닥</option></> : <><option value="NAS">나스닥</option><option value="NYS">뉴욕</option><option value="AMS">아멕스</option></>}
+                </select></label>
+              </div>
+              <button
+                className="ranked-refresh"
+                type="button"
+                aria-label="순위 새로고침"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError("");
+                  setAttempt((v) => v + 1);
+                }}
+              >
+                <RefreshCw size={16} />
+              </button>
+            </div>
+          ) : null}
         </div>
-        {metric !== "ALL" ? <><button
-          className="ranked-refresh"
-          type="button"
-          aria-label="순위 새로고침"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError("");
-            setAttempt((v) => v + 1);
-          }}
-        >
-          <RefreshCw size={16} />
-        </button>
-      <div className="record-filters ranking-exchange-filter">
-        <label>거래소<select aria-label="순위 거래소 필터" value={exchange} onChange={e => { setData(null); navigateMarketBrowse(marketBrowseHref(browseLocation, {exchange: e.target.value})); }}>
-          <option value="ALL">전체 거래소</option>
-          {market === "KR" ? <><option value="KOSPI">코스피</option><option value="KOSDAQ">코스닥</option></> : <><option value="NAS">나스닥</option><option value="NYS">뉴욕증권거래소</option><option value="AMS">아멕스</option></>}
-        </select></label>
-      </div></> : null}
       </header>
       {comparison.length ? <section className="ranking-comparison has-selection" aria-labelledby="ranking-comparison-title">
         <div className="ranking-comparison-heading"><div><h3 id="ranking-comparison-title">함께 비교하기 <span>{comparison.length}/3</span></h3><p>종목 옆 비교 버튼으로 2~3개를 골라보세요.</p></div>

@@ -1,0 +1,605 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../components";
+
+@theme {
+  --radius-market: 18px;
+  --shadow-market: 0 16px 42px -30px rgb(31 43 77 / 24%);
+  --color-market-brand: #554ed6;
+  --color-market-positive: #b5364e;
+  --color-market-negative: #315fce;
+}
+
+/* Tailwind 4 is deliberately loaded without Preflight. The older app keeps
+   its own reset; these tokens and composed utilities are scoped to Market. */
+.consumer-app.product-edition.stitch-workspace.view-market {
+  --ws-canvas: #f6f7fb;
+  --ws-surface: #fff;
+  --ws-soft: #f0f2f8;
+  --ws-ink: #191d2b;
+  --ws-muted: #626d83;
+  --ws-line: #e2e6ef;
+  --ws-brand: #554ed6;
+  --ws-brand-solid: #4b45c8;
+  --ws-tint: #efeeff;
+  --ws-floating: #fff;
+  --color-market-positive: #b5364e;
+  --color-market-negative: #315fce;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgb(105 102 226 / 7%), transparent 34rem),
+    var(--ws-canvas);
+}
+
+html[data-theme="dark"] .consumer-app.product-edition.stitch-workspace.view-market {
+  --ws-canvas: #0d1119;
+  --ws-surface: #151b27;
+  --ws-soft: #1c2432;
+  --ws-ink: #f0f2f8;
+  --ws-muted: #a9b2c4;
+  --ws-line: #2c3546;
+  --ws-brand: #aaa5ff;
+  --ws-brand-solid: #8c84ff;
+  --ws-tint: #282644;
+  --ws-floating: #1a2230;
+  --color-market-positive: #ff7d91;
+  --color-market-negative: #8eb1ff;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgb(111 105 224 / 9%), transparent 34rem),
+    var(--ws-canvas);
+}
+
+.stitch-workspace.product-edition.view-market .workspace-intro {
+  align-items: center;
+  padding-block: clamp(18px, 2.4vw, 28px) 18px;
+  margin-block-end: 18px;
+  border-block-end: 1px solid var(--ws-line);
+}
+
+.stitch-workspace.product-edition.view-market .workspace-intro .workspace-eyebrow {
+  display: block;
+  margin-block-end: 6px;
+  color: var(--ws-brand);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+}
+
+.stitch-workspace.product-edition.view-market .workspace-intro h1 {
+  font-size: clamp(28px, 2.6vw, 36px);
+  line-height: 1.18;
+  letter-spacing: -.045em;
+}
+
+.stitch-workspace.product-edition.view-market .market-overview-context {
+  gap: 7px;
+  font-size: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .market-paper-label {
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--ws-brand) 16%, transparent);
+  border-radius: 999px;
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+.stitch-workspace.product-edition.view-market .market-quote-times > div {
+  min-height: 32px;
+  padding: 5px 9px;
+  border-color: var(--ws-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ws-surface) 88%, var(--ws-tint));
+}
+
+.stitch-workspace.product-edition.view-market .market-focus-layout {
+  @apply min-w-0 items-start gap-6;
+  align-items: start;
+  gap: clamp(16px, 2vw, 26px);
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage {
+  @apply min-w-0 overflow-hidden rounded-market border shadow-market;
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card {
+  @apply min-w-0 border;
+  padding: clamp(14px, 1.7vw, 22px) clamp(14px, 2vw, 24px) 16px;
+  border: 0;
+  border-block-end: 1px solid var(--ws-line);
+  border-radius: 0;
+  background: linear-gradient(112deg, var(--ws-surface), color-mix(in srgb, var(--ws-tint) 38%, var(--ws-surface)));
+  box-shadow: none;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .discovery-search-label {
+  color: var(--ws-ink);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -.02em;
+}
+
+.stitch-workspace.product-edition.view-market .search-card .search-input {
+  min-height: 52px;
+  border-color: var(--ws-line);
+  border-radius: 13px;
+  background: var(--ws-surface);
+  box-shadow: 0 2px 8px rgb(28 35 56 / 4%);
+}
+
+.stitch-workspace.product-edition.view-market .search-card .search-input:focus-within {
+  border-color: var(--ws-brand);
+  outline: 3px solid color-mix(in srgb, var(--ws-brand) 16%, transparent);
+  outline-offset: 1px;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-stage .broker-rankings {
+  @apply min-w-0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: var(--ws-surface);
+  box-shadow: none;
+}
+
+.stitch-workspace.product-edition.view-market .market-rankings-header {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px clamp(14px, 2vw, 24px) 12px;
+  border: 0;
+  border-block-end: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+}
+
+.stitch-workspace.product-edition.view-market .market-rankings-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading {
+  padding: 0;
+  border: 0;
+}
+
+.stitch-workspace.product-edition.view-market .market-discovery-heading h2 {
+  font-size: clamp(19px, 1.8vw, 22px);
+  font-weight: 760;
+  letter-spacing: -.04em;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-market-switch {
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid var(--ws-line);
+  border-radius: 11px;
+  background: var(--ws-soft);
+}
+
+.stitch-workspace.product-edition.view-market .ranked-market-switch button {
+  min-width: 64px;
+  min-height: 38px;
+  border-radius: 8px;
+  color: var(--ws-muted);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-market-switch button[aria-pressed="true"] {
+  background: var(--ws-surface);
+  color: var(--ws-brand);
+  box-shadow: 0 2px 8px rgb(28 35 56 / 9%);
+}
+
+.stitch-workspace.product-edition.view-market .market-rankings-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-metric-tabs {
+  min-width: 0;
+  gap: 4px;
+  padding: 3px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-metric-tabs::-webkit-scrollbar { display: none; }
+
+.stitch-workspace.product-edition.view-market .ranked-metric-tabs button {
+  min-height: 42px;
+  padding-inline: clamp(10px, 1.2vw, 16px);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ws-muted);
+  font-size: 13px;
+  font-weight: 650;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-metric-tabs button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ws-brand) 20%, var(--ws-line));
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+  box-shadow: none;
+}
+
+.stitch-workspace.product-edition.view-market .market-rankings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stitch-workspace.product-edition.view-market .ranking-exchange-filter {
+  width: 168px;
+  max-width: 168px;
+  margin: 0;
+}
+
+.stitch-workspace.product-edition.view-market .ranking-exchange-filter label {
+  display: block;
+  width: 100%;
+  font-size: 0;
+}
+
+.stitch-workspace.product-edition.view-market .ranking-exchange-filter select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 32px 8px 12px;
+  border-radius: 11px;
+  background-color: var(--ws-soft);
+  font-size: 14px;
+}
+
+.stitch-workspace.product-edition.view-market .ranked-refresh {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--ws-line);
+  border-radius: 11px;
+  background: var(--ws-surface);
+  color: var(--ws-brand);
+}
+
+.stitch-workspace.product-edition.view-market .ranked-refresh:hover:not(:disabled) {
+  background: var(--ws-tint);
+  border-color: color-mix(in srgb, var(--ws-brand) 25%, var(--ws-line));
+}
+
+.stitch-workspace.product-edition.view-market .ranked-basis {
+  padding: 12px clamp(14px, 2vw, 24px);
+  color: var(--ws-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.stitch-workspace.product-edition.view-market .stock-list-heading {
+  padding: 12px clamp(14px, 2vw, 24px);
+  border-block: 1px solid var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .stock-row-open {
+  min-height: 76px;
+  padding-block: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-number {
+  color: color-mix(in srgb, var(--ws-muted) 72%, var(--ws-line));
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-identity b {
+  font-size: 15px;
+  font-weight: 740;
+  letter-spacing: -.025em;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-identity small {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-price b {
+  font-size: 15px;
+  font-weight: 740;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-price small,
+.stitch-workspace.product-edition.view-market .broker-rankings .stock-row-metric {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-price small.up {
+  color: var(--color-market-positive) !important;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .rank-price small.down {
+  color: var(--color-market-negative) !important;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .stock-row-save,
+.stitch-workspace.product-edition.view-market .broker-rankings .stock-row-compare {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .consumer-stock-row.selected {
+  background: color-mix(in srgb, var(--ws-tint) 72%, var(--ws-surface));
+  box-shadow: inset 3px 0 var(--ws-brand);
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .ranked-state {
+  margin: 12px 16px;
+  padding: 20px;
+  border: 1px solid var(--ws-line);
+  border-radius: 14px;
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  font-size: 14px;
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .ranked-recovery {
+  border-color: color-mix(in srgb, #d34259 24%, var(--ws-line));
+}
+
+.stitch-workspace.product-edition.view-market .broker-rankings .ranked-more {
+  min-height: 48px;
+  margin: 12px clamp(14px, 2vw, 24px) 18px;
+  border: 1px solid var(--ws-line);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary {
+  gap: 14px;
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .market-index-card {
+  @apply min-w-0 rounded-market border shadow-market;
+  margin: 0;
+  padding: 18px;
+  border-color: var(--ws-line);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--ws-tint) 52%, var(--ws-surface)), var(--ws-surface) 68%);
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .index-title h2 { font-size: 14px; }
+.stitch-workspace.product-edition.view-market .market-auxiliary .index-title strong { font-size: 28px; letter-spacing: -.04em; }
+.stitch-workspace.product-edition.view-market .market-auxiliary .market-index-copy p { font-size: 12px; }
+.stitch-workspace.product-edition.view-market .market-auxiliary .market-index-copy small { font-size: 10px; }
+.stitch-workspace.product-edition.view-market .market-auxiliary .index-axis { font-size: 10px; }
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .balance-card,
+.stitch-workspace.product-edition.view-market .market-auxiliary .watchlist-board {
+  @apply min-w-0 rounded-market border shadow-market;
+  border-color: var(--ws-line);
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .balance-card {
+  border-inline-start: 3px solid var(--ws-brand-solid);
+  background: linear-gradient(135deg, var(--ws-surface), color-mix(in srgb, var(--ws-tint) 38%, var(--ws-surface)));
+}
+
+.stitch-workspace.product-edition.view-market .market-auxiliary .watchlist-board {
+  overflow: hidden;
+}
+
+.stitch-workspace.product-edition.view-market :is(.market-discovery-stage, .market-auxiliary) {
+  min-width: 0;
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .stitch-workspace.product-edition.view-market .workspace-intro {
+    padding-block: 14px 12px;
+    margin-block-end: 12px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-header {
+    gap: 10px;
+    padding: 14px 18px 8px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .stitch-workspace.product-edition.view-market .market-rankings-header {
+    grid-template-columns: max-content max-content minmax(0, 1fr) minmax(132px, 150px) 44px;
+    grid-template-areas: "title market metrics exchange refresh";
+    align-items: center;
+    gap: 8px;
+    padding: 12px clamp(14px, 1.5vw, 22px);
+  }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-topline,
+  .stitch-workspace.product-edition.view-market .market-rankings-controls,
+  .stitch-workspace.product-edition.view-market .market-rankings-actions { display: contents; }
+
+  .stitch-workspace.product-edition.view-market .market-discovery-heading { grid-area: title; }
+  .stitch-workspace.product-edition.view-market .ranked-market-switch { grid-area: market; }
+  .stitch-workspace.product-edition.view-market .ranked-metric-tabs { grid-area: metrics; }
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter { grid-area: exchange; width: 100%; max-width: none; }
+
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter label {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ws-muted);
+  }
+
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter label > span { white-space: nowrap; }
+  .stitch-workspace.product-edition.view-market .ranked-refresh { grid-area: refresh; }
+
+  .stitch-workspace.product-edition.view-market .ranked-metric-tabs button {
+    min-width: 0;
+    padding-inline: clamp(6px, .8vw, 11px);
+  }
+
+  .stitch-workspace.product-edition.view-market .broker-rankings.is-directory .market-rankings-header {
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    grid-template-areas: "title market metrics";
+  }
+}
+
+@media (max-width: 767px) {
+  .stitch-workspace.product-edition.view-market .workspace-intro {
+    align-items: flex-start;
+    padding-block: 8px 8px;
+    margin-block-end: 7px;
+    gap: 7px;
+  }
+
+  .stitch-workspace.product-edition.view-market .workspace-intro h1 { font-size: 26px; }
+  .stitch-workspace.product-edition.view-market .workspace-intro .workspace-eyebrow { display: none; }
+  .stitch-workspace.product-edition.view-market .market-overview-context { justify-items: start; font-size: 11px; }
+  .stitch-workspace.product-edition.view-market .market-quote-times { gap: 5px; }
+  .stitch-workspace.product-edition.view-market .market-quote-times > div { padding: 4px 7px; }
+
+  .stitch-workspace.product-edition.view-market .market-discovery-stage {
+    border-radius: 16px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-discovery-stage > .search-card {
+    padding: 10px 12px 10px;
+  }
+
+  .stitch-workspace.product-edition.view-market .search-card .discovery-search-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .stitch-workspace.product-edition.view-market .search-card .search-input { min-height: 48px; }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "market actions" "metrics metrics";
+    gap: 6px;
+    padding: 9px 8px 7px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-topline,
+  .stitch-workspace.product-edition.view-market .market-rankings-controls { display: contents; }
+
+  .stitch-workspace.product-edition.view-market .market-discovery-heading:not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-market-switch { grid-area: market; }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-controls > .ranked-metric-tabs {
+    grid-area: metrics;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-controls > .market-rankings-actions {
+    grid-area: actions;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-metric-tabs {
+    margin-inline: -2px;
+    padding: 2px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-metric-tabs button {
+    min-height: 44px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .stitch-workspace.product-edition.view-market .market-rankings-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 6px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-market-switch button {
+    min-height: 44px;
+    min-width: 45px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-refresh {
+    width: 40px;
+    min-width: 40px;
+    min-height: 42px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter {
+    width: 100%;
+    max-width: none;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter select {
+    min-height: 42px;
+    padding-inline: 9px 26px;
+    font-size: 13px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-basis { padding: 7px 11px; font-size: 11px; line-height: 1.4; }
+
+  .stitch-workspace.product-edition.view-market .broker-rankings .stock-list-heading { padding: 10px 13px; }
+  .stitch-workspace.product-edition.view-market .broker-rankings .stock-row-open { min-height: 70px; }
+
+  .stitch-workspace.product-edition.view-market .market-auxiliary { gap: 12px; }
+  .stitch-workspace.product-edition.view-market .market-auxiliary .market-index-card { padding: 15px; }
+  .stitch-workspace.product-edition.view-market .market-auxiliary .index-title strong { font-size: 25px; }
+}
+
+@media (max-width: 359px) {
+  .stitch-workspace.product-edition.view-market .market-rankings-header {
+    padding-inline: 5px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-market-switch {
+    padding: 2px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-market-switch button {
+    min-width: 44px;
+    padding-inline: 4px;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranking-exchange-filter select {
+    padding-inline: 4px 12px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stitch-workspace.product-edition.view-market .broker-rankings .consumer-stock-row {
+    transition: background-color 140ms ease;
+  }
+
+  .stitch-workspace.product-edition.view-market .ranked-refresh:not(:disabled):active,
+  .stitch-workspace.product-edition.view-market .ranked-metric-tabs button:not(:disabled):active {
+    transform: translateY(1px);
+  }
+}

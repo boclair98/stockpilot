@@ -41,7 +41,7 @@ async function verify(width, height, theme) {
     page.setDefaultTimeout(12000);
     page.on("pageerror", error => errors.push(error.message));
     const screenshot = async view => {
-      if (screenshots && (width === 390 || width === 1440)) {
+      if (screenshots) {
         await page.screenshot({ path: join(screenshots, `${view}-${width}-${theme}.png`) });
       }
     };
@@ -51,13 +51,13 @@ async function verify(width, height, theme) {
     const first = ranks.getByRole("button", { name: "삼성전자 상세 보기", exact: true });
     await first.waitFor();
     await page.evaluate(() => document.fonts.ready);
+    await screenshot("market");
     assert(await fits());
     const firstTop = Math.round((await first.boundingBox()).y);
     assert(firstTop < (width < 480 ? 520 : 565), `Stock list starts too low at ${width}px: ${firstTop}`);
     assert(await page.locator(".ranking-comparison").isHidden());
     const nav = page.getByRole("navigation", { name: "주요 메뉴", exact: true });
     const desktopNav = width === 1440 ? await nav.boundingBox() : null;
-    await screenshot("market");
     const compare = ranks.getByRole("button", { name: "삼성전자 비교 추가", exact: true });
     await compare.press("Enter");
     const activeComparison = page.locator(".ranking-comparison");
@@ -119,7 +119,7 @@ async function verify(width, height, theme) {
 
 try {
   const results = [];
-  for (const [width, height] of [[360, 800], [390, 844], [768, 1024], [1440, 900]]) {
+  for (const [width, height] of [[320, 800], [360, 800], [390, 844], [430, 932], [768, 1024], [1024, 900], [1440, 900], [1920, 1080]]) {
     for (const theme of ["light", "dark"]) results.push(await verify(width, height, theme));
   }
   console.log(JSON.stringify({ results, writes: 0 }, null, 2));
