@@ -1,0 +1,1142 @@
+/*
+ * StockPilot all-page visual system.
+ * This layer changes presentation only; route state, data contracts and actions
+ * remain owned by their existing components.
+ */
+:root {
+  --ws-canvas: #f6f7fb;
+  --ws-surface: #ffffff;
+  --ws-soft: #eff1f7;
+  --ws-ink: #182033;
+  --ws-muted: #5f6b7e;
+  --ws-line: #e2e6ee;
+  --ws-brand: #554ed6;
+  --ws-brand-solid: #4d46cb;
+  --ws-on-brand: #ffffff;
+  --ws-tint: #efeeff;
+  --ws-up: #b8324d;
+  --ws-down: #285ec6;
+  --ws-floating: #ffffff;
+  --ws-shadow: 0 8px 26px rgb(23 31 51 / 5%);
+  --sp-radius-card: 18px;
+  --sp-radius-control: 12px;
+}
+
+html[data-theme="dark"] {
+  --ws-canvas: #0d1119;
+  --ws-surface: #151b27;
+  --ws-soft: #1e2634;
+  --ws-ink: #f2f4fa;
+  --ws-muted: #a9b2c4;
+  --ws-line: #2c3546;
+  --ws-brand: #aaa5ff;
+  --ws-brand-solid: #8c84ff;
+  --ws-on-brand: #151422;
+  --ws-tint: #292644;
+  --ws-up: #ff8293;
+  --ws-down: #8fb0ff;
+  --ws-floating: #1a2230;
+  --ws-shadow: 0 10px 30px rgb(0 0 0 / 22%);
+}
+
+html,
+body {
+  background: var(--ws-canvas);
+  color: var(--ws-ink);
+}
+
+body {
+  font-family: "StockPilot Pretendard", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  font-kerning: normal;
+  font-variant-numeric: proportional-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  color: var(--ws-ink);
+}
+
+:is(.consumer-app, .comparison-page, .growth-app, .league-app, .practice-app,
+  .learning-app, .learn-page, .lounge-app, .service-page, .pricing-page,
+  .worker-page, .ops-shell) :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ws-brand) 68%, transparent);
+  outline-offset: 3px;
+}
+
+/* Consistent working width; each screen keeps its own content hierarchy. */
+.growth-app,
+.league-app,
+.practice-app,
+.learning-app,
+.learn-page,
+.lounge-app,
+.service-page,
+.pricing-page {
+  max-width: 1380px;
+}
+
+.ops-shell,
+.worker-page {
+  max-width: none;
+}
+
+/* Page headers share one quiet shell instead of unrelated brand treatments. */
+.workspace-app .topbar,
+.growth-topbar,
+.league-topbar,
+.practice-topbar,
+.lounge-topbar,
+.learn-topbar,
+.service-topbar,
+.pricing-topbar {
+  min-height: 68px;
+  height: auto;
+  padding-inline: clamp(14px, 2vw, 26px);
+  border-bottom: 1px solid var(--ws-line);
+  background: color-mix(in srgb, var(--ws-canvas) 88%, transparent);
+  color: var(--ws-ink);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.workspace-app .topbar {
+  padding-inline: 0;
+}
+
+:is(.growth-brand, .league-brand, .practice-brand, .learn-brand, .brand) {
+  color: var(--ws-ink);
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+
+:is(.growth-brand, .league-brand, .practice-brand, .learn-brand, .brand) > span {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+:is(.growth-topbar, .league-topbar, .practice-topbar, .lounge-topbar, .learn-topbar,
+  .service-topbar, .pricing-topbar) nav a,
+.workspace-primary a,
+.service-back {
+  min-height: 42px;
+  border-radius: 10px;
+  color: var(--ws-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+:is(.growth-topbar, .league-topbar, .practice-topbar, .lounge-topbar, .learn-topbar,
+  .service-topbar, .pricing-topbar) nav a:hover,
+.workspace-primary a:hover,
+.service-back:hover {
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+.workspace-primary a[aria-current="page"],
+.workspace-primary a[aria-current="page"]:hover {
+  color: var(--ws-brand);
+}
+
+/* App panels use one surface language; empty and loading states stay compact. */
+:is(.comparison-panel, .growth-app .daily-challenge, .growth-app .skill-card,
+  .growth-app .weekly-card, .growth-app .journal-form, .growth-app .journal-list,
+  .league-stats > div, .league-loading, .league-empty, .league-side > section,
+  .league-rules article, .lounge-composer, .lounge-login-card, .lounge-sidebar > section,
+  .lounge-post, .learn-section, .learning-arcade, .practice-grid > section,
+  .pricing-section, .pricing-compare, .pricing-card, .service-document) {
+  border-color: var(--ws-line);
+  background-color: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: none;
+}
+
+:is(.comparison-panel, .growth-app .daily-challenge, .growth-app .skill-card,
+  .growth-app .weekly-card, .growth-app .journal-form, .growth-app .journal-list,
+  .league-stats > div, .league-loading, .league-empty, .league-side > section,
+  .league-rules article, .lounge-composer, .lounge-login-card, .lounge-sidebar > section,
+  .lounge-post, .learn-section, .learning-arcade, .practice-grid > section,
+  .pricing-section, .pricing-compare, .pricing-card, .service-document) {
+  border-radius: var(--sp-radius-card);
+}
+
+.growth-hero,
+.league-hero,
+.practice-hero,
+.lounge-hero,
+.pricing-hero,
+.service-page-hero {
+  border: 1px solid var(--ws-line);
+  border-radius: 20px;
+  background: var(--ws-tint);
+  box-shadow: none;
+}
+
+.growth-hero,
+.league-hero,
+.practice-hero,
+.lounge-hero,
+.pricing-hero,
+.service-page-hero {
+  color: var(--ws-ink);
+}
+
+.growth-hero h1,
+.league-hero h1,
+.practice-hero h1,
+.lounge-hero h1,
+.pricing-hero h1,
+.service-page-hero h1 {
+  color: var(--ws-ink);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.growth-hero :is(p, small, span),
+.league-hero :is(p, small, span),
+.practice-hero :is(p, small, span),
+.lounge-hero :is(p, small, span),
+.pricing-hero :is(p, small, span),
+.service-page-hero :is(p, small, span) {
+  color: var(--ws-muted);
+}
+
+.growth-app .growth-topbar nav a,
+.league-app .league-topbar nav a,
+.practice-app .practice-topbar nav a,
+.lounge-app .lounge-topbar nav a,
+.learn-page .learn-topbar nav a {
+  padding-inline: 10px;
+}
+
+/* Market: preserve the list-first workspace and make the side controls breathe. */
+.consumer-app.product-edition.view-market .market-focus-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
+  gap: clamp(16px, 2vw, 24px);
+}
+
+.consumer-app.product-edition.view-market .market-auxiliary {
+  min-width: 0;
+}
+
+.consumer-app.product-edition.view-market .market-auxiliary > * {
+  min-width: 0;
+}
+
+.consumer-app.product-edition.view-market .market-auxiliary .watchlist-board {
+  overflow: clip;
+}
+
+.consumer-app.product-edition.view-market .watchlist-board :is(.watchlist-header-actions, .watchlist-tools) {
+  min-width: 0;
+}
+
+.consumer-app.product-edition.view-market .watchlist-board :is(input, select) {
+  max-width: 100%;
+}
+
+/* Compare: selected instruments first; the no-selection chart state is not a blank panel. */
+.comparison-content {
+  max-width: 1240px;
+  padding-top: clamp(22px, 3vw, 34px);
+}
+
+.comparison-heading {
+  align-items: flex-end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.comparison-heading h1 {
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.22;
+}
+
+.comparison-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-height: 156px;
+  padding: 22px 18px;
+  border: 1px dashed var(--ws-line);
+  border-radius: 14px;
+  background: var(--ws-soft);
+}
+
+.comparison-empty h3 {
+  margin-block: 8px 4px;
+}
+
+.comparison-empty p {
+  max-width: 48ch;
+  margin: 0;
+}
+
+.comparison-panel {
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.comparison-panel + .comparison-panel {
+  margin-top: 16px;
+}
+
+.comparison-period button[aria-pressed="true"] {
+  border-color: var(--ws-brand);
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+/* Review: challenge, outcome and journal are separate tasks, not one long hero. */
+.growth-app {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.growth-hero {
+  min-height: 0;
+  margin: 18px 18px 16px;
+  padding: clamp(22px, 3vw, 34px);
+}
+
+.growth-hero h1 {
+  max-width: 18ch;
+  font-size: clamp(28px, 3.5vw, 40px);
+  line-height: 1.22;
+}
+
+.growth-primary-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+  margin-inline: 18px;
+}
+
+.growth-app .analytics-loading {
+  min-height: 108px;
+  padding: 20px;
+  color: var(--ws-muted);
+}
+
+.growth-app .growth-loading {
+  min-height: 130px;
+  padding: 20px;
+  color: var(--ws-muted);
+  background: var(--ws-soft);
+  border: 1px dashed var(--ws-line);
+  border-radius: 14px;
+}
+
+.growth-app :is(.growth-section-head, .journal-form, .journal-list) h2 {
+  color: var(--ws-ink);
+}
+
+.growth-app :is(.growth-section-head p, .growth-footer, .growth-hero > div > small,
+  .weekly-empty, .journal-empty p) {
+  color: var(--ws-muted);
+}
+
+.growth-app :is(.journal-form input, .journal-form select, .journal-form textarea,
+  .journal-list form select, .journal-list form textarea) {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+/* League: leaderboard and privacy rules take priority over decorative trophy art. */
+.league-app {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.league-hero {
+  min-height: 0;
+  margin: 18px 18px 16px;
+  padding: clamp(24px, 3vw, 38px);
+}
+
+.league-hero h1 {
+  font-size: clamp(28px, 3.2vw, 38px);
+}
+
+.league-hero .hero-trophy {
+  opacity: 0.32;
+  transform: scale(0.72);
+}
+
+.league-stats {
+  margin-bottom: 20px;
+}
+
+.league-stats > div,
+.league-rules article,
+.league-side > section:not(.join-card) {
+  border-radius: 14px;
+}
+
+.league-loading,
+.league-empty {
+  min-height: 168px;
+  padding: 22px;
+  border-style: dashed;
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  box-shadow: none;
+}
+
+.league-app .ranking-list {
+  border-color: var(--ws-line);
+  border-radius: 16px;
+  background: var(--ws-surface);
+}
+
+.league-app .ranking-list article {
+  min-height: 64px;
+  border-color: var(--ws-line);
+}
+
+.league-app .join-card,
+.league-app .join-card.joined {
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.league-app .join-card > p,
+.league-app .join-card label,
+.league-app .join-card form small,
+.league-app .privacy-card small,
+.league-app .privacy-card > p {
+  color: var(--ws-muted);
+}
+
+.league-app .join-card input {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+.league-app :is(.trade-button, .join-card form button, .google-join) {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+.league-app .privacy-card li {
+  color: var(--ws-ink);
+}
+
+/* Learning and historical practice: compact task entry, legible real state. */
+.learn-page {
+  --learn-ink: var(--ws-ink);
+  --learn-muted: var(--ws-muted);
+  --learn-green: var(--ws-brand);
+  --learn-soft: var(--ws-tint);
+  color: var(--ws-ink);
+  background: var(--ws-canvas);
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.learn-hero {
+  margin: 16px 18px 16px;
+  padding: clamp(24px, 4vw, 42px);
+  gap: clamp(20px, 4vw, 44px);
+  border: 1px solid var(--ws-line);
+  border-radius: 20px;
+  background: var(--ws-tint);
+  color: var(--ws-ink);
+  box-shadow: none;
+}
+
+.learn-hero-copy > p,
+.learn-hero-copy h1 em,
+.learn-progress-card > div:nth-child(2) > p,
+.learn-streak b {
+  color: var(--ws-brand);
+}
+
+.learn-hero-copy h1 {
+  max-width: 18ch;
+  color: var(--ws-ink);
+  font-size: clamp(29px, 3.5vw, 42px);
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+}
+
+.learn-hero-copy > span,
+.learn-hero-copy > small,
+.learn-progress-card div > span,
+.learn-progress-card .progress-ring small {
+  color: var(--ws-muted);
+}
+
+.learn-hero-actions button {
+  min-height: 48px;
+  border: 1px solid var(--ws-brand-solid);
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+  font-size: 14px;
+}
+
+.learn-hero-actions .secondary {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.learn-page .learn-topbar .market-link {
+  border: 1px solid var(--ws-brand-solid);
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+.learn-page .learn-tabs {
+  border-color: var(--ws-line);
+  background: color-mix(in srgb, var(--ws-surface) 94%, transparent);
+  box-shadow: var(--ws-shadow);
+}
+
+.learn-page .learn-tabs button {
+  color: var(--ws-muted);
+}
+
+.learn-page .learn-tabs button.active {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+.learn-progress-card {
+  border: 1px solid var(--ws-line);
+  border-radius: 16px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  backdrop-filter: none;
+  animation: none;
+}
+
+.progress-ring {
+  background: conic-gradient(var(--ws-brand-solid) var(--progress), var(--ws-soft) 0);
+}
+
+.progress-ring > span {
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.learn-streak {
+  border: 1px solid var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+.learn-hero::before,
+.learn-hero::after,
+.learn-live-ribbon > div {
+  animation: none;
+}
+
+.learn-live-ribbon {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  box-shadow: none;
+}
+
+.learn-live-ribbon > div {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.learn-live-ribbon > div > span {
+  color: var(--ws-ink);
+  font-size: 12px;
+}
+
+.learn-live-ribbon b,
+.learn-live-ribbon em,
+.learn-live-ribbon small {
+  font-size: 12px;
+}
+
+.arcade-header,
+.arcade-stage {
+  border-color: var(--ws-line);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.arcade-header > div > p,
+.arcade-stage-head span {
+  color: var(--ws-brand);
+}
+
+.practice-app {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.practice-hero {
+  min-height: 0;
+  margin: 16px 18px 14px;
+  padding: clamp(22px, 3vw, 36px);
+}
+
+.practice-hero p {
+  color: var(--ws-brand);
+}
+
+.practice-hero span {
+  max-width: 58ch;
+  color: var(--ws-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.practice-presets button {
+  min-height: 60px;
+  border-color: var(--ws-line);
+  border-radius: 13px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.practice-presets button.active {
+  border-color: var(--ws-brand);
+  background: var(--ws-tint);
+  color: var(--ws-brand);
+}
+
+.practice-presets small,
+.replay-head small,
+.replay-balance small,
+.replay-trades small,
+.replay-account > label {
+  color: var(--ws-muted);
+  font-size: 12px;
+}
+
+.practice-loading {
+  min-height: 176px;
+  border: 1px dashed var(--ws-line);
+  border-radius: 16px;
+  background: var(--ws-soft);
+  color: var(--ws-muted);
+  font-size: 14px;
+}
+
+.practice-grid {
+  align-items: start;
+}
+
+.replay-market,
+.replay-account {
+  border-color: var(--ws-line);
+  border-radius: 16px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.replay-head b,
+.replay-head strong,
+.replay-balance b,
+.replay-trades > b {
+  color: var(--ws-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-account input {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+  font-size: 16px;
+}
+
+/* Lounge: authorship and moderation controls are clear without exposing account data. */
+.lounge-app {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.lounge-hero {
+  margin: 16px 18px 16px;
+  padding: clamp(22px, 3vw, 32px);
+}
+
+.lounge-hero h1 {
+  font-size: clamp(27px, 3vw, 34px);
+}
+
+.lounge-stat {
+  border: 1px solid var(--ws-line);
+  border-radius: 14px;
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+}
+
+.lounge-grid {
+  align-items: start;
+}
+
+.lounge-feed-head,
+.lounge-post-content,
+.lounge-sidebar section,
+.lounge-login-card {
+  color: var(--ws-ink);
+}
+
+.lounge-post-content > p,
+.lounge-sidebar li,
+.lounge-notice p,
+.lounge-login-card p {
+  color: var(--ws-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.lounge-composer textarea {
+  min-height: 112px;
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+  font-size: 16px;
+}
+
+.lounge-feed-head button,
+.lounge-login-card a,
+.lounge-composer button,
+.lounge-message button {
+  min-height: 44px;
+  border-radius: 11px;
+}
+
+.lounge-composer button,
+.lounge-login-card a {
+  background: var(--ws-brand-solid);
+  color: var(--ws-on-brand);
+}
+
+/* Public documents: a readable article column, not a sales landing card. */
+.service-page:has(.document-date) .service-page-hero {
+  margin: 18px 18px 12px;
+  padding: 20px 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--ws-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.service-page:has(.document-date) .service-page-hero h1 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+
+.service-page:has(.document-date) .service-document {
+  max-width: 880px;
+  margin-inline: auto;
+  padding: clamp(20px, 4vw, 42px);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.service-document :is(h2, h3) {
+  color: var(--ws-ink);
+}
+
+.service-document p,
+.service-document li {
+  color: var(--ws-muted);
+  font-size: 15px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.service-document h2 {
+  font-size: 20px;
+}
+
+.service-document h3 {
+  font-size: 16px;
+}
+
+.service-document .document-date {
+  color: var(--ws-muted);
+  font-size: 13px;
+}
+
+.service-page:has(.guide-step-grid) .service-page-hero {
+  margin-top: 18px;
+  padding: clamp(24px, 4vw, 38px);
+}
+
+.service-page:has(.guide-step-grid) .service-document {
+  box-shadow: none;
+}
+
+.guide-step,
+.service-faq details,
+.service-callout {
+  border-color: var(--ws-line);
+  border-radius: 14px;
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+}
+
+.service-page-footer,
+.pricing-footer,
+.lounge-footer,
+.growth-footer,
+.league-footer,
+.practice-footer {
+  border-color: var(--ws-line);
+  color: var(--ws-muted);
+  font-size: 13px;
+}
+
+.service-page-footer b,
+.pricing-footer b,
+.lounge-footer b,
+.league-footer b {
+  color: var(--ws-ink);
+}
+
+/* Plans: clarify comparison and avoid tiny benefit copy. */
+.pricing-hero {
+  margin: 16px 18px 16px;
+  padding: clamp(22px, 3vw, 34px);
+}
+
+.pricing-section,
+.pricing-compare {
+  box-shadow: none;
+  border-radius: 16px;
+}
+
+.pricing-card {
+  border-radius: 14px;
+}
+
+.pricing-card :is(.pricing-highlight, .pricing-description, li, .pricing-price small,
+  .pricing-prelaunch, .pricing-footnote) {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.pricing-card-head small,
+.pricing-section-head > span,
+.pricing-value-grid p,
+.pricing-trust p {
+  font-size: 13px;
+}
+
+.pricing-cta {
+  min-height: 48px;
+  font-size: 14px;
+}
+
+.pricing-table-wrap :is(table, th, td) {
+  font-size: 14px;
+  color: var(--ws-ink);
+}
+
+/* Personal workspace: distinguish tabs, form labels and user-visible result rows. */
+.personal-page .comparison-content {
+  max-width: 1240px;
+}
+
+.personal-page .comparison-heading {
+  margin-bottom: 18px;
+}
+
+.personal-page .personal-panel {
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.personal-page :is(.personal-tabs, .personal-notification-tabs) {
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+}
+
+.personal-page :is(.personal-tabs button, .personal-notification-tabs button) {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.personal-page .personal-list-row {
+  border-color: var(--ws-line);
+}
+
+.personal-page .personal-form-grid :is(input, select, textarea),
+.personal-page .personal-form :is(input, select, textarea) {
+  min-width: 0;
+  border-color: var(--ws-line);
+  background: var(--ws-soft);
+  color: var(--ws-ink);
+  font-size: 16px;
+}
+
+.personal-page :is(.personal-primary, .personal-inline-actions button) {
+  min-height: 44px;
+}
+
+/* Operations remain a separate operator workspace with their own dark semantics. */
+.ops-shell {
+  background: #0b1018;
+  color: #eef2f8;
+}
+
+.ops-shell .ops-card,
+.ops-shell .ops-metrics article {
+  border-color: #2b3442;
+  border-radius: 14px;
+  background: #141b27;
+  box-shadow: none;
+}
+
+.ops-shell :is(.ops-card h1, .ops-card h2, .ops-card h3, .ops-metrics strong) {
+  color: #eef2f8;
+}
+
+.ops-shell :is(.ops-card label, .ops-note, .ops-row span, .ops-row time) {
+  color: #b2bdcc;
+  font-size: 13px;
+}
+
+.ops-shell .ops-card input {
+  min-height: 44px;
+}
+
+@media (max-width: 900px) {
+  .consumer-app.product-edition.view-market .market-focus-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
+  }
+
+  .growth-primary-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
+  }
+
+  .league-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  }
+}
+
+@media (max-width: 767px) {
+  .workspace-app .topbar,
+  .growth-topbar,
+  .league-topbar,
+  .practice-topbar,
+  .lounge-topbar,
+  .learn-topbar,
+  .service-topbar,
+  .pricing-topbar {
+    min-height: 58px;
+    padding-inline: 12px;
+  }
+
+  .growth-hero,
+  .league-hero,
+  .practice-hero,
+  .lounge-hero,
+  .pricing-hero,
+  .service-page-hero {
+    margin-inline: 12px;
+  }
+
+  .growth-primary-grid,
+  .league-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-inline: 12px;
+  }
+
+  .league-side {
+    grid-row: auto;
+  }
+
+  .growth-app .analytics-loading,
+  .growth-app .growth-loading,
+  .league-loading,
+  .league-empty,
+  .practice-loading {
+    min-height: 132px;
+  }
+
+  .learn-hero {
+    margin-inline: 12px;
+  }
+
+  /* Keep the fixed display dock clear of the last interactive content row. */
+  .growth-app,
+  .league-app,
+  .learn-page,
+  .practice-app,
+  .lounge-app,
+  .pricing-page,
+  .service-page {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+
+  .learn-progress-card {
+    grid-template-columns: 82px minmax(0, 1fr);
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .progress-ring {
+    width: 78px;
+    height: 78px;
+    margin: 0;
+    padding: 7px;
+  }
+
+  .learn-streak {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+
+  .lounge-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-inline: 12px;
+  }
+
+  .lounge-sidebar {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  }
+
+  .personal-page .comparison-content {
+    padding-inline: 12px;
+  }
+
+  .service-page:has(.document-date) .service-page-hero {
+    margin-inline: 12px;
+  }
+
+  .service-page:has(.document-date) .service-document {
+    margin-inline: 12px;
+    padding: 20px 16px;
+  }
+
+  .pricing-card :is(.pricing-highlight, .pricing-description, li, .pricing-price small,
+    .pricing-prelaunch, .pricing-footnote) {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 430px) {
+  .growth-hero,
+  .league-hero,
+  .practice-hero,
+  .lounge-hero,
+  .pricing-hero,
+  .service-page-hero {
+    margin: 12px 10px;
+    padding: 20px 18px;
+    border-radius: 16px;
+  }
+
+  .growth-hero h1,
+  .league-hero h1,
+  .practice-hero h1,
+  .lounge-hero h1,
+  .pricing-hero h1,
+  .service-page-hero h1 {
+    font-size: 28px;
+  }
+
+  .growth-primary-grid,
+  .league-grid,
+  .lounge-grid {
+    margin-inline: 10px;
+  }
+
+  .league-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-inline: 10px;
+  }
+
+  .league-stats > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .league-stats b {
+    overflow-wrap: anywhere;
+  }
+
+  .league-app .podium-card {
+    min-width: 0;
+  }
+
+  .league-app .podium-card > b {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .comparison-content {
+    padding-inline: 12px;
+  }
+
+  .comparison-panel {
+    padding: 16px;
+  }
+
+  .comparison-empty {
+    min-height: 136px;
+  }
+
+  .practice-presets {
+    margin-inline: 10px;
+  }
+
+  .learn-hero {
+    gap: 16px;
+    padding: 20px 16px;
+  }
+
+  .learn-hero-copy h1 {
+    font-size: 29px;
+  }
+
+  .learn-hero-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .learn-hero-actions button {
+    flex: 1 1 135px;
+    padding-inline: 10px;
+  }
+
+  .lounge-login-card {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .lounge-login-card a {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .service-page-footer,
+  .pricing-footer,
+  .lounge-footer,
+  .growth-footer,
+  .league-footer,
+  .practice-footer {
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .full-product-refresh,
+  .learn-page *,
+  .growth-app *,
+  .league-app *,
+  .practice-app *,
+  .lounge-app * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
